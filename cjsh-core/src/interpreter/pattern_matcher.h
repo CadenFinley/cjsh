@@ -47,7 +47,8 @@ class PatternMatcher {
                          bool top_level_alternatives = false) const;
 
     // One endpoint per starting byte, or string::npos when no substring matches.
-    // Extended groups return nullopt so callers can use the general matcher.
+    // Repeating/negated extended groups return nullopt for the general matcher;
+    // ordinary globs and nested @() and ?() alternatives share suffix results.
     std::optional<std::vector<size_t>> match_end_positions(const std::string& text,
                                                            const std::string& pattern,
                                                            bool longest) const;

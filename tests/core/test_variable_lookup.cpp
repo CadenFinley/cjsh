@@ -511,8 +511,10 @@ bool test_pattern_endpoints_and_expansion() {
     bool ok = true;
     const bool previous_extglob = config::extglob_enabled;
     config::extglob_enabled = true;
-    std::vector<std::string> patterns{"",  "'a*'", "\\*",   "[[:digit:]]", "[!a]",  "[]a]",
-                                      "[", "a|b",  "**a**", "*a*b*",       "@(a|b)"};
+    std::vector<std::string> patterns{"",         "'a*'",   "\\*",      "[[:digit:]]", "[!a]",
+                                      "[]a]",     "[",      "a|b",      "**a**",       "*a*b*",
+                                      "@(a|b)",   "?(a|b)", "@(a|ab)b", "@(a|?(b))*a", "?()",
+                                      "@(a*|?b)", "+(a|b)"};
     const std::vector<std::string> atoms{"a", "b", "?", "*", "[ab]"};
     for (const auto& first : atoms) {
         patterns.push_back(first);
@@ -551,8 +553,8 @@ bool test_pattern_endpoints_and_expansion() {
             value = text;
             for (bool longest : {false, true}) {
                 const auto ends = matcher.match_end_positions(text, pattern, longest);
-                if (pattern == "@(a|b)") {
-                    ok = expect(!ends, "extended groups request the general matcher") && ok;
+                if (pattern == "+(a|b)") {
+                    ok = expect(!ends, "repeating groups request the general matcher") && ok;
                     continue;
                 }
                 if (!expect(ends && ends->size() == text.size() + 1, "endpoint table size")) {

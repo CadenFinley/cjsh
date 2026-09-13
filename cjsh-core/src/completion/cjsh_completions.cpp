@@ -503,13 +503,20 @@ bool command_resolution_is_unknown(const std::string& token) {
         return false;
     }
 
+    // This is an existence query, not a request for every resolution (as in
+    // `type -a`). A known shell command needs no filesystem work, particularly
+    // no interactive PATH index rebuild on each argument-completion request.
+    const auto resolution = command_lookup::resolve_command(token, g_shell.get(), false);
+    if (resolution.is_keyword || resolution.is_builtin || resolution.has_alias ||
+        resolution.has_function) {
+        return false;
+    }
+
     if (command_lookup::should_auto_cd_token(token, g_shell.get())) {
         return false;
     }
 
-    const auto resolution = command_lookup::resolve_command(token, g_shell.get(), true);
-    return !resolution.is_keyword && !resolution.is_builtin && !resolution.has_alias &&
-           !resolution.has_function && !resolution.has_path;
+    return cjsh_filesystem::find_executable_in_path(token).empty();
 }
 
 bool cursor_is_inside_known_command(const char* input, long cursor,

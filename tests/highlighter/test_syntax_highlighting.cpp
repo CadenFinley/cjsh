@@ -714,7 +714,17 @@ static bool test_split_command_path_changes_between_highlights() {
     fs::permissions(executable, fs::perms::owner_read | fs::perms::owner_exec);
 
     const std::string original_path = cjsh_env::get_shell_variable_value("PATH");
-    const std::string input = "audit fragment; audit fragment";
+    // Cross both the adaptive prefix-index threshold and the bounded result
+    // cache. The final matches must still work after many unsuccessful lookups.
+    std::string input;
+    for (size_t i = 0; i < 192; ++i) {
+        input += "missing" + std::to_string(i) + " word; ";
+    }
+    input += "audit fragment; audit fragment; blocked blockedword; wide wideword";
+    std::ofstream(populated / "blockedXblockedword") << "not executable\n";
+    const fs::path wide = populated / "wideXXwideword";
+    std::ofstream(wide) << "#!/bin/sh\n";
+    fs::permissions(wide, fs::perms::owner_read | fs::perms::owner_exec);
     ic_env_t* env = ensure_env(test_name);
     bool ok = env != nullptr;
     for (const auto& path : {populated, empty, populated}) {
@@ -736,6 +746,12 @@ static bool test_split_command_path_changes_between_highlights() {
                                                 "a new highlight must see the changed PATH") &&
                          ok;
                 }
+            }
+            for (const std::string word : {"blockedword", "wideword"}) {
+                ok = expect_not_style_range(
+                         attrs, env->bbcode, input.find(word), word.size(), "cjsh-unknown-command",
+                         test_name, "prefix search must reject nonexecutables and two-byte gaps") &&
+                     ok;
             }
         }
         if (attrs != nullptr) {

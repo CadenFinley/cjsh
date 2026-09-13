@@ -74,6 +74,8 @@ struct HighlightPathContext {
     std::optional<std::string> cwd;
     std::string previous_directory;
     std::optional<std::vector<std::string>> executables;
+    size_t executable_scan_count = 0;
+    bool executables_sorted = false;
     std::optional<std::unordered_set<std::string>> commands;
     // A redraw sees one snapshot; never retain filesystem or shell-state answers
     // across callbacks. Repeated words in multiline input need only one lookup.
@@ -118,6 +120,13 @@ struct HighlightPathContext {
     const std::vector<std::string>& executables_in_path() {
         if (!executables.has_value()) {
             executables = cjsh_filesystem::get_path_completion_candidates();
+        }
+        // A typical redraw checks only one split typo. Amortize the sort over
+        // many lookups: building the index for a short paste costs more than a
+        // scan, but rescanning all PATH names for thousands of words is costly.
+        if (!executables_sorted && ++executable_scan_count >= 128) {
+            std::sort(executables->begin(), executables->end());
+            executables_sorted = true;
         }
         return *executables;
     }
@@ -189,11 +198,19 @@ bool has_nearby_split_merge_candidate(const std::string& first_token,
     }
 
     const auto& executables = paths.executables_in_path();
-    const bool result =
-        std::any_of(executables.begin(), executables.end(), [&](const std::string& candidate) {
-            return matches_candidate(candidate) &&
-                   !cjsh_filesystem::find_executable_in_path(candidate).empty();
-        });
+    auto begin = executables.begin();
+    auto end = executables.end();
+    if (paths.executables_sorted) {
+        begin = std::lower_bound(begin, end, first_token);
+        end = begin;
+        while (end != executables.end() && end->rfind(first_token, 0) == 0) {
+            ++end;
+        }
+    }
+    const bool result = std::any_of(begin, end, [&](const std::string& candidate) {
+        return matches_candidate(candidate) &&
+               !cjsh_filesystem::find_executable_in_path(candidate).empty();
+    });
     if (paths.split_candidates.size() < kMaxHighlightCacheEntries) {
         paths.split_candidates.emplace(key, result);
     }

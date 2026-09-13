@@ -37,6 +37,7 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -55,6 +56,7 @@
 #include "completion_utils.h"
 #include "external_sub_completions.h"
 #include "isocline/isocline.h"
+#include "shell.h"
 #include "shell_env.h"
 extern "C" {
 #include "common.h"
@@ -1048,6 +1050,49 @@ static bool test_default_completer_suppresses_inside_known_command() {
                     "a recognized command or keyword should not be completed from its prefix");
     }
     return true;
+}
+
+static bool test_known_shell_command_completion_without_path() {
+    const char* test_name = "known_shell_command_completion_without_path";
+    ScopedEnvironmentValue path("PATH", "/cjsh-completion-nonexistent-path");
+    auto previous_shell = std::move(g_shell);
+    const bool previous_interactive = config::interactive_mode;
+    config::interactive_mode = false;
+    g_shell = std::make_unique<Shell>();
+    const bool ok = [&] {
+        g_shell->set_aliases({{"auditalias", "echo"}});
+        EXPECT_TRUE(g_shell->execute("auditfunction() { :; }") == 0, test_name,
+                    "function fixture should be defined");
+        EXPECT_TRUE(write_completion_history("echo_more\nauditalias_more\nauditfunction_more\n"),
+                    test_name, "competing history completions should exist");
+        for (const char* command :
+             {"echo argument", "auditalias argument", "auditfunction argument"}) {
+            const auto count =
+                run_completion_generation_at(command, 2, &cjsh_default_completer, 256);
+            clear_generated_completions();
+            EXPECT_TRUE(count == 0, test_name,
+                        "builtins, aliases and functions stay known without any PATH entries");
+        }
+        g_shell->set_aliases({});
+        {
+            const auto count = run_completion_generation_at("auditalias argument", 2,
+                                                            &cjsh_default_completer, 256);
+            clear_generated_completions();
+            EXPECT_TRUE(count > 0, test_name, "removed aliases must become unknown immediately");
+        }
+        g_shell = std::make_unique<Shell>();
+        for (const char* command : {"auditalias argument", "auditfunction argument"}) {
+            const auto count =
+                run_completion_generation_at(command, 2, &cjsh_default_completer, 256);
+            clear_generated_completions();
+            EXPECT_TRUE(count > 0, test_name,
+                        "a new shell must not retain old alias or function classifications");
+        }
+        return true;
+    }();
+    g_shell = std::move(previous_shell);
+    config::interactive_mode = previous_interactive;
+    return ok;
 }
 
 static bool test_default_completer_keeps_unfinished_command_completions() {
@@ -2402,6 +2447,8 @@ static const test_case_t kTests[] = {
      test_default_completer_suppresses_before_existing_word},
     {"default_completer_suppresses_inside_known_command",
      test_default_completer_suppresses_inside_known_command},
+    {"known_shell_command_completion_without_path",
+     test_known_shell_command_completion_without_path},
     {"default_completer_keeps_unfinished_command_completions",
      test_default_completer_keeps_unfinished_command_completions},
     {"find_last_unquoted_space", test_find_last_unquoted_space},

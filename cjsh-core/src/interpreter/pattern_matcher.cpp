@@ -460,10 +460,28 @@ std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std
                                                                        const std::string& pattern,
                                                                        bool longest) const {
     const auto& compiled = compiled_pattern_for(pattern, false);
+    // Non-repeating groups can share suffix results just like ordinary globs.
+    // Repetition and negation still use the general matcher; do not change their
+    // endpoint semantics by treating them as simple alternatives.
+    const auto supported_sequence = [](const auto& self,
+                                       const std::vector<PatternNode>& sequence) -> bool {
+        for (const auto& node : sequence) {
+            if (node.kind != PatternNodeKind::ExtendedGroup) {
+                continue;
+            }
+            if (node.value != '@' && node.value != '?') {
+                return false;
+            }
+            for (const auto& alternative : node.alternatives) {
+                if (!self(self, alternative)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
     for (const auto& alternative : compiled.alternatives) {
-        if (std::any_of(alternative.begin(), alternative.end(), [](const PatternNode& node) {
-                return node.kind == PatternNodeKind::ExtendedGroup;
-            })) {
+        if (!supported_sequence(supported_sequence, alternative)) {
             return std::nullopt;
         }
     }
@@ -478,16 +496,28 @@ std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std
         }
         return longest ? std::max(left, right) : std::min(left, right);
     };
-    std::vector<size_t> endpoints(text.size() + 1, no_match);
-    std::vector<size_t> next(text.size() + 1);
-    std::vector<size_t> current(text.size() + 1);
-    for (const auto& alternative : compiled.alternatives) {
-        // An empty pattern ends at its starting byte. Work backwards through the
-        // pattern, sharing suffix results instead of matching every substring.
-        for (size_t pos = 0; pos <= text.size(); ++pos) {
-            next[pos] = pos;
-        }
-        for (auto node = alternative.rbegin(); node != alternative.rend(); ++node) {
+    const auto sequence_endpoints = [&](const auto& self, const std::vector<PatternNode>& sequence,
+                                        std::vector<size_t> next) -> std::vector<size_t> {
+        std::vector<size_t> current(text.size() + 1);
+        // Work backwards, sharing suffix results instead of matching every
+        // substring. A group's branches inherit the continuation after the group,
+        // so choose the best final endpoint, not the longest/shortest branch.
+        for (auto node = sequence.rbegin(); node != sequence.rend(); ++node) {
+            if (node->kind == PatternNodeKind::ExtendedGroup) {
+                if (node->value == '?') {
+                    current = next;
+                } else {
+                    std::fill(current.begin(), current.end(), no_match);
+                }
+                for (const auto& alternative : node->alternatives) {
+                    const auto branch = self(self, alternative, next);
+                    for (size_t pos = 0; pos <= text.size(); ++pos) {
+                        current[pos] = choose(current[pos], branch[pos]);
+                    }
+                }
+                next.swap(current);
+                continue;
+            }
             current[text.size()] =
                 node->kind == PatternNodeKind::AnyString ? next[text.size()] : no_match;
             for (size_t pos = text.size(); pos > 0;) {
@@ -505,6 +535,18 @@ std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std
             }
             next.swap(current);
         }
+        return next;
+    };
+
+    std::vector<size_t> endpoints(text.size() + 1, no_match);
+    for (const auto& alternative : compiled.alternatives) {
+        // An empty pattern ends at its starting byte.
+        std::vector<size_t> continuation(text.size() + 1);
+        for (size_t pos = 0; pos <= text.size(); ++pos) {
+            continuation[pos] = pos;
+        }
+        const auto next =
+            sequence_endpoints(sequence_endpoints, alternative, std::move(continuation));
         for (size_t pos = 0; pos <= text.size(); ++pos) {
             endpoints[pos] = choose(endpoints[pos], next[pos]);
         }
