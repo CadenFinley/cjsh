@@ -213,11 +213,19 @@ cjshopt style_def <token_type> <style>
 
 **Available Style Names:**
 - `keyword`, `builtin`, `system`, `unknown-command`, `agent-prefix`, `agent-request`
-- `string`, `comment`, `variable`, `number`, `operator`
+- `string`, `comment`, `variable`, `number`, `operator`, `heredoc-delimiter`
 - `file-argument`, `path-exists`, `path-not-exists`, `glob-pattern`, `assignment-value`
 - `command-substitution`, `arithmetic`, `option`, `function-definition`, `history-expansion`
 - `ic-prompt`, `ic-hint`, `ic-error`, `ic-info`, `ic-source`, `ic-diminish`, `ic-emphasis`
 - `ic-linenumbers`, `ic-linenumber-current`, `ic-bracematch`, `ic-whitespace-char`
+
+Heredoc opening markers (such as `EOF` in `cat <<EOF`) and matching closing lines use
+`heredoc-delimiter` (bold yellow by default). Quoted/escaped markers, multiple heredocs,
+and `<<-` tab stripping are recognized. Body text uses `string` rather than command styling.
+
+```bash
+cjshopt style_def heredoc-delimiter "bold color=#8BE9FD"
+```
 
 **Syntax Highlighting Control:**
 The syntax highlighter can be temporarily disabled with the `--no-syntax-highlighting` startup flag.
@@ -944,6 +952,7 @@ All visual aspects of the editor can be customized through style definitions.
 - `builtin`: Builtin commands
 - `system`: External commands resolved from PATH
 - `unknown-command`: Unresolved command names
+- `heredoc-delimiter`: Opening and closing heredoc markers
 - `agent-prefix`, `agent-request`: Agent trigger prefixes and their natural-language requests
 - `string`, `comment`, `variable`, `number`, `operator`
 - `file-argument`, `path-exists`, `path-not-exists`, `glob-pattern`, `assignment-value`

@@ -91,7 +91,7 @@ from `token_constants::default_styles` and include:
 ```
 unknown-command  agent-prefix  agent-request  colon  file-argument  path-exists  path-not-exists
 glob-pattern     operator  keyword  builtin  system
-variable         assignment-value  string  comment
+variable         assignment-value  string  comment  heredoc-delimiter
 command-substitution  arithmetic  option  number
 function-definition  history-expansion
 ic-prompt  ic-hint  ic-error  ic-info  ic-emphasis

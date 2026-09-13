@@ -102,6 +102,9 @@ std::string style_preview_sample(const std::string& token_type) {
     if (token_type == "string") {
         return "\"hello\"";
     }
+    if (token_type == "heredoc-delimiter") {
+        return "EOF";
+    }
     if (token_type == "comment") {
         return "# comment";
     }

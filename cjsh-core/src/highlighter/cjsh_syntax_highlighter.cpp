@@ -483,6 +483,25 @@ void SyntaxHighlighter::highlight(ic_highlight_env_t* henv, const char* input, v
         return;
     }
 
+    const auto heredoc_ranges = find_heredoc_ranges(input, len);
+    // Keep heredoc text out of command/variable/comment classification. In
+    // particular, closing markers must not inherit unknown-command underlines.
+    for (const auto& range : heredoc_ranges) {
+        for (size_t i = range.start; i < range.end; ++i) {
+            if (raw_input[i] != '\n') {
+                raw_input[i] = ' ';
+            }
+        }
+    }
+    input = raw_input.c_str();
+    const auto highlight_heredocs = [&] {
+        for (const auto& range : heredoc_ranges) {
+            ic_highlight(henv, static_cast<long>(range.start),
+                         static_cast<long>(range.end - range.start),
+                         range.is_delimiter ? "cjsh-heredoc-delimiter" : "cjsh-string");
+        }
+    };
+
     std::vector<command_analysis::CommentRange> comment_ranges;
     std::string sanitized_input =
         command_analysis::sanitize_input_for_analysis(raw_input, &comment_ranges);
@@ -507,6 +526,7 @@ void SyntaxHighlighter::highlight(ic_highlight_env_t* henv, const char* input, v
         if (brace_pos != std::string::npos && brace_pos < len) {
             ic_highlight(henv, static_cast<long>(brace_pos), 1L, "cjsh-operator");
         }
+        highlight_heredocs();
         return;
     }
 
@@ -548,4 +568,6 @@ void SyntaxHighlighter::highlight(ic_highlight_env_t* henv, const char* input, v
                          static_cast<long>(range.end - range.start), "cjsh-comment");
         }
     }
+
+    highlight_heredocs();
 }

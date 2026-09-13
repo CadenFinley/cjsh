@@ -31,6 +31,8 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "isocline.h"
 #include "quote_state.h"
@@ -397,6 +399,149 @@ void highlight_compound_redirections(ic_highlight_env_t* henv, const char* input
             i = pos - 1;
         }
     }
+}
+
+std::vector<HeredocRange> find_heredoc_ranges(const char* input, size_t len) {
+    struct PendingHereDoc {
+        std::string delimiter;
+        bool strip_tabs;
+    };
+    std::vector<PendingHereDoc> pending;
+    char quote = '\0';
+
+    std::vector<HeredocRange> ranges;
+    const auto record = [&](size_t start, size_t end, bool is_delimiter = true) {
+        if (end > start) {
+            ranges.push_back({start, end, is_delimiter});
+        }
+    };
+    const auto word_end = [](char ch) {
+        return std::isspace(static_cast<unsigned char>(ch)) != 0 ||
+               std::strchr(";&|<>()", ch) != nullptr;
+    };
+
+    for (size_t i = 0; i < len;) {
+        const char ch = input[i];
+        if (ch == '\\' && quote != '\'') {
+            i += (i + 1 < len ? 2 : 1);
+            continue;
+        }
+        if (quote != '\0') {
+            if (ch == quote) {
+                quote = '\0';
+            }
+            ++i;
+            continue;
+        }
+        if (ch == '\'' || ch == '"' || ch == '`') {
+            quote = ch;
+            ++i;
+            continue;
+        }
+        if (ch == '#' && (i == 0 || word_end(input[i - 1]))) {
+            while (i < len && input[i] != '\n') {
+                ++i;
+            }
+            continue;
+        }
+        // A shift inside arithmetic is not a here-document redirection.
+        if (ch == '(' && i + 1 < len && input[i + 1] == '(') {
+            const size_t end = find_matching_parenthesis(input, i + 2, len, 2);
+            i = end == std::string::npos ? len : end + 1;
+            continue;
+        }
+        if (ch == '\n') {
+            ++i;
+            // Bodies begin after the command line, in declaration order. Never
+            // interpret quotes, comments, or further << tokens inside a body.
+            for (const auto& doc : pending) {
+                const size_t body_start = i;
+                size_t body_end = len;
+                while (i < len) {
+                    const size_t line_start = i;
+                    while (i < len && input[i] != '\n') {
+                        ++i;
+                    }
+                    const size_t line_end = i;
+                    size_t marker_start = line_start;
+                    if (doc.strip_tabs) {
+                        while (marker_start < line_end && input[marker_start] == '\t') {
+                            ++marker_start;
+                        }
+                    }
+                    const bool matches =
+                        line_end - marker_start == doc.delimiter.size() &&
+                        doc.delimiter.compare(0, doc.delimiter.size(), input + marker_start,
+                                              line_end - marker_start) == 0;
+                    if (i < len) {
+                        ++i;
+                    }
+                    if (matches) {
+                        body_end = line_start;
+                        record(marker_start, line_end);
+                        break;
+                    }
+                }
+                record(body_start, body_end, false);
+            }
+            pending.clear();
+            continue;
+        }
+        if (ch != '<' || i + 1 >= len || input[i + 1] != '<') {
+            ++i;
+            continue;
+        }
+        // Consume the entire run so <<< cannot be mistaken for << at offset 1.
+        size_t operator_end = i + 2;
+        while (operator_end < len && input[operator_end] == '<') {
+            ++operator_end;
+        }
+        if (operator_end != i + 2) {
+            i = operator_end;
+            continue;
+        }
+        const bool strip_tabs = operator_end < len && input[operator_end] == '-';
+        i = operator_end + (strip_tabs ? 1 : 0);
+        while (i < len && (input[i] == ' ' || input[i] == '\t')) {
+            ++i;
+        }
+        if (i < len && input[i] == '#') {
+            continue;
+        }
+        const size_t start = i;
+        std::string delimiter;
+        char delimiter_quote = '\0';
+        while (i < len) {
+            const char current = input[i];
+            if (delimiter_quote == '\0' && word_end(current)) {
+                break;
+            }
+            if (current == '\\' && delimiter_quote != '\'' && i + 1 < len) {
+                const char next = input[i + 1];
+                if (delimiter_quote == '\0' || next == '$' || next == '`' || next == '"' ||
+                    next == '\\' || next == '\n') {
+                    if (next != '\n') {
+                        delimiter += next;
+                    }
+                    i += 2;
+                    continue;
+                }
+            }
+            if (current == delimiter_quote) {
+                delimiter_quote = '\0';
+            } else if (delimiter_quote == '\0' && (current == '\'' || current == '"')) {
+                delimiter_quote = current;
+            } else {
+                delimiter += current;
+            }
+            ++i;
+        }
+        if (i > start && delimiter_quote == '\0') {
+            record(start, i);
+            pending.push_back({std::move(delimiter), strip_tabs});
+        }
+    }
+    return ranges;
 }
 
 void highlight_history_expansions(ic_highlight_env_t* henv, const char* input, size_t len) {

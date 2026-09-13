@@ -1278,6 +1278,156 @@ static bool test_heredoc_operator_highlighting() {
     return ok;
 }
 
+static bool test_heredoc_delimiter_highlighting() {
+    const char* test_name = "heredoc_delimiter_highlighting";
+    struct Case {
+        std::string input;
+        std::string opening;
+        std::string closing;
+    };
+    const Case cases[] = {
+        {"cat << EOF\nhello\nEOF", "EOF", "EOF"},
+        {"cat <<EOF", "EOF", ""},
+        {"cat <<'EOF'\nhello\nEOF\necho done", "'EOF'", "EOF"},
+        {"cat <<\"END TEXT\"\nhello\nEND TEXT", "\"END TEXT\"", "END TEXT"},
+        {"cat <<E\"O\"F\nhello\nEOF", "E\"O\"F", "EOF"},
+        {"cat <<\\EOF\nhello\nEOF", "\\EOF", "EOF"},
+        {"cat <<-EOF\n\thello\n\tEOF", "EOF", "EOF"},
+        {"cat <<EOF; echo ready\nhello\nEOF", "EOF", "EOF"},
+        {"cat <<$END\nhello\n$END", "$END", "$END"},
+        {"cat <<'#END'\nhello\n#END", "'#END'", "#END"},
+        {"cat <<EOF\n' \" # <<NOT_A_DOC\nEOF", "EOF", "EOF"},
+        {"cat <<EOF\nEOF extra\n EOF\nEOF", "EOF", "EOF"},
+        {"cat <<EOF\nunfinished body", "EOF", ""},
+        {"f() { cat <<EOF\nhello\nEOF\n}", "EOF", "EOF"},
+        {"cat <<EOF \\\n; echo ready\nhello\nEOF", "EOF", "EOF"},
+    };
+    ic_env_t* env = ensure_env(test_name);
+    if (env == nullptr) {
+        return false;
+    }
+    bool ok = true;
+    for (const auto& test : cases) {
+        attrbuf_t* attrs = highlight_input(test.input, test_name);
+        if (attrs == nullptr) {
+            return false;
+        }
+        ok &= expect_style_range(attrs, env->bbcode, test.input.find(test.opening),
+                                 test.opening.size(), "cjsh-heredoc-delimiter", test_name,
+                                 "opening marker should use the heredoc delimiter style");
+        if (!test.closing.empty()) {
+            const bool closing_ok =
+                expect_style_range(attrs, env->bbcode, test.input.rfind(test.closing),
+                                   test.closing.size(), "cjsh-heredoc-delimiter", test_name,
+                                   "closing marker should use the heredoc delimiter style");
+            if (!closing_ok) {
+                log_failure(test_name, test.input.c_str());
+            }
+            ok &= closing_ok;
+        }
+        attrbuf_free(attrs);
+    }
+    return ok;
+}
+
+static bool test_heredoc_delimiter_false_positives() {
+    const char* test_name = "heredoc_delimiter_false_positives";
+    const std::string inputs[] = {
+        "echo '<<EOF'\nEOF",
+        "echo \"<<EOF\"\nEOF",
+        "echo ok # <<EOF\nEOF",
+        "cat <<<EOF\nEOF",
+        "echo $((1 << EOF))\nEOF",
+        "((1 << EOF))\nEOF",
+        "echo \\<\\<EOF\nEOF",
+        "cat <<\nEOF",
+        "cat << # EOF\nEOF",
+        "cat <<'unfinished",
+        "echo \"multiline\n<<EOF\"\nEOF",
+    };
+    ic_env_t* env = ensure_env(test_name);
+    if (env == nullptr) {
+        return false;
+    }
+    bool ok = true;
+    for (const auto& input : inputs) {
+        attrbuf_t* attrs = highlight_input(input, test_name);
+        if (attrs == nullptr) {
+            return false;
+        }
+        ok &= expect_not_style_range(attrs, env->bbcode, 0, input.size(), "cjsh-heredoc-delimiter",
+                                     test_name,
+                                     "non-heredoc text must not receive delimiter styling");
+        attrbuf_free(attrs);
+    }
+    return ok;
+}
+
+static bool test_heredoc_body_highlighting() {
+    const char* test_name = "heredoc_body_highlighting";
+    const std::string inputs[] = {
+        "cat <<EOF\nEOF extra\n EOF\n\tEOF\n' # <<FAKE\nEOF\necho done",
+        "cat <<-EOF\n EOF\n\tEOF extra\n' # <<FAKE\n\tEOF\necho done",
+        "cat <<'EOF'\n$HOME $(date) !!\nEOF\necho done",
+    };
+    ic_env_t* env = ensure_env(test_name);
+    if (env == nullptr) {
+        return false;
+    }
+    bool ok = true;
+    for (const auto& input : inputs) {
+        attrbuf_t* attrs = highlight_input(input, test_name);
+        if (attrs == nullptr) {
+            return false;
+        }
+        const size_t body_start = input.find('\n') + 1;
+        const size_t closing = input.rfind("EOF");
+        const size_t body_end = input.rfind('\n', closing) + 1;
+        ok &= expect_style_range(attrs, env->bbcode, body_start, body_end - body_start,
+                                 "cjsh-string", test_name,
+                                 "body text and nonmatching markers must not be shell commands");
+        ok &= expect_style_range(attrs, env->bbcode, input.rfind("echo"), 4, "cjsh-builtin",
+                                 test_name, "normal highlighting should resume after the heredoc");
+        attrbuf_free(attrs);
+    }
+    return ok;
+}
+
+static bool test_multiple_heredoc_delimiters() {
+    const char* test_name = "multiple_heredoc_delimiters";
+    const std::string input =
+        "cat <<FIRST <<-SECOND\nSECOND\nFIRST\n\tSECOND\ncat <<THIRD\nFIRST\nTHIRD";
+    attrbuf_t* attrs = highlight_input(input, test_name);
+    if (attrs == nullptr) {
+        return false;
+    }
+    ic_env_t* env = ensure_env(test_name);
+    if (env == nullptr) {
+        attrbuf_free(attrs);
+        return false;
+    }
+    bool ok = true;
+    for (const std::string marker : {"FIRST", "SECOND", "THIRD"}) {
+        const size_t opening = input.find(marker);
+        const size_t closing =
+            marker == "FIRST" ? input.find("FIRST", opening + 1) : input.rfind(marker);
+        ok &=
+            expect_style_range(attrs, env->bbcode, opening, marker.size(), "cjsh-heredoc-delimiter",
+                               test_name, "each opening marker should be highlighted");
+        ok &=
+            expect_style_range(attrs, env->bbcode, closing, marker.size(), "cjsh-heredoc-delimiter",
+                               test_name, "closing markers should follow declaration order");
+    }
+    ok &= expect_not_style_range(attrs, env->bbcode, input.find("\nSECOND") + 1, 6,
+                                 "cjsh-heredoc-delimiter", test_name,
+                                 "a later delimiter inside an earlier body is ordinary text");
+    ok &= expect_not_style_range(attrs, env->bbcode, input.rfind("FIRST"), 5,
+                                 "cjsh-heredoc-delimiter", test_name,
+                                 "a previous delimiter inside a later body is ordinary text");
+    attrbuf_free(attrs);
+    return ok;
+}
+
 static bool test_nested_arithmetic_substitution_highlighting() {
     const char* test_name = "nested_arithmetic_substitution_highlighting";
     const std::string input = "echo $((1 + $(echo 2)))";
@@ -1805,6 +1955,10 @@ static const test_case_t kTests[] = {
     {"bracket_glob_highlighting", test_bracket_glob_highlighting},
     {"brace_glob_highlighting", test_brace_glob_highlighting},
     {"heredoc_operator_highlighting", test_heredoc_operator_highlighting},
+    {"heredoc_delimiter_highlighting", test_heredoc_delimiter_highlighting},
+    {"heredoc_delimiter_false_positives", test_heredoc_delimiter_false_positives},
+    {"multiple_heredoc_delimiters", test_multiple_heredoc_delimiters},
+    {"heredoc_body_highlighting", test_heredoc_body_highlighting},
     {"nested_arithmetic_substitution_highlighting",
      test_nested_arithmetic_substitution_highlighting},
     {"command_substitution_with_quotes_highlighting",
