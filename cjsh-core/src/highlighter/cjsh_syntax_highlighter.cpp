@@ -36,6 +36,7 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -67,11 +68,37 @@ enum class ExistingPathType : std::uint8_t {
     Other
 };
 
+constexpr size_t kMaxHighlightCacheEntries = 64;
+
 struct HighlightPathContext {
     std::optional<std::string> cwd;
     std::string previous_directory;
     std::optional<std::vector<std::string>> executables;
     std::optional<std::unordered_set<std::string>> commands;
+    // A redraw sees one snapshot; never retain filesystem or shell-state answers
+    // across callbacks. Repeated words in multiline input need only one lookup.
+    // Cap each cache so large inputs with unique words do not allocate per token.
+    std::unordered_map<std::string, command_analysis::CommandTokenClassification> classifications;
+    std::unordered_map<std::string, ExistingPathType> argument_paths;
+    std::unordered_map<std::string, bool> split_candidates;
+
+    command_analysis::CommandTokenClassification classify(const std::string& token,
+                                                          size_t absolute_start) {
+        // Quick history substitution is only recognized at the start of the input.
+        if (!token.empty() && token.front() == '^') {
+            return command_analysis::classify_command_token(token, absolute_start, g_shell.get());
+        }
+        const auto found = classifications.find(token);
+        if (found != classifications.end()) {
+            return found->second;
+        }
+        const auto result =
+            command_analysis::classify_command_token(token, absolute_start, g_shell.get());
+        if (classifications.size() < kMaxHighlightCacheEntries) {
+            classifications.emplace(token, result);
+        }
+        return result;
+    }
 
     void initialize() {
         if (!cwd.has_value()) {
@@ -102,18 +129,23 @@ ExistingPathType classify_existing_path_argument(const std::string& token,
         return ExistingPathType::None;
     }
 
+    const auto found = paths.argument_paths.find(token);
+    if (found != paths.argument_paths.end()) {
+        return found->second;
+    }
     paths.initialize();
     const std::string path_to_check =
         cjsh_filesystem::resolve_shell_token_path(token, *paths.cwd, paths.previous_directory);
     std::error_code status_error;
     const std::filesystem::file_status status =
         std::filesystem::status(path_to_check, status_error);
-    if (status_error || !std::filesystem::exists(status)) {
-        return ExistingPathType::None;
+    const auto result = status_error || !std::filesystem::exists(status) ? ExistingPathType::None
+                        : std::filesystem::is_regular_file(status) ? ExistingPathType::RegularFile
+                                                                   : ExistingPathType::Other;
+    if (paths.argument_paths.size() < kMaxHighlightCacheEntries) {
+        paths.argument_paths.emplace(token, result);
     }
-
-    return std::filesystem::is_regular_file(status) ? ExistingPathType::RegularFile
-                                                    : ExistingPathType::Other;
+    return result;
 }
 
 bool has_nearby_split_merge_candidate(const std::string& first_token,
@@ -123,6 +155,12 @@ bool has_nearby_split_merge_candidate(const std::string& first_token,
         return false;
     }
 
+    // Include the boundary: different word splits can have the same concatenation.
+    const std::string key = first_token + '\0' + second_token;
+    const auto found = paths.split_candidates.find(key);
+    if (found != paths.split_candidates.end()) {
+        return found->second;
+    }
     constexpr size_t kMaxGapChars = 1;
     const size_t min_candidate_length = first_token.length() + second_token.length();
     const size_t max_candidate_length = min_candidate_length + kMaxGapChars;
@@ -143,15 +181,23 @@ bool has_nearby_split_merge_candidate(const std::string& first_token,
 
     for (const auto& candidate : paths.available_commands()) {
         if (matches_candidate(candidate)) {
+            if (paths.split_candidates.size() < kMaxHighlightCacheEntries) {
+                paths.split_candidates.emplace(key, true);
+            }
             return true;
         }
     }
 
     const auto& executables = paths.executables_in_path();
-    return std::any_of(executables.begin(), executables.end(), [&](const std::string& candidate) {
-        return matches_candidate(candidate) &&
-               !cjsh_filesystem::find_executable_in_path(candidate).empty();
-    });
+    const bool result =
+        std::any_of(executables.begin(), executables.end(), [&](const std::string& candidate) {
+            return matches_candidate(candidate) &&
+                   !cjsh_filesystem::find_executable_in_path(candidate).empty();
+        });
+    if (paths.split_candidates.size() < kMaxHighlightCacheEntries) {
+        paths.split_candidates.emplace(key, result);
+    }
+    return result;
 }
 
 void highlight_command_range(ic_highlight_env_t* henv, const char* input,
@@ -180,8 +226,7 @@ void highlight_command_range(ic_highlight_env_t* henv, const char* input,
     size_t absolute_token_start = cmd_start + first_token_start;
     size_t first_token_length = first_token_end - first_token_start;
 
-    const auto classification =
-        command_analysis::classify_command_token(token, absolute_token_start, g_shell.get());
+    const auto classification = paths.classify(token, absolute_token_start);
     const bool first_token_unknown = !classification.known;
 
     bool highlight_split_unknown_second_token = false;
@@ -202,8 +247,8 @@ void highlight_command_range(ic_highlight_env_t* henv, const char* input,
                     cmd_str.substr(second_token_start, second_token_end - second_token_start);
                 if (command_lookup::token_allows_split_command_merge(second_token)) {
                     const size_t absolute_second_token_start = cmd_start + second_token_start;
-                    const bool merged_token_known = command_analysis::is_known_command_token(
-                        token + second_token, absolute_token_start, g_shell.get());
+                    const bool merged_token_known =
+                        paths.classify(token + second_token, absolute_token_start).known;
                     const bool merged_token_near_match =
                         !merged_token_known &&
                         has_nearby_split_merge_candidate(token, second_token, paths);

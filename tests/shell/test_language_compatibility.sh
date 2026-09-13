@@ -122,6 +122,14 @@ run_expect_output "extglob works in parameter replacement" \
     'cjshopt extglob on >/dev/null; value=foobar; printf "%s|%s" "${value/@(foo|bar)/X}" "${value//+(foo|bar)/X}"' \
     'Xbar|X'
 
+run_expect_output "overlapping and empty extglob alternatives retain suffix matching" \
+    'cjshopt extglob on >/dev/null; for value in b aab aaab aaac; do case "$value" in *(a|aa|)b) printf "yes " ;; *) printf "no " ;; esac; done' \
+    'yes yes yes no '
+
+run_expect_output "extglob frontiers preserve leftmost-longest replacement and trimming" \
+    'cjshopt extglob on >/dev/null; value=aaabaa; printf "%s|%s|%s|%s" "${value//+(a|aa)/X}" "${value##*(a|aa)}" "${value%%+(a|aa)}" "${value/@(*a*a)b/X}"' \
+    'XbX|baa|aaab|Xaa'
+
 EXTGLOB_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cjsh-extglob.XXXXXX")
 touch "$EXTGLOB_DIR/one.txt" "$EXTGLOB_DIR/two.txt" "$EXTGLOB_DIR/three.log" \
     "$EXTGLOB_DIR/.hidden.txt"

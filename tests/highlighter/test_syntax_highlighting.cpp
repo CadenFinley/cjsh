@@ -749,6 +749,57 @@ static bool test_split_command_path_changes_between_highlights() {
     return ok;
 }
 
+static bool test_redraw_lookup_cache_refresh() {
+    const char* test_name = "redraw_lookup_cache_refresh";
+    namespace fs = std::filesystem;
+    const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root =
+        fs::temp_directory_path() / ("cjsh_redraw_cache_" + std::to_string(suffix));
+    fs::create_directories(root);
+    const fs::path target = root / "target";
+    const std::string token = target.string();
+    const std::string input = token + "; echo " + token + " " + token + "; " + token;
+    ic_env_t* env = ensure_env(test_name);
+    bool ok = env != nullptr;
+    // Reuse tokens within a redraw, but observe creation, type changes and deletion
+    // on the next callback without a PATH change or explicit invalidation.
+    for (int phase = 0; phase < 4; ++phase) {
+        if (phase == 1) {
+            std::ofstream(target) << "content\n";
+        } else if (phase == 2) {
+            fs::remove(target);
+            fs::create_directory(target);
+        } else if (phase == 3) {
+            fs::remove(target);
+        }
+        attrbuf_t* attrs = highlight_input(input, test_name);
+        if (attrs == nullptr || env == nullptr) {
+            ok = false;
+        } else {
+            const char* command_style =
+                phase == 0 || phase == 3 ? "cjsh-unknown-command" : "cjsh-system";
+            const char* argument_style = phase == 1   ? "cjsh-file-argument"
+                                         : phase == 2 ? "cjsh-path-exists"
+                                                      : "cjsh-path-not-exists";
+            size_t occurrence = 0;
+            for (size_t pos = input.find(token); pos != std::string::npos;
+                 pos = input.find(token, pos + token.size()), ++occurrence) {
+                ok = expect_style_range(
+                         attrs, env->bbcode, pos, token.size(),
+                         occurrence == 0 || occurrence == 3 ? command_style : argument_style,
+                         test_name, "redraw must refresh repeated path lookups") &&
+                     ok;
+            }
+        }
+        if (attrs != nullptr) {
+            attrbuf_free(attrs);
+        }
+    }
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 static bool test_unknown_command_argument_not_marked_as_unknown_command() {
     const char* test_name = "unknown_command_argument_not_marked_as_unknown_command";
     const std::string unknown_command = "definitelynotrealcmd";
@@ -1733,6 +1784,7 @@ static const test_case_t kTests[] = {
      test_split_unknown_command_fragment_highlighting_with_gap},
     {"split_command_path_changes_between_highlights",
      test_split_command_path_changes_between_highlights},
+    {"redraw_lookup_cache_refresh", test_redraw_lookup_cache_refresh},
     {"split_unknown_command_fragment_highlighting_with_known_second_token",
      test_split_unknown_command_fragment_highlighting_with_known_second_token},
     {"unknown_command_argument_not_marked_as_unknown_command",

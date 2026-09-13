@@ -394,6 +394,58 @@ bool test_pattern_matching() {
     return ok;
 }
 
+bool test_extended_pattern_frontiers() {
+    const bool previous_extglob = config::extglob_enabled;
+    config::extglob_enabled = true;
+    PatternMatcher matcher;
+    bool ok = true;
+    const struct {
+        const char* text;
+        const char* pattern;
+        bool expected;
+    } cases[] = {
+        {"", "*(a|)", true},
+        {"", "+(a|)", true},
+        {"", "+(a)", false},
+        {"aaab", "+(a|aa)b", true},
+        {"aaac", "+(a|aa)b", false},
+        {"aaab", "*(a|aa|)b", true},
+        {"b", "*(a|aa|)b", true},
+        {"abab", "+(@(a|ab)|b)", true},
+        {"abac", "+(@(a|ab)|b)", false},
+        {"abcd", "@(*a*b*|*a*c*)d", true},
+        {"abcd", "@(*a*b*|*a*c*)e", false},
+        {"ab", "?(a|ab)b", true},
+        {"b", "?(a|ab)b", true},
+        {"aaab", "!(a|aa)b", true},
+        {"aab", "!(a|aa)b", false},
+        {"b", "!(|a)b", false},
+        {"aab", "!(|a)b", true},
+        {"7b", "@([[:digit:]]|[ab])b", true},
+        {"a*b", "@(a\\*|b)b", true},
+    };
+    for (const auto& entry : cases) {
+        ok = expect(matcher.matches_pattern(entry.text, entry.pattern, false) == entry.expected,
+                    entry.pattern) &&
+             ok;
+    }
+    const std::string repeated(4096, 'a');
+    ok = expect(matcher.matches_pattern(repeated + "b", "+(a|aa|)b", false),
+                "overlapping repetitions retain all reachable endpoints") &&
+         ok;
+    ok = expect(!matcher.matches_pattern(repeated + "c", "+(a|aa|)b", false),
+                "overlapping repetitions reject a failed suffix") &&
+         ok;
+    ok = expect(!matcher.matches_pattern(repeated + "c", "@(*a*a*a*a)b", false),
+                "equivalent star splits must not be explored repeatedly") &&
+         ok;
+    ok = expect(matcher.matches_pattern(repeated, "@(" + repeated + ")", false),
+                "long sequences inside groups do not recurse per literal") &&
+         ok;
+    config::extglob_enabled = previous_extglob;
+    return ok;
+}
+
 bool test_literal_pattern_removal() {
     std::string value;
     PatternMatcher matcher;
@@ -562,11 +614,12 @@ int main() {
     const bool import_ok = test_environment_import();
     const bool pattern_ok = test_pattern_matching();
     const bool endpoints_ok = test_pattern_endpoints_and_expansion();
+    const bool frontiers_ok = test_extended_pattern_frontiers();
     g_shell.reset();
     if (!lookup_ok || !expansion_ok || !replacement_ok || !removal_ok || !import_ok ||
-        !pattern_ok || !transitions_ok || !endpoints_ok) {
+        !pattern_ok || !transitions_ok || !endpoints_ok || !frontiers_ok) {
         return 1;
     }
-    std::puts("All 8 variable lookup and expansion tests passed");
+    std::puts("All 9 variable lookup and expansion tests passed");
     return 0;
 }

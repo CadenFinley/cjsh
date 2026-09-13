@@ -228,10 +228,17 @@ std::vector<size_t> match_sequence(const std::vector<PatternNode>& sequence, siz
 
 std::vector<size_t> match_alternatives(const std::vector<std::vector<PatternNode>>& alternatives,
                                        const std::string& text, size_t text_index) {
+    if (alternatives.size() == 1) {
+        return match_sequence(alternatives.front(), 0, text, text_index);
+    }
     std::vector<size_t> endpoints;
+    std::vector<bool> seen(text.size() + 1, false);
     for (const auto& alternative : alternatives) {
         for (size_t endpoint : match_sequence(alternative, 0, text, text_index)) {
-            append_unique(endpoints, endpoint);
+            if (!seen[endpoint]) {
+                seen[endpoint] = true;
+                endpoints.push_back(endpoint);
+            }
         }
     }
     return endpoints;
@@ -240,13 +247,19 @@ std::vector<size_t> match_alternatives(const std::vector<std::vector<PatternNode
 std::vector<size_t> repeat_group(const PatternNode& node, const std::string& text,
                                  const std::vector<size_t>& initial) {
     std::vector<size_t> endpoints = initial;
-    // This worklist grows while matching; iterators would be invalidated by append_unique.
+    std::vector<bool> seen(text.size() + 1, false);
+    for (size_t endpoint : endpoints) {
+        seen[endpoint] = true;
+    }
+    // Visit each reachable offset once, including for overlapping or empty alternatives.
+    // This worklist grows while matching, so iterators would be invalidated.
     // NOLINTNEXTLINE(modernize-loop-convert)
     for (size_t cursor = 0; cursor < endpoints.size(); ++cursor) {
         size_t begin = endpoints[cursor];
         for (size_t endpoint : match_alternatives(node.alternatives, text, begin)) {
-            if (endpoint != begin) {
-                append_unique(endpoints, endpoint);
+            if (!seen[endpoint]) {
+                seen[endpoint] = true;
+                endpoints.push_back(endpoint);
             }
         }
     }
@@ -295,9 +308,13 @@ std::vector<size_t> match_node(const PatternNode& node, const std::string& text,
         return repeat_group(node, text, direct);
     }
     if (node.value == '!') {
+        std::vector<bool> excluded(text.size() + 1, false);
+        for (size_t endpoint : direct) {
+            excluded[endpoint] = true;
+        }
         std::vector<size_t> endpoints;
         for (size_t endpoint = text_index; endpoint <= text.size(); ++endpoint) {
-            if (std::find(direct.begin(), direct.end(), endpoint) == direct.end()) {
+            if (!excluded[endpoint]) {
                 endpoints.push_back(endpoint);
             }
         }
@@ -308,17 +325,53 @@ std::vector<size_t> match_node(const PatternNode& node, const std::string& text,
 
 std::vector<size_t> match_sequence(const std::vector<PatternNode>& sequence, size_t node_index,
                                    const std::string& text, size_t text_index) {
-    if (node_index >= sequence.size()) {
-        return {text_index};
-    }
-
-    std::vector<size_t> endpoints;
-    for (size_t next_index : match_node(sequence[node_index], text, text_index)) {
-        for (size_t endpoint : match_sequence(sequence, node_index + 1, text, next_index)) {
-            append_unique(endpoints, endpoint);
+    // All paths reaching the same offset at a node have the same remaining work.
+    // Advance a unique frontier instead of recursively exploring every star split.
+    // Memory is bounded by input length; recursion is only needed for nested groups.
+    std::vector<size_t> positions{text_index};
+    std::vector<size_t> next;
+    std::vector<bool> seen;
+    for (; node_index < sequence.size() && !positions.empty(); ++node_index) {
+        const auto& node = sequence[node_index];
+        if (node.kind == PatternNodeKind::AnyString) {
+            const size_t begin = *std::min_element(positions.begin(), positions.end());
+            positions.clear();
+            for (size_t pos = begin; pos <= text.size(); ++pos) {
+                positions.push_back(pos);
+            }
+            continue;
         }
+        if (node.kind == PatternNodeKind::ExtendedGroup && positions.size() == 1) {
+            positions = match_node(node, text, positions.front());
+            continue;
+        }
+        next.clear();
+        if (node.kind == PatternNodeKind::ExtendedGroup) {
+            seen.assign(text.size() + 1, false);
+            for (size_t pos : positions) {
+                for (size_t endpoint : match_node(node, text, pos)) {
+                    if (!seen[endpoint]) {
+                        seen[endpoint] = true;
+                        next.push_back(endpoint);
+                    }
+                }
+            }
+        } else {
+            // Literal, '?' and character-class transitions are one-to-one, so
+            // unique input offsets remain unique without a membership table.
+            for (size_t pos : positions) {
+                if (pos < text.size() &&
+                    (node.kind == PatternNodeKind::AnyCharacter ||
+                     (node.kind == PatternNodeKind::Literal && node.value == text[pos]) ||
+                     (node.kind == PatternNodeKind::CharacterClass &&
+                      character_class_matches(text[pos], node.character_class)))) {
+                    next.push_back(pos + 1);
+                }
+            }
+        }
+        positions.swap(next);
     }
-    return endpoints;
+    return positions;
 }
 
 struct CompiledPattern {
