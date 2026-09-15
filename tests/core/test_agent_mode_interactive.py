@@ -34,9 +34,11 @@ import json
 import os
 import re
 import shlex
+import struct
 import subprocess
 import sys
 import tempfile
+import termios
 import time
 
 CURSOR_QUERY = b"\x1b[6n"
@@ -53,6 +55,49 @@ def normalize_terminal_output(output: bytes) -> bytes:
     return ANSI_CSI_RE.sub(b"", normalized)
 
 
+def assert_waiting_shimmer(output: bytes, command: bytes) -> None:
+    # Track foreground colors without discarding the per-letter SGR sequences.
+    output = ANSI_OSC_RE.sub(b"", output)
+    text = bytearray()
+    colors: list[tuple[int, ...] | None] = []
+    foreground: tuple[int, ...] | None = None
+    end = 0
+    for escape in ANSI_CSI_RE.finditer(output):
+        chunk = output[end : escape.start()]
+        text.extend(chunk)
+        colors.extend([foreground] * len(chunk))
+        end = escape.end()
+        if not escape.group().endswith(b"m"):
+            continue
+        parameters = [int(value or b"0") for value in escape.group()[2:-1].split(b";")]
+        index = 0
+        while index < len(parameters):
+            value = parameters[index]
+            if value in (0, 39):
+                foreground = None
+            elif 30 <= value <= 37 or 90 <= value <= 97:
+                foreground = (value,)
+            elif value in (38, 48) and index + 1 < len(parameters):
+                size = 5 if parameters[index + 1] == 2 else 3
+                if value == 38:
+                    foreground = tuple(parameters[index : index + size])
+                index += size - 1
+            index += 1
+    text.extend(output[end:])
+    colors.extend([foreground] * (len(output) - end))
+    frames = list(re.finditer(rb"Running \[0s\]: " + re.escape(command), text))
+    profiles = {tuple(colors[frame.start() : frame.start() + 13]) for frame in frames}
+    if len(profiles) < 4:
+        raise AssertionError("waiting label did not animate between elapsed-second updates")
+    for frame in frames:
+        label_colors = colors[frame.start() : frame.start() + 13]
+        if not all(color and color[:2] == (38, 2) for color in label_colors):
+            raise AssertionError("the shimmer did not cover exactly the running label")
+        command_colors = colors[frame.start() + 13 : frame.end()]
+        if not command_colors or set(command_colors) != {(90,)}:
+            raise AssertionError("the shimmer leaked into the space or executor command")
+
+
 class Session:
     def __init__(
         self,
@@ -60,12 +105,19 @@ class Session:
         home: str,
         cwd: str | None = None,
         prompt_vars: bool = False,
+        no_color: bool = False,
     ) -> None:
         self.master_fd, slave_fd = os.openpty()
+        # Keep long macOS temporary executor paths on one row for style assertions.
+        fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 240, 0, 0))
         flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
         fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         env = os.environ.copy()
         env["TERM"] = "xterm-256color"
+        env["COLORTERM"] = "truecolor"
+        env.pop("NO_COLOR", None)
+        if no_color:
+            env["NO_COLOR"] = "1"
         env["HOME"] = home
         env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
         arguments = [binary, "--no-titleline"]
@@ -430,6 +482,13 @@ def main() -> int:
                     start=longest_start,
                 )
             session.wait_for(b"agent command:", start=longest_start)
+            assert_waiting_shimmer(
+                bytes(session.output[longest_start:]), f"{executor} longest".encode()
+            )
+            finished_start = len(session.output)
+            session.pump(0.2)
+            if b"Running" in normalize_terminal_output(bytes(session.output[finished_start:])):
+                raise AssertionError("the shimmer continued after the executor finished")
             with open(prompt_capture, encoding="utf-8") as captured:
                 route, prompt = captured.read().split("|", 1)
                 context_marker = (
@@ -653,6 +712,23 @@ def main() -> int:
                 )
         finally:
             session.close()
+
+        # NO_COLOR keeps the timer readable without per-frame animation redraws.
+        plain_session = Session(sys.argv[1], configured_home, no_color=True)
+        try:
+            plain_session.wait_for(PROMPT_INPUT_START)
+            plain_start = len(plain_session.output)
+            plain_session.enter_text(b":deep no color request")
+            plain_session.wait_for(b"agent command:", start=plain_start)
+            plain_output = bytes(plain_session.output[plain_start:])
+            for seconds in range(3):
+                label = f"Running [{seconds}s]: {executor} longest".encode()
+                if normalize_terminal_output(plain_output).count(label) != 1:
+                    raise AssertionError("NO_COLOR should update the waiting status once per second")
+            if re.search(rb"\x1b\[[0-9;]*38;[25];", plain_output):
+                raise AssertionError("NO_COLOR emitted shimmer colors")
+        finally:
+            plain_session.close()
 
         # A configured PS1_FINAL restyles only the preserved request. The generated
         # command continues on the original active PS1.

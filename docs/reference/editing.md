@@ -605,8 +605,10 @@ highlighter styles the prefix and the remaining natural-language request with `a
 `agent-request`; it does not interpret request punctuation as shell syntax. Both styles can be
 changed with `cjshopt style_def`. A transient `Running [0s]: <configured command>` status
 shows the selected executor's configured command and arguments, with elapsed seconds updating
-while it runs. The timer starts at zero for each request, and the status clears before results or
-an error are displayed (or when the request is canceled).
+while it runs. A soft, left-to-right text shimmer animates only `Running [0s]:`, leaving the
+configured command unchanged. With colors disabled (including `NO_COLOR`), only the once-per-second
+timer updates remain. The timer and shimmer restart for each request, and the status clears before
+results or an error are displayed (or when the request is canceled).
 Use `Up`/`Down` to select a suggestion, `Tab` to insert it for review, `Enter` to submit it, or `Esc`
 to keep the original buffer.
 

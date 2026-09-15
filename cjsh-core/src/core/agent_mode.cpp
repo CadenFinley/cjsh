@@ -32,6 +32,7 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
@@ -72,6 +73,7 @@ namespace agent_mode {
 namespace {
 
 constexpr const char* kDefaultKeySpec = "alt-a";
+constexpr unsigned int kWaitingFrameIntervalMs = 40;
 constexpr size_t kMaxSuggestions = 3;
 constexpr size_t kMaxDirectoryEntries = 256;
 constexpr std::string_view kMasterSystemPrompt =
@@ -752,15 +754,44 @@ class ScopedWaitingStatus {
     }
 
     void advance() {
-        const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::steady_clock::now() - started_at_);
-        if (elapsed == last_elapsed_) {
+        const auto elapsed = std::chrono::steady_clock::now() - started_at_;
+        const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+        const bool animate = config::colors_enabled && ic_term_get_color_bits() > 1;
+        const auto frame =
+            animate ? std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() /
+                          kWaitingFrameIntervalMs
+                    : seconds;
+        if (frame == last_frame_) {
             return;
         }
-        last_elapsed_ = elapsed;
-        status_line::set_transient_status_message(
-            "[ic-info]Running \\[" + std::to_string(elapsed.count()) + "s]: " +
-            command_display_ + "[/]");
+        last_frame_ = frame;
+
+        const std::string label = "Running [" + std::to_string(seconds) + "s]:";
+        std::ostringstream message;
+        message << "[ic-info]";
+        // A soft light sweeps left to right, then pauses offscreen before repeating.
+        // Only the ASCII label gets per-character styling; the executor stays ic-info.
+        const double peak = std::fmod(std::chrono::duration<double>(elapsed).count() * 25.0,
+                                      static_cast<double>(label.size()) + 35.0) -
+                            12.0;
+        for (size_t index = 0; index < label.size(); ++index) {
+            if (animate) {
+                const double distance = static_cast<double>(index) - peak;
+                const auto brightness = static_cast<unsigned int>(
+                    100.0 + 155.0 * std::exp(-distance * distance / 16.0));
+                message << "[color=#" << std::hex << std::setfill('0') << std::setw(6)
+                        << brightness * 0x010101U << "]";
+            }
+            if (label[index] == '[') {
+                message << '\\';
+            }
+            message << label[index];
+            if (animate) {
+                message << "[/]";
+            }
+        }
+        message << ' ' << command_display_ << "[/]";
+        status_line::set_transient_status_message(message.str());
         (void)ic_current_loop_reset(nullptr, nullptr, nullptr);
         ic_term_flush();
     }
@@ -770,7 +801,7 @@ class ScopedWaitingStatus {
 
    private:
     const std::chrono::steady_clock::time_point started_at_{std::chrono::steady_clock::now()};
-    std::chrono::seconds last_elapsed_{-1};
+    int64_t last_frame_{-1};
     std::string command_display_;
 };
 
@@ -845,7 +876,7 @@ bool run_agent(bool require_prefix) {
     {
         ScopedWaitingStatus waiting_status(resolved->executor->command_display);
         output = exec_utils::execute_command_vector_for_output_with_progress(
-            executor_args, [&waiting_status] { waiting_status.advance(); }, 250,
+            executor_args, [&waiting_status] { waiting_status.advance(); }, kWaitingFrameIntervalMs,
             [&request_cancelled] {
                 if (!request_cancelled) {
                     request_cancelled = agent_interrupt_requested();
