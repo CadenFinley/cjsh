@@ -1966,8 +1966,26 @@ Hide the entire status area—syntax validation, inline diagnostics, and the hin
 <li><code>on</code> (default) – keep validation messages and banners visible.</li>
 <li><code>off</code> – remove the status row entirely; <code>status-hints</code> preferences are remembered but stay hidden until you turn the line back on.</li>
 </ul>
+<p><strong>Command Hints:</strong>
+When the cursor is on or immediately after a literal command name, the status line shows how
+that name resolves:</p>
+<ul>
+<li>External commands: <code>(/bin/ls) - list directory contents</code> using the current PATH lookup and
+  available completion documentation.</li>
+<li>Builtins: <code>(builtin) - Change the current directory</code> for <code>cd</code>.</li>
+<li>Defined functions: <code>(function)</code>.</li>
+<li>Aliases: <code>(alias) - ls -l</code> for <code>ll</code>.</li>
+<li>Interactive abbreviations: <code>(abbreviation) - git status</code> for <code>gs</code>.</li>
+<li>Shell keywords: <code>(keyword) - Evaluate a conditional block</code> for <code>if</code>.</li>
+</ul>
+<p>This also works for commands after pipes and command separators. The hint disappears when you
+move into arguments. Abbreviations and aliases show their expansion text without executing it.
+External descriptions reuse cached or registered completion documentation; typing never triggers
+manual-page fetching. When no description is available, only the parenthesized source is shown.
+The source tag uses the completion menu's <code>ic-diminish</code> style, followed by an unstyled description.
+Disabling colors or syntax highlighting leaves the entire hint unstyled.</p>
 <p><strong>cjsh Status Reporting:</strong>
-Prefer to keep the status line for banners but hide validation/error text? Toggle the built-in reporting channel.</p>
+Prefer to keep the status line for banners but hide validation/error text and command hints? Toggle the built-in reporting channel.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
 </span></code></pre></div>
 <ul>
@@ -2135,9 +2153,12 @@ preserved request; the generated command still uses the normal active <code>PS1<
 prefix is removed before the request is sent. While an enabled trigger prefix matches, the syntax
 highlighter styles the prefix and the remaining natural-language request with <code>agent-prefix</code> and
 <code>agent-request</code>; it does not interpret request punctuation as shell syntax. Both styles can be
-changed with <code>cjshopt style_def</code>. A transient <strong>Waiting for agent response.</strong> status
-animates through one, two, and three dots while the executor is running, then clears before its
-results or an error are displayed.
+changed with <code>cjshopt style_def</code>. A transient <code>Running [0s]: &lt;configured command&gt;</code> status
+shows the selected executor's configured command and arguments, with elapsed seconds updating
+while it runs. A soft, left-to-right text shimmer animates only <code>Running [0s]:</code>, leaving the
+configured command unchanged. With colors disabled (including <code>NO_COLOR</code>), only the once-per-second
+timer updates remain. The timer and shimmer restart for each request, and the status clears before
+results or an error are displayed (or when the request is canceled).
 Use <code>Up</code>/<code>Down</code> to select a suggestion, <code>Tab</code> to insert it for review, <code>Enter</code> to submit it, or <code>Esc</code>
 to keep the original buffer.</p>
 <p>Invoking the agent activation key with an empty or whitespace-only buffer, or pressing <code>Enter</code>
