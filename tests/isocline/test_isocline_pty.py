@@ -2331,8 +2331,6 @@ def main() -> int:
     mouse_wheel_down = b"\x1b[<65;1;1M"
     mouse_wheel_down_shift = b"\x1b[<69;1;1M"
     mouse_release = b"\x1b[<3;1;1m"
-    # Directory and nested-scope indicators wrap the history header to two rows.
-    mouse_click_history_second = mouse_left_click(6, 5)
     mouse_click_custom_second = mouse_left_click(6, 4)
     mouse_click_completion_expanded_second = mouse_left_click(6, 4)
     # At 80 columns, the collapsed completion header wraps to two rows when it
@@ -2596,15 +2594,21 @@ def main() -> int:
             f"{hist_all_off!r}"
         )
 
-    hist_click = run_case(
-        binary,
-        "history_search_scroll",
-        b"\x12" + mouse_click_history_second + b"!\r",
-    )
-    if hist_click != "history alpha!":
-        raise AssertionError(
-            f"history_search_click expected 'history alpha!', got {hist_click!r}"
+    # The scope indicators wrap the header at 80 columns, but not at 120.
+    # Pin the viewport so click coordinates do not depend on the parent terminal.
+    for columns, second_row in ((80, 5), (120, 4)):
+        hist_click = run_case(
+            binary,
+            "history_search_scroll",
+            b"\x12" + mouse_left_click(6, second_row) + b"!\r",
+            initial_rows=24,
+            initial_cols=columns,
         )
+        if hist_click != "history alpha!":
+            raise AssertionError(
+                f"history_search_click at {columns} columns expected 'history alpha!', "
+                f"got {hist_click!r}"
+            )
 
     hist_search_ctrl_s = run_case(binary, "history_search_scroll", b"\x13\r")
     if hist_search_ctrl_s != "history beta":

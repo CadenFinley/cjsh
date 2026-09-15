@@ -11,6 +11,24 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-09-15
+
+### Added
+
+- Added directory-aware interactive history with `cjshopt history-directory` and `cjshopt history-directory-subdirs`, both off by default, to scope arrow-key recall, fuzzy search, and history completions to the current directory and optionally its descendants. `Alt+D` and `Alt+N` toggle these settings temporarily inside the history menu.
+- Added customizable `heredoc-delimiter` highlighting for opening and closing markers, including quoted or escaped delimiters, multiple heredocs, and `<<-` tab stripping. Heredoc bodies now use string styling rather than command highlighting.
+- Added regression coverage for directory-scoped history, heredoc highlighting, completion lookup behavior, and glob and extended-glob matching endpoints.
+
+### Changed
+
+- History records now capture the physical working directory before command execution and deduplicate repeated commands per directory. Older records remain available in global history; `history`, `fc`, and history expansion continue to use the full history.
+- Improved syntax-highlighting and completion hot paths with bounded per-redraw lookup caches, fewer redundant PATH and filesystem checks, earlier spell-correction filtering, and lighter history metadata parsing.
+- Optimized pattern-based parameter trimming and replacement by reusing matching endpoints, and reduced repeated work when matching overlapping or empty extended-glob alternatives.
+
+### Fixed
+
+- Made history-menu mouse-click PTY coverage independent of the parent terminal width, checking both wrapped and single-row history headers.
+
 ## [1.5.5] - 2026-09-12
 
 ### Added
@@ -962,7 +980,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Included JSON prompt themes, a shared-library plugin engine, and an optional built-in AI assistant.
 - Included CMake builds, installation helpers, and shell compatibility tests.
 
-[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.5...HEAD
+[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.6...HEAD
+[1.5.6]: https://github.com/CadenFinley/cjsh/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/CadenFinley/cjsh/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/CadenFinley/cjsh/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/CadenFinley/cjsh/compare/v1.5.2...v1.5.3
