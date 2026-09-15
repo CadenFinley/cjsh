@@ -363,8 +363,26 @@ cjshopt status-line on|off|status
 - `on` (default) – keep validation messages and banners visible.
 - `off` – remove the status row entirely; `status-hints` preferences are remembered but stay hidden until you turn the line back on.
 
+**Command Hints:**
+When the cursor is on or immediately after a literal command name, the status line shows how
+that name resolves:
+
+- External commands: `Command path: /bin/ls` using the current PATH lookup.
+- Builtins: `Builtin: cd`.
+- Defined functions: `Function: myfunc`.
+- Aliases: `Alias: ll -> ls -l`.
+- Interactive abbreviations: `Abbreviation: gs -> git status`.
+- Shell keywords: `Keyword: if`.
+
+This also works for commands after pipes and command separators. The hint disappears when you
+move into arguments. Abbreviations and aliases show their expansion text without executing it.
+The entire hint uses the syntax highlighter's named style: `cjsh-system` for external commands,
+`cjsh-builtin` for builtins/functions/aliases/abbreviations, and `cjsh-keyword` for keywords.
+Custom style definitions apply to these hints too; disabling colors or syntax highlighting leaves
+the hint unstyled.
+
 **cjsh Status Reporting:**
-Prefer to keep the status line for banners but hide validation/error text? Toggle the built-in reporting channel.
+Prefer to keep the status line for banners but hide validation/error text and command hints? Toggle the built-in reporting channel.
 
 ```bash
 cjshopt status-reporting on|off|status

@@ -36,7 +36,7 @@ import tempfile
 import termios
 import unittest
 
-from test_idle_hook_interactive import IdleHookSession
+from test_idle_hook_interactive import IdleHookSession, PROMPT_INPUT_START
 
 
 class InteractiveTests(unittest.TestCase):
@@ -47,15 +47,69 @@ class InteractiveTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.home = Path(directory.name)
 
-    def session(self, history=False, *, terminal_size=None):
+    def session(self, history=False, *, terminal_size=None, syntax_highlighting=False):
         args = [self.binary, "--no-config", "--no-titleline", "--no-prompt-vars",
-                "--no-completions", "--no-syntax-highlighting"]
+                "--no-completions"]
+        if not syntax_highlighting:
+            args.append("--no-syntax-highlighting")
         if not history:
             args.append("--no-history")
         s = IdleHookSession(self.binary, str(self.home), argv=args, terminal_size=terminal_size)
         self.addCleanup(s.close)
         s.wait_for_prompt(0)
         return s
+
+    def test_command_path_hint_tracks_cursor(self):
+        for name in ("pathprobe", "pathother"):
+            executable = self.home / name
+            executable.write_text("#!/bin/sh\nexit 0\n")
+            executable.chmod(0o755)
+        session = self.session(terminal_size=(24, 160))
+        session.run_command(f"export PATH={shlex.quote(str(self.home))}:$PATH".encode())
+        session.write(b"\x1b[200~pathprobe | pathother arg\x1b[201~")
+        session.pump(0.2)
+
+        start = len(session.output)
+        session.write(b"\x01")  # Home: touch the first command without changing input.
+        session.wait_for_normalized(f"Command path: {self.home}/pathprobe".encode(), start)
+
+        start = len(session.output)
+        session.write(b"\x05")  # End: arguments should not show a command path.
+        session.pump(0.2)
+        # Cursor movement can redraw once with the old status before the status refresh.
+        # Check the final frame, not the accumulated terminal output.
+        final_frame = bytes(session.output[start:]).rsplit(PROMPT_INPUT_START, 1)[-1]
+        self.assertNotIn(b"Command path:", final_frame)
+
+        start = len(session.output)
+        session.write(b"\x1b[D" * 4)  # Immediately after the second command name.
+        session.wait_for_normalized(f"Command path: {self.home}/pathother".encode(), start)
+
+    def test_shell_command_hints_use_custom_syntax_styles(self):
+        session = self.session(terminal_size=(24, 160), syntax_highlighting=True)
+        session.run_command(b'cjshopt style_def builtin "ansi-red"')
+        session.run_command(b"hintfunction() { :; }")
+        session.run_command(b"alias hintalias='echo [value]'")
+        session.run_command(b"abbr hintabbr='echo [value]'")
+        for command, expected in (
+            (b"echo", b"Builtin: echo"),
+            (b"hintfunction", b"Function: hintfunction"),
+            (b"hintalias", b"Alias: hintalias -> echo [value]"),
+            (b"hintabbr", b"Abbreviation: hintabbr -> echo [value]"),
+        ):
+            start = len(session.output)
+            session.write(b"\x1b[200~" + command + b"\x1b[201~")
+            session.wait_for_normalized(expected, start)
+            self.assertIn(b"\x1b[91m" + expected, bytes(session.output[start:]))
+            session.write(b"\x03")
+            session.pump(0.1)
+
+        # Redefining the same named style changes subsequent status hints too.
+        session.run_command(b'cjshopt style_def builtin "ansi-blue"')
+        start = len(session.output)
+        session.write(b"echo")
+        session.wait_for_normalized(b"Builtin: echo", start)
+        self.assertIn(b"\x1b[94mBuiltin: echo", bytes(session.output[start:]))
 
     def test_palette_tracks_binding_changes_between_prompts(self):
         # Keep the custom entry below the initial viewport so the search must find it.

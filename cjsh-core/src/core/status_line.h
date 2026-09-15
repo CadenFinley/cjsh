@@ -29,11 +29,14 @@
 #ifndef CJSH_CORE_SRC_CORE_STATUS_LINE_H
 #define CJSH_CORE_SRC_CORE_STATUS_LINE_H
 
+#include <cstddef>
 #include <string>
 
 namespace status_line {
 
 const char* create_below_syntax_message(const char* input_buffer, void* user_data);
+// Explicit byte-offset variant for callers without an active line editor.
+const char* create_below_syntax_message_at_cursor(const char* input_buffer, size_t cursor_pos);
 
 // Temporarily replace the normal status content with operation feedback.
 void set_transient_status_message(const std::string& message);

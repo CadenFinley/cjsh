@@ -43,6 +43,7 @@
 #include "command_lookup.h"
 #include "error_out.h"
 #include "interpreter.h"
+#include "isocline.h"
 #include "pipeline_status_utils.h"
 #include "shell.h"
 #include "shell_env.h"
@@ -810,13 +811,100 @@ std::string build_cjsh_status_reporting_message(Shell* shell, const std::string&
     return combined_message;
 }
 
+std::string build_command_hint_message(Shell* shell, const std::string& input, size_t cursor_pos) {
+    if (shell == nullptr || !config::status_reporting_enabled || cursor_pos > input.size()) {
+        return {};
+    }
+
+    const cjsh_filesystem::ScopedInteractivePathLookup path_lookup;
+    const std::string analysis = command_analysis::sanitize_input_for_analysis(input);
+    std::string message;
+    const char* style = "cjsh-builtin";
+    (void)command_analysis::visit_command_ranges(analysis, [&](size_t command_start,
+                                                               size_t command_end) {
+        if (cursor_pos < command_start || cursor_pos > command_end) {
+            return true;
+        }
+
+        const std::string command = analysis.substr(command_start, command_end - command_start);
+        size_t token_cursor = 0;
+        size_t token_start = 0;
+        size_t token_end = 0;
+        if (!command_analysis::extract_next_token(command, token_cursor, token_start, token_end) ||
+            cursor_pos < command_start + token_start || cursor_pos > command_start + token_end) {
+            return true;
+        }
+
+        const std::string token = command.substr(token_start, token_end - token_start);
+        // Only inspect literal command names. Never expand or execute prompt input.
+        if (!command_lookup::token_allows_split_command_merge(token) ||
+            token.find_first_of("*?~!") != std::string::npos) {
+            return false;
+        }
+        const std::string name = sanitize_for_status(token);
+        if (shell->get_interactive_mode()) {
+            const auto& abbreviations = shell->get_abbreviations();
+            const auto abbreviation = abbreviations.find(token);
+            if (abbreviation != abbreviations.end()) {
+                message =
+                    "Abbreviation: " + name + " -> " + sanitize_for_status(abbreviation->second);
+                return false;
+            }
+        }
+
+        const auto resolution = command_lookup::resolve_command(token, shell, false);
+        if (resolution.is_keyword) {
+            style = "cjsh-keyword";
+            message = "Keyword: " + name;
+        } else if (resolution.has_alias) {
+            message = "Alias: " + name + " -> " + sanitize_for_status(resolution.alias_value);
+        } else if (resolution.has_function) {
+            message = "Function: " + name;
+        } else if (resolution.is_builtin) {
+            message = "Builtin: " + name;
+        } else {
+            const std::string path = cjsh_filesystem::find_executable_in_path(token);
+            if (!path.empty()) {
+                style = "cjsh-system";
+                message = "Command path: " + sanitize_for_status(path);
+            }
+        }
+        return false;
+    });
+    if (message.empty()) {
+        return {};
+    }
+
+    // Status content is parsed as BBCode. Keep definitions and paths literal, and use
+    // the highlighter's named styles so user color customizations apply here too.
+    std::string escaped;
+    escaped.reserve(message.size());
+    for (char ch : message) {
+        if (ch == '[' || ch == '\\') {
+            escaped.push_back('\\');
+        }
+        escaped.push_back(ch);
+    }
+    if (!config::colors_enabled || !config::syntax_highlighting_enabled) {
+        return escaped;
+    }
+    return "[" + std::string(style) + "]" + escaped + "[/]";
+}
+
 std::string previous_passed_buffer;
 bool previous_passed_buffer_valid = false;
 
 }  // namespace
 
 const char* create_below_syntax_message(const char* input_buffer, void*) {
+    size_t cursor_pos = input_buffer != nullptr ? std::char_traits<char>::length(input_buffer) : 0;
+    (void)ic_get_cursor_pos(&cursor_pos);
+    return create_below_syntax_message_at_cursor(input_buffer, cursor_pos);
+}
+
+const char* create_below_syntax_message_at_cursor(const char* input_buffer, size_t cursor_pos) {
     static thread_local std::string status_message;
+    static thread_local std::string buffer_message;
 
     if (!g_transient_status_message.empty()) {
         status_message = g_transient_status_message;
@@ -832,27 +920,29 @@ const char* create_below_syntax_message(const char* input_buffer, void*) {
 
     const std::string current_input = (input_buffer != nullptr) ? input_buffer : "";
 
-    if (previous_passed_buffer_valid && previous_passed_buffer == current_input) {
-        return status_message.empty() ? nullptr : status_message.c_str();
-    }
-
-    previous_passed_buffer = current_input;
-    previous_passed_buffer_valid = true;
     Shell* shell = g_shell.get();
-
-    std::string user_message = build_user_status_callback_message(shell, current_input);
-    std::string reporting_message = build_cjsh_status_reporting_message(shell, current_input);
-
-    status_message.clear();
-    if (!user_message.empty()) {
-        status_message = std::move(user_message);
+    // Cursor-only refreshes should not repeat syntax validation or invoke user functions.
+    if (!previous_passed_buffer_valid || previous_passed_buffer != current_input) {
+        previous_passed_buffer = current_input;
+        previous_passed_buffer_valid = true;
+        buffer_message = build_user_status_callback_message(shell, current_input);
+        const std::string reporting_message =
+            build_cjsh_status_reporting_message(shell, current_input);
+        if (!reporting_message.empty()) {
+            if (!buffer_message.empty()) {
+                buffer_message.push_back('\n');
+            }
+            (void)buffer_message.append(reporting_message);
+        }
     }
 
-    if (!reporting_message.empty()) {
+    status_message = buffer_message;
+    const std::string command_hint = build_command_hint_message(shell, current_input, cursor_pos);
+    if (!command_hint.empty()) {
         if (!status_message.empty()) {
             status_message.push_back('\n');
         }
-        (void)status_message.append(reporting_message);
+        (void)status_message.append(command_hint);
     }
 
     if (status_message.empty()) {
