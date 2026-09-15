@@ -367,19 +367,20 @@ cjshopt status-line on|off|status
 When the cursor is on or immediately after a literal command name, the status line shows how
 that name resolves:
 
-- External commands: `Command path: /bin/ls` using the current PATH lookup.
-- Builtins: `Builtin: cd`.
-- Defined functions: `Function: myfunc`.
-- Aliases: `Alias: ll -> ls -l`.
-- Interactive abbreviations: `Abbreviation: gs -> git status`.
-- Shell keywords: `Keyword: if`.
+- External commands: `(/bin/ls) - list directory contents` using the current PATH lookup and
+  available completion documentation.
+- Builtins: `(builtin) - Change the current directory` for `cd`.
+- Defined functions: `(function)`.
+- Aliases: `(alias) - ls -l` for `ll`.
+- Interactive abbreviations: `(abbreviation) - git status` for `gs`.
+- Shell keywords: `(keyword) - Evaluate a conditional block` for `if`.
 
 This also works for commands after pipes and command separators. The hint disappears when you
 move into arguments. Abbreviations and aliases show their expansion text without executing it.
-The entire hint uses the syntax highlighter's named style: `cjsh-system` for external commands,
-`cjsh-builtin` for builtins/functions/aliases/abbreviations, and `cjsh-keyword` for keywords.
-Custom style definitions apply to these hints too; disabling colors or syntax highlighting leaves
-the hint unstyled.
+External descriptions reuse cached or registered completion documentation; typing never triggers
+manual-page fetching. When no description is available, only the parenthesized source is shown.
+The source tag uses the completion menu's `ic-diminish` style, followed by an unstyled description.
+Disabling colors or syntax highlighting leaves the entire hint unstyled.
 
 **cjsh Status Reporting:**
 Prefer to keep the status line for banners but hide validation/error text and command hints? Toggle the built-in reporting channel.

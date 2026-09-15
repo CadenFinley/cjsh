@@ -71,7 +71,7 @@ class InteractiveTests(unittest.TestCase):
 
         start = len(session.output)
         session.write(b"\x01")  # Home: touch the first command without changing input.
-        session.wait_for_normalized(f"Command path: {self.home}/pathprobe".encode(), start)
+        session.wait_for_normalized(f"({self.home}/pathprobe)".encode(), start)
 
         start = len(session.output)
         session.write(b"\x05")  # End: arguments should not show a command path.
@@ -79,37 +79,39 @@ class InteractiveTests(unittest.TestCase):
         # Cursor movement can redraw once with the old status before the status refresh.
         # Check the final frame, not the accumulated terminal output.
         final_frame = bytes(session.output[start:]).rsplit(PROMPT_INPUT_START, 1)[-1]
-        self.assertNotIn(b"Command path:", final_frame)
+        self.assertNotIn(f"({self.home}/pathprobe)".encode(), final_frame)
+        self.assertNotIn(f"({self.home}/pathother)".encode(), final_frame)
 
         start = len(session.output)
         session.write(b"\x1b[D" * 4)  # Immediately after the second command name.
-        session.wait_for_normalized(f"Command path: {self.home}/pathother".encode(), start)
+        session.wait_for_normalized(f"({self.home}/pathother)".encode(), start)
 
-    def test_shell_command_hints_use_custom_syntax_styles(self):
+    def test_shell_command_hints_use_completion_source_style(self):
         session = self.session(terminal_size=(24, 160), syntax_highlighting=True)
         session.run_command(b'cjshopt style_def builtin "ansi-red"')
         session.run_command(b"hintfunction() { :; }")
         session.run_command(b"alias hintalias='echo [value]'")
         session.run_command(b"abbr hintabbr='echo [value]'")
         for command, expected in (
-            (b"echo", b"Builtin: echo"),
-            (b"hintfunction", b"Function: hintfunction"),
-            (b"hintalias", b"Alias: hintalias -> echo [value]"),
-            (b"hintabbr", b"Abbreviation: hintabbr -> echo [value]"),
+            (b"echo", b"(builtin) - Write arguments to standard output"),
+            (b"hintfunction", b"(function)"),
+            (b"hintalias", b"(alias) - echo [value]"),
+            (b"hintabbr", b"(abbreviation) - echo [value]"),
         ):
             start = len(session.output)
             session.write(b"\x1b[200~" + command + b"\x1b[201~")
             session.wait_for_normalized(expected, start)
-            self.assertIn(b"\x1b[91m" + expected, bytes(session.output[start:]))
+            source = expected.split(b" - ", 1)[0]
+            self.assertIn(b"\x1b[37m" + source, bytes(session.output[start:]))
             session.write(b"\x03")
             session.pump(0.1)
 
-        # Redefining the same named style changes subsequent status hints too.
+        # Command syntax colors do not override the completion-style source tag.
         session.run_command(b'cjshopt style_def builtin "ansi-blue"')
         start = len(session.output)
         session.write(b"echo")
-        session.wait_for_normalized(b"Builtin: echo", start)
-        self.assertIn(b"\x1b[94mBuiltin: echo", bytes(session.output[start:]))
+        session.wait_for_normalized(b"(builtin) - Write arguments to standard output", start)
+        self.assertIn(b"\x1b[37m(builtin)", bytes(session.output[start:]))
 
     def test_palette_tracks_binding_changes_between_prompts(self):
         # Keep the custom entry below the initial viewport so the search must find it.

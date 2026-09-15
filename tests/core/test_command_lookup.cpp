@@ -42,6 +42,7 @@
 
 #include "cjsh_filesystem.h"
 #include "command_command.h"
+#include "completion_spec.h"
 #include "shell.h"
 #include "shell_env.h"
 #include "status_line.h"
@@ -263,10 +264,10 @@ bool test_cursor_command_path(const fs::path& root) {
         const char* message =
             status_line::create_below_syntax_message_at_cursor(input.c_str(), cursor);
         const std::string text = message != nullptr ? message : "";
-        const size_t start = text.find("Command path: ");
+        const size_t start = text.find("(/");
         return start == std::string::npos ? std::string() : text.substr(start);
     };
-    const std::string expected = "Command path: " + (root / "lookuptool").string();
+    const std::string expected = "(" + (root / "lookuptool").string() + ")";
     bool ok = true;
     for (size_t cursor : {0U, 1U, 9U, 10U}) {
         ok = expect(hint("lookuptool arg", cursor) == expected,
@@ -293,7 +294,7 @@ bool test_cursor_command_path(const fs::path& root) {
                     "shell commands") &&
              ok;
     }
-    ok = expect(hint("lookuplink", 5) == "Command path: " + (root / "lookuplink").string(),
+    ok = expect(hint("lookuplink", 5) == "(" + (root / "lookuplink").string() + ")",
                 "display the executable symlink path rather than its realpath") &&
          ok;
 
@@ -310,7 +311,7 @@ bool test_cursor_command_path(const fs::path& root) {
     fs::create_directory(first);
     executable(first / "lookuptool");
     (void)cjsh_env::set_shell_variable_value("PATH", first.string() + ":" + root.string());
-    ok = expect(hint("lookuptool", 3) == "Command path: " + (first / "lookuptool").string(),
+    ok = expect(hint("lookuptool", 3) == "(" + (first / "lookuptool").string() + ")",
                 "path hints follow PATH order and refresh when PATH changes") &&
          ok;
     (void)cjsh_env::set_shell_variable_value("PATH", root.string());
@@ -332,6 +333,19 @@ bool test_cursor_command_path(const fs::path& root) {
                 "cursor-only changes do not rerun user callbacks") &&
          ok;
     status_line::clear_user_status_callback_function();
+
+    executable(root / "lookupdocumented");
+    completion_specs::CommandDoc doc;
+    doc.summary = "List\n\tdirectory [contents] \\details";
+    ok = expect(completion_specs::register_command_doc("lookupdocumented", doc),
+                "register completion documentation for a status hint") &&
+         ok;
+    cjsh_filesystem::reset_path_hash();
+    ok = expect(hint("lookupdocumented", 3) == "(" + (root / "lookupdocumented").string() +
+                                                   ") - List directory \\[contents] \\\\details",
+                "external hints reuse completion descriptions and sanitize and escape them") &&
+         ok;
+    (void)completion_specs::unregister_command_doc("lookupdocumented");
 
     config::status_reporting_enabled = false;
     status_line::clear_transient_status_message();
@@ -357,42 +371,44 @@ bool test_cursor_shell_command_hints() {
         const size_t last_line = text.rfind('\n');
         return last_line == std::string::npos ? text : text.substr(last_line + 1);
     };
-    bool ok = expect(hint("cd /tmp", 0) == "Builtin: cd" && hint("cd /tmp", 1) == "Builtin: cd" &&
-                         hint("cd /tmp", 2) == "Builtin: cd",
-                     "builtins show their type at either edge and inside the name");
-    ok = expect(hint("cd /tmp", 3).empty() && hint("cd /tmp", 0) == "Builtin: cd",
+    const std::string cd_hint = "(builtin) - Change the current directory";
+    const std::string echo_hint = "(builtin) - Write arguments to standard output";
+    bool ok =
+        expect(hint("cd /tmp", 0) == cd_hint && hint("cd /tmp", 1) == cd_hint &&
+                   hint("cd /tmp", 2) == cd_hint,
+               "builtins show their source and description at either edge and inside the name");
+    ok = expect(hint("cd /tmp", 3).empty() && hint("cd /tmp", 0) == cd_hint,
                 "builtin hints follow cursor-only movement") &&
          ok;
-    ok = expect(hint("echo", 2) == "Builtin: echo" &&
-                    hint("lookupfunction", 3) == "Function: lookupfunction",
+    ok = expect(hint("echo", 2) == echo_hint && hint("lookupfunction", 3) == "(function)",
                 "builtins and defined functions take precedence over external counterparts") &&
          ok;
-    ok =
-        expect(hint("if true; then :; fi", 1) == "Keyword: if", "shell keywords show their type") &&
-        ok;
-    ok = expect(hint("lookuptool | echo arg", 14) == "Builtin: echo" &&
-                    hint("echo arg; lookupfunction", 12) == "Function: lookupfunction",
+    ok = expect(hint("if true; then :; fi", 1) == "(keyword) - Evaluate a conditional block",
+                "shell keywords show their source and description") &&
+         ok;
+    ok = expect(hint("lookuptool | echo arg", 14) == echo_hint &&
+                    hint("echo arg; lookupfunction", 12) == "(function)",
                 "shell command hints work after command separators") &&
          ok;
 
     ok = expect(g_shell->execute("pwd() { :; }") == 0, "create a function shadowing a builtin") &&
          ok;
-    ok = expect(hint("pwd", 2) == "Function: pwd", "functions take precedence over builtins") && ok;
+    ok = expect(hint("pwd", 2) == "(function)", "functions take precedence over builtins") && ok;
     g_shell->set_aliases({{"pwd", "lookuptool --flag"}, {"lookupalias", "echo\n\tvalue\r\x1b"}});
-    ok = expect(hint("pwd", 2) == "Alias: pwd -> lookuptool --flag",
+    ok = expect(hint("pwd", 2) == "(alias) - lookuptool --flag",
                 "aliases show their definition and take precedence over functions") &&
          ok;
-    ok = expect(hint("lookupalias", 3) == "Alias: lookupalias -> echo value",
+    ok = expect(hint("lookupalias", 3) == "(alias) - echo value",
                 "alias expansion text is sanitized to a single safe status line") &&
          ok;
 
     g_shell->set_abbreviations({{"pwd", "lookupfunction --arg"}});
     g_shell->set_interactive_mode(true);
-    ok = expect(hint("pwd", 2) == "Abbreviation: pwd -> lookupfunction --arg",
+    ok = expect(hint("pwd", 2) == "(abbreviation) - lookupfunction --arg",
                 "interactive abbreviations show their expansion before alias resolution") &&
          ok;
     g_shell->set_interactive_mode(false);
-    ok = expect(hint("pwd", 2) == "Alias: pwd -> lookuptool --flag",
+    ok = expect(hint("pwd", 2) == "(alias) - lookuptool --flag",
                 "abbreviations do not apply outside interactive mode") &&
          ok;
     g_shell->set_abbreviations({});
@@ -400,39 +416,38 @@ bool test_cursor_shell_command_hints() {
 
     config::colors_enabled = true;
     config::syntax_highlighting_enabled = true;
-    ok = expect(hint("echo", 2) == "[cjsh-builtin]Builtin: echo[/]" &&
-                    hint("lookupfunction", 3) == "[cjsh-builtin]Function: lookupfunction[/]" &&
-                    hint("if true; then :; fi", 1) == "[cjsh-keyword]Keyword: if[/]",
-                "entire shell command hints use the syntax highlighter's named styles") &&
+    ok = expect(
+             hint("echo", 2) == "[ic-diminish](builtin)[/] - Write arguments to standard output" &&
+                 hint("lookupfunction", 3) == "[ic-diminish](function)[/]" &&
+                 hint("if true; then :; fi", 1) ==
+                     "[ic-diminish](keyword)[/] - Evaluate a conditional block",
+             "source tags use the completion menu style without coloring descriptions") &&
          ok;
     const std::string external = hint("lookuptool", 3);
-    ok = expect(external.rfind("[cjsh-system]Command path: ", 0) == 0 &&
-                    external.substr(external.size() - 3) == "[/]",
-                "entire external path hints use the system command style") &&
+    ok = expect(external.rfind("[ic-diminish](/", 0) == 0 &&
+                    external.substr(external.size() - 4) == ")[/]",
+                "external paths use the completion source tag style with no dangling separator") &&
          ok;
     g_shell->set_aliases({{"lookupalias", "echo [red]value[/] \\suffix"}});
     ok = expect(hint("lookupalias", 3) ==
-                    "[cjsh-builtin]Alias: lookupalias -> echo \\[red]value\\[/] \\\\suffix[/]",
+                    "[ic-diminish](alias)[/] - echo \\[red]value\\[/] \\\\suffix",
                 "alias definitions cannot inject BBCode styles into the status line") &&
          ok;
     g_shell->set_aliases({});
     g_shell->set_abbreviations({{"lookupabbr", "echo [value]"}});
     g_shell->set_interactive_mode(true);
-    ok = expect(
-             hint("lookupabbr", 3) == "[cjsh-builtin]Abbreviation: lookupabbr -> echo \\[value][/]",
-             "abbreviation hints use builtin styling and escape expansion text") &&
+    ok = expect(hint("lookupabbr", 3) == "[ic-diminish](abbreviation)[/] - echo \\[value]",
+                "abbreviation hints use source tag styling and escape expansion text") &&
          ok;
     g_shell->set_abbreviations({});
     g_shell->set_interactive_mode(false);
     config::syntax_highlighting_enabled = false;
-    ok = expect(hint("echo", 2) == "Builtin: echo",
+    ok = expect(hint("echo", 2) == echo_hint,
                 "disabled syntax highlighting leaves command hints unstyled") &&
          ok;
     config::syntax_highlighting_enabled = true;
     config::colors_enabled = false;
-    ok = expect(hint("echo", 2) == "Builtin: echo",
-                "disabled colors leave command hints unstyled") &&
-         ok;
+    ok = expect(hint("echo", 2) == echo_hint, "disabled colors leave command hints unstyled") && ok;
 
     config::status_reporting_enabled = false;
     status_line::clear_transient_status_message();

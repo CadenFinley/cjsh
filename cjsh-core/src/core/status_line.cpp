@@ -39,9 +39,11 @@
 #include <vector>
 
 #include "builtin.h"
+#include "builtins_completions_handler.h"
 #include "cjsh_filesystem.h"
 #include "command_lookup.h"
 #include "error_out.h"
+#include "external_sub_completions.h"
 #include "interpreter.h"
 #include "isocline.h"
 #include "pipeline_status_utils.h"
@@ -818,8 +820,8 @@ std::string build_command_hint_message(Shell* shell, const std::string& input, s
 
     const cjsh_filesystem::ScopedInteractivePathLookup path_lookup;
     const std::string analysis = command_analysis::sanitize_input_for_analysis(input);
-    std::string message;
-    const char* style = "cjsh-builtin";
+    std::string source;
+    std::string description;
     (void)command_analysis::visit_command_ranges(analysis, [&](size_t command_start,
                                                                size_t command_end) {
         if (cursor_pos < command_start || cursor_pos > command_end) {
@@ -841,54 +843,65 @@ std::string build_command_hint_message(Shell* shell, const std::string& input, s
             token.find_first_of("*?~!") != std::string::npos) {
             return false;
         }
-        const std::string name = sanitize_for_status(token);
         if (shell->get_interactive_mode()) {
             const auto& abbreviations = shell->get_abbreviations();
             const auto abbreviation = abbreviations.find(token);
             if (abbreviation != abbreviations.end()) {
-                message =
-                    "Abbreviation: " + name + " -> " + sanitize_for_status(abbreviation->second);
+                source = "abbreviation";
+                description = abbreviation->second;
                 return false;
             }
         }
 
         const auto resolution = command_lookup::resolve_command(token, shell, false);
         if (resolution.is_keyword) {
-            style = "cjsh-keyword";
-            message = "Keyword: " + name;
+            source = "keyword";
+            description = builtin_completions::get_builtin_summary(token);
         } else if (resolution.has_alias) {
-            message = "Alias: " + name + " -> " + sanitize_for_status(resolution.alias_value);
+            source = "alias";
+            description = resolution.alias_value;
         } else if (resolution.has_function) {
-            message = "Function: " + name;
+            source = "function";
         } else if (resolution.is_builtin) {
-            message = "Builtin: " + name;
+            source = "builtin";
+            description = builtin_completions::get_builtin_summary(token);
         } else {
-            const std::string path = cjsh_filesystem::find_executable_in_path(token);
-            if (!path.empty()) {
-                style = "cjsh-system";
-                message = "Command path: " + sanitize_for_status(path);
+            source = cjsh_filesystem::find_executable_in_path(token);
+            if (!source.empty()) {
+                // Reuse completion documentation without fetching man pages while typing.
+                description = get_command_summary(token, false);
+                if (description == source) {
+                    description.clear();
+                }
             }
         }
         return false;
     });
-    if (message.empty()) {
+    if (source.empty()) {
         return {};
     }
 
-    // Status content is parsed as BBCode. Keep definitions and paths literal, and use
-    // the highlighter's named styles so user color customizations apply here too.
-    std::string escaped;
-    escaped.reserve(message.size());
-    for (char ch : message) {
-        if (ch == '[' || ch == '\\') {
-            escaped.push_back('\\');
+    // Status content is parsed as BBCode. Keep paths and descriptions literal.
+    auto escape = [](const std::string& text) {
+        std::string escaped;
+        for (char ch : sanitize_for_status(text)) {
+            if (ch == '[' || ch == '\\') {
+                escaped.push_back('\\');
+            }
+            escaped.push_back(ch);
         }
-        escaped.push_back(ch);
-    }
-    if (!config::colors_enabled || !config::syntax_highlighting_enabled) {
         return escaped;
+    };
+    std::string message = "(" + escape(source) + ")";
+    if (config::colors_enabled && config::syntax_highlighting_enabled) {
+        // Match the source tag on an unselected completion menu item.
+        message = "[ic-diminish]" + message + "[/]";
     }
-    return "[" + std::string(style) + "]" + escaped + "[/]";
+    const std::string escaped_description = escape(description);
+    if (!escaped_description.empty()) {
+        message += " - " + escaped_description;
+    }
+    return message;
 }
 
 std::string previous_passed_buffer;
