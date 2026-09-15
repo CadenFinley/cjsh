@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
@@ -733,7 +734,14 @@ bool show_setup_help() {
 
 class ScopedWaitingStatus {
    public:
-    ScopedWaitingStatus() {
+    explicit ScopedWaitingStatus(const std::string& command) {
+        // Status messages use BBCode; display the configured command literally.
+        for (unsigned char ch : command) {
+            if (ch == '[' || ch == '\\') {
+                command_display_.push_back('\\');
+            }
+            command_display_.push_back(std::iscntrl(ch) ? ' ' : static_cast<char>(ch));
+        }
         advance();
     }
 
@@ -744,13 +752,15 @@ class ScopedWaitingStatus {
     }
 
     void advance() {
-        static constexpr std::array<const char*, 3> frames = {
-            "[ic-info]Waiting for agent response.[/]",
-            "[ic-info]Waiting for agent response..[/]",
-            "[ic-info]Waiting for agent response...[/]",
-        };
-        status_line::set_transient_status_message(frames[frame_index_]);
-        frame_index_ = (frame_index_ + 1) % frames.size();
+        const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - started_at_);
+        if (elapsed == last_elapsed_) {
+            return;
+        }
+        last_elapsed_ = elapsed;
+        status_line::set_transient_status_message(
+            "[ic-info]Running \\[" + std::to_string(elapsed.count()) + "s]: " +
+            command_display_ + "[/]");
         (void)ic_current_loop_reset(nullptr, nullptr, nullptr);
         ic_term_flush();
     }
@@ -759,7 +769,9 @@ class ScopedWaitingStatus {
     ScopedWaitingStatus& operator=(const ScopedWaitingStatus&) = delete;
 
    private:
-    size_t frame_index_{0};
+    const std::chrono::steady_clock::time_point started_at_{std::chrono::steady_clock::now()};
+    std::chrono::seconds last_elapsed_{-1};
+    std::string command_display_;
 };
 
 bool finish_empty_agent_request(const std::string& buffer) {
@@ -831,7 +843,7 @@ bool run_agent(bool require_prefix) {
     exec_utils::CommandOutput output;
     bool request_cancelled = false;
     {
-        ScopedWaitingStatus waiting_status;
+        ScopedWaitingStatus waiting_status(resolved->executor->command_display);
         output = exec_utils::execute_command_vector_for_output_with_progress(
             executor_args, [&waiting_status] { waiting_status.advance(); }, 250,
             [&request_cancelled] {

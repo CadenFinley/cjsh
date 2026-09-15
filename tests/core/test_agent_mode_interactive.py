@@ -214,7 +214,7 @@ def main() -> int:
         os.mkdir(context_directory)
         with open(context_file, "w", encoding="utf-8") as marker:
             marker.write("agent context\n")
-        executor = os.path.join(temp_dir, "agent-executor")
+        executor = os.path.join(temp_dir, "agent-[executor]")
         prompt_capture = os.path.join(temp_dir, "last-prompt")
         first_result = os.path.join(temp_dir, "first-result")
         selected_result = os.path.join(temp_dir, "selected-result")
@@ -233,6 +233,7 @@ def main() -> int:
                 "case \"$1\" in\n"
                 "  fail) exit 7 ;;\n"
                 "  malformed) printf 'not JSON output\\n'; exit 0 ;;\n"
+                "  longest) sleep 1.5 ;;\n"
                 f"  interrupt) sleep 30; touch {interrupt_completed} ;;\n"
                 "esac\n"
                 "sleep 0.8\n"
@@ -403,7 +404,9 @@ def main() -> int:
                 b":interrupt cancel this request", start=interrupt_start
             )
             session.write(b"\r")
-            session.wait_for(b"Waiting for agent response", start=interrupt_start)
+            session.wait_for_normalized(
+                f"Running [0s]: {executor} interrupt".encode(), start=interrupt_start
+            )
             cancellation_start = len(session.output)
             session.write(b"\x03")
             session.wait_for_quiet_prompt(start=cancellation_start)
@@ -419,14 +422,13 @@ def main() -> int:
             # Overlapping prefixes route to the most specific executor.
             longest_start = len(session.output)
             session.enter_text(b":deep use the longest prefix")
-            session.wait_for(b"Waiting for agent response...", start=longest_start)
-            first_frame = session.output.find(b"Waiting for agent response.", longest_start)
-            second_frame = session.output.find(b"Waiting for agent response..", first_frame + 1)
-            third_frame = session.output.find(b"Waiting for agent response...", second_frame + 1)
-            if min(first_frame, second_frame, third_frame) < 0 or not (
-                first_frame < second_frame < third_frame
-            ):
-                raise AssertionError("agent waiting dots did not animate in order")
+            # The timer starts at zero for each request and shows the selected
+            # configured command (including arguments and literal BBCode brackets).
+            for seconds in range(3):
+                session.wait_for_normalized(
+                    f"Running [{seconds}s]: {executor} longest".encode(),
+                    start=longest_start,
+                )
             session.wait_for(b"agent command:", start=longest_start)
             with open(prompt_capture, encoding="utf-8") as captured:
                 route, prompt = captured.read().split("|", 1)

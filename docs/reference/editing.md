@@ -602,9 +602,10 @@ With that example, type `: describe what the command should do` and press `Enter
 prefix is removed before the request is sent. While an enabled trigger prefix matches, the syntax
 highlighter styles the prefix and the remaining natural-language request with `agent-prefix` and
 `agent-request`; it does not interpret request punctuation as shell syntax. Both styles can be
-changed with `cjshopt style_def`. A transient **Waiting for agent response.** status
-animates through one, two, and three dots while the executor is running, then clears before its
-results or an error are displayed.
+changed with `cjshopt style_def`. A transient `Running [0s]: <configured command>` status
+shows the selected executor's configured command and arguments, with elapsed seconds updating
+while it runs. The timer starts at zero for each request, and the status clears before results or
+an error are displayed (or when the request is canceled).
 Use `Up`/`Down` to select a suggestion, `Tab` to insert it for review, `Enter` to submit it, or `Esc`
 to keep the original buffer.
 
