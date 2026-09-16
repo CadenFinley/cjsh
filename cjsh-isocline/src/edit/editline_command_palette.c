@@ -420,22 +420,17 @@ again:;
     if (match_count > 0) {
         const char* query = sbuf_string(eb->input);
         bool is_filtered = (query != NULL && query[0] != '\0');
-        ssize_t total_actions = command_palette_action_count() + command_palette_custom_count(env);
-
         if (showing_all_due_to_no_matches) {
             (void)sbuf_appendf(
                 eb->extra,
-                "[ic-info]No matches - showing all actions (%zd action%s) - case %s%s[/]\n",
-                total_actions, total_actions == 1 ? "" : "s",
+                "[ic-info]No matches - showing all actions - case %s%s[/]\n",
                 session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
         } else if (is_filtered) {
-            (void)sbuf_appendf(eb->extra, "[ic-info]%zd action%s found - case %s%s[/]\n",
-                               match_count, match_count == 1 ? "" : "s",
+            (void)sbuf_appendf(eb->extra, "[ic-info]Actions found - case %s%s[/]\n",
                                session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
         } else {
-            (void)sbuf_appendf(eb->extra, "[ic-info]Actions (%zd total) - case %s%s[/]\n",
-                               total_actions, session_case_sensitive ? "sensitive" : "insensitive",
-                               mouse_suffix);
+            (void)sbuf_appendf(eb->extra, "[ic-info]Actions - case %s%s[/]\n",
+                               session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
         }
 
         ssize_t term_width = term_get_width(env->term);

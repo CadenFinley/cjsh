@@ -248,11 +248,10 @@ again:;
 
     if (match_count > 0) {
         if (is_filtered) {
-            (void)sbuf_appendf(eb->extra, "[ic-info]%zd item%s found - case %s%s[/]\n", match_count,
-                               match_count == 1 ? "" : "s",
+            (void)sbuf_appendf(eb->extra, "[ic-info]Items found - case %s%s[/]\n",
                                session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
         } else {
-            (void)sbuf_appendf(eb->extra, "[ic-info]Items (%zd total) - case %s%s[/]\n", item_count,
+            (void)sbuf_appendf(eb->extra, "[ic-info]Items - case %s%s[/]\n",
                                session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
         }
 

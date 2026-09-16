@@ -1199,8 +1199,8 @@ def assert_menu_viewports(binary: str) -> None:
     menus = {
         "completion": (b"entry\t", "Showing ", 8),
         "history": (b"\x12entry", "120 matches found", 9),
-        "palette": (ALT_P + b"zzviewport", "120 actions found", 9),
-        "custom": (F3, "Items (", 9),
+        "palette": (ALT_P + b"zzviewport", "Actions found - case", 9),
+        "custom": (F3, "Items - case", 9),
     }
 
     def check(kind, keys, first, count, selected, suffix="", rows=80, reopen=None,
@@ -1418,7 +1418,7 @@ def assert_menu_dismissal(binary: str) -> None:
                 f"menu_dismiss_palette{suffix}",
                 [
                     ("send", ALT_P + b"cursor left"),
-                    ("wait", "1 action found"),
+                    ("wait", "Actions found - case"),
                     ("idle", 0.05),
                     ("send", key),
                     ("idle", 0.05),
