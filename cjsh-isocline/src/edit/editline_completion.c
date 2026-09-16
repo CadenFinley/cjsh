@@ -268,12 +268,18 @@ static ssize_t edit_completions_max_width(ic_env_t* env, ssize_t count, ssize_t 
     return max_width;
 }
 
+static bool edit_completion_auto_menu_has_prefix(editor_t* eb) {
+    // Wait for input in the next argument, including when the cursor moves between words.
+    return !edit_current_line_is_empty(eb) && eb->pos > 0 &&
+           !ic_char_is_white(sbuf_string(eb->input) + eb->pos - 1, 1);
+}
+
 // A passive menu is only rendered here: it never reads keys, captures the mouse, applies a
 // common prefix, or previews a replacement. The main editor continues to own all input.
 static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     sbuf_clear(eb->extra);
     eb->completion_auto_menu_visible = false;
-    if (edit_current_line_is_empty(eb) || eb->pos <= 0) {
+    if (!edit_completion_auto_menu_has_prefix(eb)) {
         eb->completion_menu_maximized = false;
         edit_refresh(env, eb);
         return;
@@ -519,8 +525,12 @@ static bool edit_recompute_completion_list(ic_env_t* env, editor_t* eb, ssize_t*
                                            bool* more_available, ssize_t* selected,
                                            ssize_t* scroll_offset, bool allow_inline_hint) {
     const ssize_t limit = IC_MAX_COMPLETIONS_TO_SHOW;
-    ssize_t new_count =
-        completions_generate(env, env->completions, sbuf_string(eb->input), eb->pos, limit);
+    // Editing an active menu back to an empty argument hands input back to the editor.
+    ssize_t new_count = 0;
+    if (!env->completion_auto_menu || edit_completion_auto_menu_has_prefix(eb)) {
+        new_count =
+            completions_generate(env, env->completions, sbuf_string(eb->input), eb->pos, limit);
+    }
     bool new_more_available = (new_count >= limit);
 
     if (new_count <= 0) {

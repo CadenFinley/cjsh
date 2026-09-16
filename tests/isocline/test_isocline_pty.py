@@ -515,6 +515,7 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
          ("send", b"\r")], "s", initial_cols=100,
     )
 
+    assert_completion_auto_menu_whitespace_cases(binary)
     assert_completion_auto_menu_mouse_cases(binary)
 
     # Separate Escape from following bytes so it is not decoded as an Alt binding.
@@ -525,6 +526,83 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
         ("completion_auto_menu_dual", [b"pla\t", b"\x1b", b"\r"], "pla"),
     ]:
         assert_timed_case(binary, "auto_menu_cancel", scenario, chunks, expected, step_delay_s=0.5)
+
+
+def assert_completion_auto_menu_whitespace_cases(binary: str) -> None:
+    def check_menu(expected_input: str, mode: str):
+        def check(output: str) -> None:
+            screen = terminal_screen(output, 24, 100)
+            if screen[0].rstrip() != f"pty> {expected_input}".rstrip():
+                raise AssertionError(f"{label}: whitespace edits must preserve input: {screen!r}")
+            menu = "\n".join(screen[1:]).strip()
+            if mode == "hidden":
+                if menu:
+                    raise AssertionError(
+                        f"{label}: whitespace before the cursor must hide the menu: {screen!r}"
+                    )
+            else:
+                footer = "tab:activate completions" if mode == "passive" else "enter/right:accept"
+                if "Completions" not in menu or footer not in menu:
+                    raise AssertionError(f"{label}: expected a {mode} completion menu: {screen!r}")
+        return check
+
+    for label, steps, expected in [
+        ("space_and_backspace", [
+            (b"  ", "  ", "hidden"),
+            (b"\x15", "", "hidden"),
+            (b"s", "s", "passive"),
+            (b" ", "s ", "hidden"),
+            (b" ", "s  ", "hidden"),
+            (b"s", "s  s", "passive"),
+            (b"\x7f", "s  ", "hidden"),
+        ], "s  "),
+        ("cursor_between_arguments", [
+            (b"s  s", "s  s", "passive"),
+            (LEFT, "s  s", "hidden"),
+            (LEFT, "s  s", "hidden"),
+            (RIGHT, "s  s", "hidden"),
+            (RIGHT, "s  s", "passive"),
+            (HOME, "s  s", "hidden"),
+        ], "s  s"),
+        ("click_between_arguments", [
+            (b"s  s", "s  s", "passive"),
+            (mouse_left_click(8, 1), "s  s", "hidden"),
+            (END, "s  s", "passive"),
+        ], "s  s"),
+        ("paste_whitespace", [
+            (b"s", "s", "passive"),
+            (b"\x1b[200~  \x1b[201~", "s  ", "hidden"),
+            (b"s", "s  s", "passive"),
+        ], "s  s"),
+        ("explicit_tab_after_space", [
+            (b"s ", "s ", "hidden"),
+            (b"\t", "s ", "active"),
+            (b"\r", "s s01", "passive"),
+        ], "s s01"),
+        ("space_in_active_menu", [
+            (b"s\t", "s", "active"),
+            (b" ", "s ", "hidden"),
+            (b"s", "s s", "passive"),
+        ], "s s"),
+        ("backspace_in_active_menu", [
+            (b"s s\t", "s s", "active"),
+            (b"\x7f", "s ", "hidden"),
+            (b"s", "s s", "passive"),
+        ], "s s"),
+    ]:
+        actions = []
+        for keys, expected_input, mode in steps:
+            actions.extend([
+                ("send", keys), ("idle", 0.1),
+                ("check", check_menu(expected_input, mode)),
+            ])
+        actions.append(("send", b"\r"))
+        actual = run_resize_case(
+            binary, "completion_auto_menu_mouse_nopreview", actions,
+            initial_cols=100, respond_to_cursor_queries=True,
+        )
+        if actual != expected:
+            raise AssertionError(f"{label} expected {expected!r}, got {actual!r}")
 
 
 def assert_completion_auto_menu_mouse_cases(binary: str) -> None:

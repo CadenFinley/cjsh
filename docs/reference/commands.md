@@ -1261,9 +1261,11 @@ exists. With mouse clicking enabled at the prompt, clicking an entry activates a
 clicking the header or footer selects the first entry. The activating click never accepts,
 regardless of `completion-click-accept`. Mouse-disabled/menu-only capture modes still require Tab.
 Scrolling, mouse selection/click acceptance, and Enter/Right/End acceptance then follow the
-normal completion-menu settings. After acceptance, the updated menu remains visible but returns
-to passive mode, so Enter submits your input and Tab or a menu click activates completions again. No matches or
-an empty current line hide the menu. Escape hides it until the next edit without clearing input.
+normal completion-menu settings. After acceptance, suggestions refresh in passive mode, so Enter
+submits your input and Tab or a menu click activates completions again. No matches, an empty
+current line, or whitespace immediately before the cursor hide the menu. Pressing Space or moving
+between arguments waits for you to start typing the next argument; an explicit Tab still opens
+completions after whitespace. Escape hides the menu until the next edit without clearing input.
 
 This replaces inline hints while enabled and works even with `hint off`. Completion preview is
 only shown after activation. Add `cjshopt completion-auto-menu on` to `~/.cjshrc` to persist it.

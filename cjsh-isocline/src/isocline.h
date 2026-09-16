@@ -878,7 +878,8 @@ bool ic_completion_preview_is_enabled(void);
 /// With prompt mouse capture enabled, a click activates and selects the clicked entry (or the
 /// first entry for a header/footer click), never accepting it on that activating click.
 /// After acceptance, suggestions refresh and remain passive until Tab or a click activates them.
-/// Empty lines or no matches hide the menu; Escape hides it until the next edit.
+/// Empty lines, no matches, or whitespace immediately before the cursor hide the passive menu.
+/// Tab still opens completions after whitespace. Escape hides the menu until the next edit.
 /// The passive menu replaces inline hints, independently of the hint and preview settings.
 /// Returns the previous setting.
 bool ic_enable_completion_auto_menu(bool enable);
