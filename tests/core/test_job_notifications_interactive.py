@@ -135,7 +135,7 @@ def main() -> int:
             pid = session.launch("completion-notify")
             start = len(session.output)
             session.write(b"jobs \t")
-            session.wait_for(b"completions", start)
+            session.wait_for(b"Completions", start)
             start = len(session.output)
             os.kill(pid, signal.SIGSTOP)
             session.pump(0.25)

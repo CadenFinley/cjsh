@@ -97,7 +97,11 @@ int main(int argc, char** argv) {
         // Darwin applies SA_RESETHAND but omits it from the returned action,
         // so libraries cannot discover it when wrapping an existing handler.
         if ((observed.sa_flags & SA_RESETHAND) == 0) {
-            (void)printf("SIGNAL_READY\nUNREPORTED_RESETHAND\n");
+            (void)printf("UNREPORTED_RESETHAND\nSIGNAL_READY\n");
+            (void)fflush(stdout);
+            // Wait for the peer to consume the skip marker before closing the
+            // PTY: Darwin can discard queued output when the last slave closes.
+            (void)getchar();
             return 77;
         }
     }

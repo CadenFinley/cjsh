@@ -172,8 +172,8 @@ def check_scrollbars(binary: str) -> None:
     # Focus loss, keyboard input, resize and dismissal all end temporary motion capture.
     for ending in (b"\x1b[O", pty_tests.DOWN, b"\x1b"):
         output = observe("custom", "_mouse", [
-            ("send", press_thumb), ("idle", 0.15),
-            ("send", ending), ("idle", 0.25),
+            ("send", press_thumb), ("wait", b"\x1b[?1002h"),
+            ("send", ending), ("wait", b"\x1b[?1002l"), ("idle", 0.15),
         ])
         if output.rfind("\x1b[?1002l") < output.rfind("\x1b[?1002h"):
             raise AssertionError("temporary drag reporting leaked after focus/key/cancel")
@@ -181,10 +181,11 @@ def check_scrollbars(binary: str) -> None:
             raise AssertionError("dismissal left a scrollbar on the prompt")
 
     resized = observe("custom", "_mouse", [
-        ("send", press_thumb), ("idle", 0.15),
+        ("send", press_thumb), ("wait", b"\x1b[?1002h"),
         ("resize", (12, 60)),
         # The blocking TTY reader processes pending resize notifications with its next input.
-        ("send", pty_tests.mouse_left_drag(59, 3)), ("idle", 0.15),
+        ("send", pty_tests.mouse_left_drag(59, 3)),
+        ("wait", b"\x1b[?1002l"), ("idle", 0.15),
     ])
     if resized.rfind("\x1b[?1002l") < resized.rfind("\x1b[?1002h"):
         raise AssertionError(f"resizing must end temporary motion capture: {resized!r}")

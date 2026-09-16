@@ -1114,9 +1114,10 @@ def run_resize_case(
     current_cols = initial_cols
     cursor_reports_sent = 0
     last_output_at = time.monotonic()
+    action_output_start = 0
 
-    def normalized_output() -> str:
-        text = output.decode("utf-8", errors="replace")
+    def normalized_output(start: int = 0) -> str:
+        text = output[start:].decode("utf-8", errors="replace")
         return normalize_terminal_output(text)
 
     try:
@@ -1137,7 +1138,11 @@ def run_resize_case(
             while prompt_seen and action_index < len(actions):
                 action, value = actions[action_index]
                 if action == "wait":
-                    if value not in normalized_output():
+                    # A previous render cannot acknowledge the latest input. Raw
+                    # bytes also let mouse tests wait for terminal mode changes.
+                    recent = (output[action_output_start:] if isinstance(value, bytes)
+                              else normalized_output(action_output_start))
+                    if value not in recent:
                         break
                 elif action == "idle":
                     if time.monotonic() - last_output_at < float(value):
@@ -1148,11 +1153,13 @@ def run_resize_case(
                         if callable(value)
                         else value
                     )
+                    action_output_start = len(output)
                     os.write(fd, keys)
                     last_output_at = time.monotonic()
                 elif action == "check":
                     value(output.decode("utf-8", errors="replace"))
                 elif action == "resize":
+                    action_output_start = len(output)
                     if isinstance(value, tuple):
                         next_rows, next_cols = value
                     else:
@@ -1296,11 +1303,13 @@ def assert_menu_viewports(binary: str) -> None:
         if resize_to is not None:
             actions += [("resize", (resize_to, 160)), ("send", FOCUS_IN), ("idle", 0.2)]
         if reopen is not None:
-            actions += [("send", b"\x1b"), ("idle", 0.3)]
+            # Escape is decoded after a timeout. Wait for dismissal before
+            # reopening so slow runners cannot combine it with the next key.
+            actions += [("send", b"\x1b"), ("wait", "pty> "), ("idle", 0.1)]
             if kind == "completion":
                 # Clear the fixture completer's inserted common prefix before reopening.
-                actions += [("send", b"\x1b"), ("idle", 0.3)]
-            actions += [("send", reopen), ("idle", 0.1)]
+                actions += [("send", b"\x1b"), ("wait", "pty> "), ("idle", 0.1)]
+            actions += [("send", reopen), ("wait", marker), ("idle", 0.1)]
         output = observe_resize_case(
             binary,
             scenario,

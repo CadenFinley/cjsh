@@ -140,6 +140,7 @@ class TerminalContractTests(unittest.TestCase):
     def test_reset_hand_is_honored(self) -> None:
         session = self.start("reset")
         if b"UNREPORTED_RESETHAND" in session.output:
+            session.write(b"\r")
             self.assertEqual(session.wait_for_exit(), 77)
             self.skipTest("sigaction does not report SA_RESETHAND on this platform")
         os.kill(session.pid, signal.SIGINT)
