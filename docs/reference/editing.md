@@ -105,6 +105,12 @@ Embedding applications can set independent limits through `ic_set_completion_men
 1 through 256. The shared menu-height API and `cjshopt menu-max-lines` have been removed.
 Menus use the same `multiline-bottom-lines` scroll margin (3 by default) around the selected item.
 
+When a menu has more items than fit on screen, a scrollbar appears beside its item rows. Click
+above or below the thumb to page, or drag the thumb to scroll. Releasing it keeps the menu open.
+These interactions use the existing menu mouse settings; `mouse-clicking all-off` leaves the
+scrollbar visible for keyboard navigation. Passive completion suggestions show the scrollbar;
+press **Tab** or click the menu to activate it before scrolling interactively.
+
 **Multiline Detection:**
 CJ's Shell automatically enters multiline mode when:
 - A line ends with a backslash (`\`)

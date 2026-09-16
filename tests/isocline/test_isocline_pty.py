@@ -3520,7 +3520,7 @@ def main() -> int:
                 ("resize", (8, cols)),
                 # Wake the PTY read on platforms that restart it after SIGWINCH.
                 ("send", FOCUS_IN),
-                ("wait", "preview line 03..." if cols == 80 else "pty> m02 first line..."),
+                ("wait", "preview line 03..." if cols == 80 else "preview line 02..."),
                 ("idle", 0.1),
             ],
             initial_rows=24,
