@@ -29,6 +29,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "history_expansion.h"
@@ -86,6 +87,77 @@ static bool test_quick_substitution_skips_staged_entry() {
                         "quick substitution should target the previous command");
 }
 
+static bool test_quick_substitution_rejects_empty_search() {
+    const char* test_name = "quick_substitution_rejects_empty_search";
+    const std::vector<std::string> commands = {
+        "^^", "^^^", "^^^^^^^^^^^", std::string(39, '^'), "^^replacement^",
+    };
+    for (const auto& command : commands) {
+        for (bool staged : {false, true}) {
+            std::vector<std::string> history = {"clear"};
+            if (staged) {
+                history.push_back(command);
+            }
+            const auto result = HistoryExpansion::expand(command, history, staged);
+            EXPECT_TRUE(result.has_error, test_name, "empty search must not replay history");
+            EXPECT_FALSE(result.was_expanded, test_name, "invalid input must not expand");
+            EXPECT_TRUE(result.error_message.find("empty search") != std::string::npos,
+                        test_name, "error should explain the empty search");
+            if (!expect_streq(result.expanded_command, command, test_name,
+                              "invalid input must remain unchanged")) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool test_quick_substitution_valid_forms() {
+    const char* test_name = "quick_substitution_valid_forms";
+    const std::vector<std::pair<std::string, std::string>> cases = {
+        {"^alpha^gamma", "echo gamma alpha beta"},
+        {"^alpha^gamma^", "echo gamma alpha beta"},
+        {"^alpha^", "echo  alpha beta"},
+        {"^alpha^^", "echo  alpha beta"},
+        {"^alpha^alpha^", "echo alpha alpha beta"},
+    };
+    for (const auto& [command, expected] : cases) {
+        const auto result = HistoryExpansion::expand(command, {"echo alpha alpha beta"});
+        EXPECT_FALSE(result.has_error, test_name, "valid substitution should succeed");
+        EXPECT_TRUE(result.was_expanded, test_name, "valid substitution should expand");
+        if (!expect_streq(result.expanded_command, expected, test_name,
+                          "only the first match should be replaced")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool test_quick_substitution_preserves_suffix() {
+    const char* test_name = "quick_substitution_preserves_suffix";
+    for (const std::string suffix : {" extra", " && echo done", "^^"}) {
+        const auto result = HistoryExpansion::expand("^alpha^beta^" + suffix, {"echo alpha"});
+        EXPECT_FALSE(result.has_error, test_name, "substitution with suffix should succeed");
+        EXPECT_TRUE(result.was_expanded, test_name, "substitution with suffix should expand");
+        if (!expect_streq(result.expanded_command, "echo beta" + suffix, test_name,
+                          "text after the closing caret must not be discarded")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool test_quick_substitution_errors() {
+    const char* test_name = "quick_substitution_errors";
+    const auto missing_history = HistoryExpansion::expand("^alpha^beta^", {});
+    EXPECT_TRUE(missing_history.has_error, test_name, "missing history should fail");
+    EXPECT_FALSE(missing_history.was_expanded, test_name, "missing history must not expand");
+    const auto missing_match = HistoryExpansion::expand("^missing^beta^", {"echo alpha"});
+    EXPECT_TRUE(missing_match.has_error, test_name, "missing match should fail");
+    EXPECT_FALSE(missing_match.was_expanded, test_name, "missing match must not expand");
+    return true;
+}
+
 static bool test_previous_command_word_designators_expand() {
     const char* test_name = "previous_command_word_designators_expand";
     const std::vector<std::string> history = {"cp source.txt dest.txt", "!$"};
@@ -134,6 +206,10 @@ int main() {
     const TestCase tests[] = {
         {"substring_search_skips_staged_entry", test_substring_search_skips_staged_entry},
         {"quick_substitution_skips_staged_entry", test_quick_substitution_skips_staged_entry},
+        {"quick_substitution_rejects_empty_search", test_quick_substitution_rejects_empty_search},
+        {"quick_substitution_valid_forms", test_quick_substitution_valid_forms},
+        {"quick_substitution_preserves_suffix", test_quick_substitution_preserves_suffix},
+        {"quick_substitution_errors", test_quick_substitution_errors},
         {"previous_command_word_designators_expand", test_previous_command_word_designators_expand},
         {"double_bang_replays_last_expanded_command",
          test_double_bang_replays_last_expanded_command},

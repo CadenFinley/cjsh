@@ -304,6 +304,10 @@ bool HistoryExpansion::expand_quick_substitution(const std::string& command,
     }
 
     std::string old_text = command.substr(1, second_caret - 1);
+    if (old_text.empty()) {
+        error = "quick substitution: empty search string";
+        return false;
+    }
 
     size_t third_caret = command.find('^', second_caret + 1);
     std::string new_text;
@@ -326,6 +330,9 @@ bool HistoryExpansion::expand_quick_substitution(const std::string& command,
     }
 
     result = last_command.substr(0, pos) + new_text + last_command.substr(pos + old_text.length());
+    if (third_caret != std::string::npos) {
+        result += command.substr(third_caret + 1);
+    }
     return true;
 }
 

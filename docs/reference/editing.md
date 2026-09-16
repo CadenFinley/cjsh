@@ -549,6 +549,11 @@ History expansion runs in interactive sessions before the command line is parsed
 
 `!?` by itself is not a complete expansion; use `!?text?` (or `!?text`) with a search string.
 
+Quick substitution requires non-empty search text: `^^` and repeated carets report an error
+instead of rerunning the previous command. The replacement may be empty (`^old^^` deletes the
+first match). A closing caret is optional; text after it is appended to the expanded command
+(for example, `^old^new^ extra`).
+
 Press `Alt+.` or `Alt+_` to insert the last argument from the previous command. Press the binding
 again to cycle through the last arguments of older history entries. You can also use `!$` when you
 want history expansion to happen as part of command submission.
