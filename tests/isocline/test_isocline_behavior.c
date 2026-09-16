@@ -500,7 +500,7 @@ static bool test_menu_max_line_count_defaults_and_clamps(void) {
                                ic_get_history_menu_max_line_count,
                                ic_get_command_palette_max_line_count,
                                ic_get_custom_menu_max_line_count};
-    const size_t defaults[] = {15, 30, 30, 30};
+    const size_t defaults[] = {15, 15, 15, 15};
     for (size_t i = 0; i < 4; i++) {
         EXPECT_TRUE(getters[i]() == defaults[i], "each menu should use its own default row limit");
         EXPECT_TRUE(setters[i](0) == defaults[i], "setter should return the previous limit");

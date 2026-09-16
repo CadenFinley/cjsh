@@ -1508,7 +1508,7 @@ static bool edit_menu_read_event(ic_env_t* env, editor_t* eb, edit_menu_session_
                                  code_t* key, ssize_t* scroll_offset, ssize_t* selected) {
     *key = KEY_ESC;
     (void)edit_menu_read_key(env, eb, key);
-    if (tty_term_resize_event(env->tty)) {
+    if (*key == KEY_EVENT_RESIZE || tty_term_resize_event(env->tty)) {
         edit_menu_scrollbar_release(env, eb, &session->scrollbar);
         (void)edit_resize(env, eb);
     }

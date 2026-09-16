@@ -88,8 +88,9 @@ Users can type to fuzzy-filter labels, descriptions, and keywords. Up/Down, Ctrl
 Shift+Up/Down, Enter/Tab, Escape, Alt+C, and menu mouse interactions follow the existing Isocline
 menu controls.
 
-Completion menus default to a maximum of 15 visible content rows; history, command palette, and
-custom menus default to 30. These limits include expanded previews, and menus shrink to fit the terminal. Each menu has independent setters/getters (limits clamp to 1 through 256):
+All menus default to a maximum of 15 visible content rows. These limits include expanded previews,
+and menus shrink to fit the terminal. Each menu has independent setters/getters (limits clamp to
+1 through 256):
 
 | Menu | Setter | Getter |
 | --- | --- | --- |

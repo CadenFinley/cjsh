@@ -236,9 +236,9 @@ const std::vector<std::string>& cjshopt_usage_lines() {
         std::string("  multiline-max-lines <count|status> Limit visible multiline input rows ") +
             "(default: 15)",
         "  completion-menu-max-lines <count|status> Limit completion menu rows (default: 15)",
-        "  history-menu-max-lines <count|status> Limit history menu rows (default: 30)",
-        "  command-palette-max-lines <count|status> Limit command palette rows (default: 30)",
-        "  custom-menu-max-lines <count|status> Limit custom menu rows (default: 30)",
+        "  history-menu-max-lines <count|status> Limit history menu rows (default: 15)",
+        "  command-palette-max-lines <count|status> Limit command palette rows (default: 15)",
+        "  custom-menu-max-lines <count|status> Limit custom menu rows (default: 15)",
         std::string(
             "  multiline-bottom-lines <count|status> Set the input and menu scroll margin ") +
             "(default: 3)",

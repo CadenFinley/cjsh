@@ -1154,8 +1154,7 @@ cjshopt command-palette-max-lines <count|status>
 cjshopt custom-menu-max-lines <count|status>
 ```
 
-Completion menus default to **15 rows**. History, command palette, and custom menus default to
-**30 rows** each. Counts must be positive integers; values above **256** are clamped
+All menus default to **15 rows** each. Counts must be positive integers; values above **256** are clamped
 to 256. Expanded item previews count toward the limit, but headers and help text use separate
 rows. Menus always shrink to fit the terminal. The completion setting applies to both active
 menus and passive suggestions shown while typing.

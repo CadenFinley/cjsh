@@ -1068,7 +1068,7 @@ int completion_menu_max_lines_command(const std::vector<std::string>& args) {
 int history_menu_max_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
         "Usage: history-menu-max-lines <count|status>",
-        "Limit history menu content rows, including expanded previews (default: 30).",
+        "Limit history menu content rows, including expanded previews (default: 15).",
         "Use a positive count; values above 256 are clamped to 256.",
         "Ctrl+J temporarily toggles the open menu to full terminal height."};
     return max_lines_command(args, "history-menu-max-lines", "History menu",
@@ -1079,7 +1079,7 @@ int history_menu_max_lines_command(const std::vector<std::string>& args) {
 int command_palette_max_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
         "Usage: command-palette-max-lines <count|status>",
-        "Limit command palette content rows (default: 30).",
+        "Limit command palette content rows (default: 15).",
         "Use a positive count; values above 256 are clamped to 256.",
         "Ctrl+J temporarily toggles the open menu to full terminal height."};
     return max_lines_command(args, "command-palette-max-lines", "Command palette",
@@ -1090,7 +1090,7 @@ int command_palette_max_lines_command(const std::vector<std::string>& args) {
 int custom_menu_max_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
         "Usage: custom-menu-max-lines <count|status>",
-        "Limit custom menu content rows, including expanded previews (default: 30).",
+        "Limit custom menu content rows, including expanded previews (default: 15).",
         "Use a positive count; values above 256 are clamped to 256.",
         "Ctrl+J temporarily toggles the open menu to full terminal height."};
     return max_lines_command(args, "custom-menu-max-lines", "Custom menu",

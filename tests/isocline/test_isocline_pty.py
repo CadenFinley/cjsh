@@ -1086,6 +1086,7 @@ def run_resize_case(
                         pass
                     current_rows = next_rows
                     current_cols = next_cols
+                    last_output_at = time.monotonic()
                 else:
                     raise AssertionError(
                         f"case {scenario} has unknown resize action {action!r}"
@@ -1254,7 +1255,7 @@ def assert_menu_viewports(binary: str) -> None:
         return render
 
     for kind, (_, _, short_count) in menus.items():
-        default_rows = 15 if kind == "completion" else 30
+        default_rows = 15
         check(kind, b"", 0, default_rows, 0, suffix="_default")
         check(kind, b"\n", 0, 68 + short_count, 0, suffix="_default")
         check(kind, b"\n\n", 0, default_rows, 0, suffix="_default")
@@ -2411,7 +2412,7 @@ def main() -> int:
         (
             "status_idle_completion_menu",
             b"\t",
-            "Showing",
+            "Completions",
             "idle|s|cursor=1|tty=1|lost=0",
         ),
         (

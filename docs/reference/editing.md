@@ -75,7 +75,7 @@ cjshopt multiline-start-lines <count|status>
 # Limit visible multiline input rows (default: 15)
 cjshopt multiline-max-lines <count|status>
 
-# Independently limit menu content rows (completion: 15; history/palette/custom: 30)
+# Independently limit menu content rows (default: 15 for all menus)
 cjshopt completion-menu-max-lines <count|status>
 cjshopt history-menu-max-lines <count|status>
 cjshopt command-palette-max-lines <count|status>
@@ -91,8 +91,8 @@ laid out separately below the input viewport. The symmetric cursor margin keeps 
 while the cursor moves within it, uses only rows that exist in the command, and never pads the
 display with blank lines.
 
-Completion menus default to at most 15 content rows; history, command palette, and custom menus
-default to 30. These limits include expanded item previews, and menus shrink to fit the terminal. Headers and help text use separate rows.
+All menus default to at most 15 content rows. These limits include expanded item previews, and
+menus shrink to fit the terminal. Headers and help text use separate rows.
 Use the per-menu `cjshopt` commands above to set independent limits, and add them to `~/.cjshrc`
 to persist them. Counts must be positive; values above 256 are clamped to 256.
 Press **Ctrl+J** inside any menu (including passive completion suggestions) to toggle between its

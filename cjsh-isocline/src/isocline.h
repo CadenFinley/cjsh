@@ -950,8 +950,7 @@ size_t ic_set_multiline_bottom_line_count(size_t line_count);
 size_t ic_get_multiline_bottom_line_count(void);
 
 /// Configure independent menu content-row limits, including expanded item previews.
-/// Completion menus default to 15 rows; history, command palette, and custom menus
-/// default to 30. Values are clamped to 1 through 256. Headers and help text use
+/// All menus default to 15 rows. Values are clamped to 1 through 256. Headers and help text use
 /// separate rows, and menus shrink to fit the terminal. Ctrl+J temporarily toggles the
 /// open menu between its configured limit and all available terminal space, without
 /// changing these settings. The toggle resets when the menu closes.

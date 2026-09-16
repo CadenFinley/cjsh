@@ -182,10 +182,12 @@ def check_scrollbars(binary: str) -> None:
 
     resized = observe("custom", "_mouse", [
         ("send", press_thumb), ("idle", 0.15),
-        ("resize", (12, 60)), ("idle", 0.15),
+        ("resize", (12, 60)),
+        # The blocking TTY reader processes pending resize notifications with its next input.
+        ("send", pty_tests.mouse_left_drag(59, 3)), ("idle", 0.15),
     ])
     if resized.rfind("\x1b[?1002l") < resized.rfind("\x1b[?1002h"):
-        raise AssertionError("resizing must end temporary motion capture")
+        raise AssertionError(f"resizing must end temporary motion capture: {resized!r}")
     narrow = pty_tests.terminal_screen(resized, 12, 60)
     if not any(len(line) == 59 and line[-1] in "█│" for line in narrow):
         raise AssertionError(f"scrollbar must follow the terminal width: {narrow!r}")
@@ -201,6 +203,4 @@ def check_scrollbars(binary: str) -> None:
 
 if __name__ == "__main__":
     check_scrollbars(sys.argv[1])
-    print(f"Total tests: {pty_tests.PTY_CASE_COUNT}")
-    print(f"Passed: {pty_tests.PTY_CASE_COUNT}")
-    print("Failed: 0")
+    print(f"All {pty_tests.PTY_CASE_COUNT} menu scrollbar tests passed")

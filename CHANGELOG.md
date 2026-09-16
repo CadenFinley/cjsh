@@ -18,7 +18,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Changed
 
-- Menu content-row defaults are now 15 for completions and 30 for history, command palette, and custom menus. Per-menu `cjshopt` overrides and the temporary Ctrl+J height toggle remain available.
+- Menu content-row defaults are now 15 for completion, history, command palette, and custom menus. Per-menu `cjshopt` overrides and the temporary Ctrl+J height toggle remain available.
 - Removed the shared `ic_set_menu_max_line_count()` / `ic_get_menu_max_line_count()` API and `cjshopt menu-max-lines`. Use the per-menu isocline APIs or `cjshopt` settings instead, and replace the old option in startup files.
 - Completion menus now always use the full single-column list with scrolling, paging, and mouse support. Removed the collapsed menu, its expand/collapse controls, and `cjshopt completion-menu-expanded` (including the corresponding isocline API). Remove this setting from existing startup files.
 

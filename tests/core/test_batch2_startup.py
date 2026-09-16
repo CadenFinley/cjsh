@@ -165,9 +165,9 @@ class StartupTests(unittest.TestCase):
         for command, label, default in (
             ("multiline-max-lines", "Multiline input", 15),
             ("completion-menu-max-lines", "Completion menu", 15),
-            ("history-menu-max-lines", "History menu", 30),
-            ("command-palette-max-lines", "Command palette", 30),
-            ("custom-menu-max-lines", "Custom menu", 30),
+            ("history-menu-max-lines", "History menu", 15),
+            ("command-palette-max-lines", "Command palette", 15),
+            ("custom-menu-max-lines", "Custom menu", 15),
         ):
             result = self.run_shell("-c", f"cjshopt {command} status")
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -199,7 +199,7 @@ class StartupTests(unittest.TestCase):
             ("command-palette-max-lines", "Command palette", 16),
             ("custom-menu-max-lines", "Custom menu", 20),
         )
-        defaults = dict(zip((command for command, _, _ in options), (15, 30, 30, 30)))
+        defaults = dict(zip((command for command, _, _ in options), (15, 15, 15, 15)))
         statuses = "; ".join(f"cjshopt {command} status" for command, _, _ in options)
         for changed_command, _, limit in options:
             result = self.run_shell("-c", f"cjshopt {changed_command} {limit}; " + statuses)
