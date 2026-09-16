@@ -2602,6 +2602,18 @@ static bool test_option_toggle_consistency(void) {
         return false;
     }
 
+    EXPECT_FALSE(ic_completion_auto_menu_is_enabled(),
+                 "automatic completion menu should default to disabled");
+    EXPECT_FALSE(ic_enable_completion_auto_menu(true),
+                 "automatic menu enable should report previously disabled state");
+    EXPECT_TRUE(ic_completion_auto_menu_is_enabled(),
+                "automatic menu getter should reflect enable");
+    EXPECT_TRUE(env->completion_auto_menu, "automatic menu flag should become enabled");
+    EXPECT_TRUE(ic_enable_completion_auto_menu(false),
+                "automatic menu disable should report previously enabled state");
+    EXPECT_FALSE(ic_completion_auto_menu_is_enabled(),
+                 "automatic menu getter should reflect disable");
+
     env->complete_autotab = false;
     EXPECT_FALSE(ic_enable_auto_tab(true), "auto-tab should report previously disabled state");
     EXPECT_TRUE(env->complete_autotab, "auto-tab flag should become enabled");

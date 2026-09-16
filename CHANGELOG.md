@@ -11,6 +11,10 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+### Added
+
+- Added opt-in `cjshopt completion-auto-menu on|off|status` and matching isocline APIs. Typing shows an unselected, live completion list; Tab activates navigation, mouse interaction, preview, and acceptance without inserting a common prefix or accepting a lone match. With prompt mouse clicking enabled, clicking a passive entry activates and selects it; header/footer clicks select the first entry. The activating click never accepts. After acceptance, refreshed suggestions stay visible in passive mode until Tab or another menu click activates them.
+
 ### Changed
 
 - Completion menus now always use the full single-column list with scrolling, paging, and mouse support. Removed the collapsed menu, its expand/collapse controls, and `cjshopt completion-menu-expanded` (including the corresponding isocline API). Remove this setting from existing startup files.

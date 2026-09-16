@@ -94,6 +94,11 @@ typedef struct editor_s {
     bool disable_undo;                  // temporarily disable auto undo (for history search)
     bool refresh_suppressed;            // batch screen updates during high-volume input
     bool refresh_pending;               // remember to refresh when suppression lifts
+    bool completion_auto_menu_visible;  // passive list owned by the main editor
+    bool completion_menu_active;        // an interactive completion menu owns input
+    ssize_t completion_auto_menu_header_rows;  // passive layout used for click activation
+    ssize_t completion_auto_menu_item_rows;
+    ssize_t completion_auto_menu_rows;
     bool history_prefix_active;         // whether prefix-prioritized history is active
     bool request_submit;                // request submission of current line
     bool force_linear_line_numbers;     // final render should drop relative numbering styling
@@ -178,6 +183,7 @@ static bool edit_completion_click_accept_enabled(const ic_env_t* env) {
 }
 
 static void edit_generate_completions(ic_env_t* env, editor_t* eb, bool autotab);
+static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb);
 static void edit_history_search_with_current_line(ic_env_t* env, editor_t* eb);
 static void edit_command_palette(ic_env_t* env, editor_t* eb);
 static void edit_history_prev(ic_env_t* env, editor_t* eb);
@@ -279,7 +285,7 @@ static bool key_action_execute(ic_env_t* env, editor_t* eb, ic_key_action_t acti
             edit_cursor_left(env, eb);
             return true;
         case IC_KEY_ACTION_CURSOR_RIGHT_OR_COMPLETE:
-            if (eb->pos == sbuf_len(eb->input)) {
+            if (!env->completion_auto_menu && eb->pos == sbuf_len(eb->input)) {
                 edit_generate_completions(env, eb, false);
             } else {
                 edit_cursor_right(env, eb);
@@ -309,7 +315,7 @@ static bool key_action_execute(ic_env_t* env, editor_t* eb, ic_key_action_t acti
             edit_cursor_prev_word(env, eb);
             return true;
         case IC_KEY_ACTION_CURSOR_WORD_NEXT_OR_COMPLETE:
-            if (eb->pos == sbuf_len(eb->input)) {
+            if (!env->completion_auto_menu && eb->pos == sbuf_len(eb->input)) {
                 edit_generate_completions(env, eb, false);
             } else {
                 edit_cursor_next_word(env, eb);
@@ -871,8 +877,8 @@ static bool edit_handle_mouse_click(ic_env_t* env, editor_t* eb, const char* ren
         eb->rendered_hint_snapshot[0] != '\0') {
         active_hint = eb->rendered_hint_snapshot;
     }
-    if ((active_hint == NULL || active_hint[0] == '\0') && env->completions != NULL &&
-        completions_count(env->completions) > 0) {
+    if (!env->completion_auto_menu && (active_hint == NULL || active_hint[0] == '\0') &&
+        env->completions != NULL && completions_count(env->completions) > 0) {
         active_hint = completions_get_hint(env->completions, 0, NULL);
     }
 
@@ -2154,7 +2160,11 @@ static bool edit_resize(ic_env_t* env, editor_t* eb) {
 
     eb->termh = newtermh;
     if (!width_changed) {
-        edit_refresh(env, eb);
+        if (eb->completion_auto_menu_visible) {
+            edit_refresh_completion_auto_menu(env, eb);
+        } else {
+            edit_refresh(env, eb);
+        }
         return true;
     }
 
@@ -2225,7 +2235,11 @@ static bool edit_resize(ic_env_t* env, editor_t* eb) {
         eb->cur_rows++;
     }
     eb->termw = newtermw;
-    edit_refresh(env, eb);
+    if (eb->completion_auto_menu_visible) {
+        edit_refresh_completion_auto_menu(env, eb);
+    } else {
+        edit_refresh(env, eb);
+    }
 
     // remove hint again
     sbuf_delete_at(eb->input, eb->pos, sbuf_len(eb->hint));
@@ -2256,6 +2270,21 @@ static void edit_refresh_hint(ic_env_t* env, editor_t* eb) {
     sbuf_clear(eb->hint);
     sbuf_clear(eb->hint_help);
     completions_clear(env->completions);
+
+    if (eb->completion_auto_menu_visible) {
+        sbuf_clear(eb->extra);
+        eb->completion_auto_menu_visible = false;
+    }
+    if (env->completion_auto_menu) {
+        // Shared search/palette menus temporarily disable undo while editing their query.
+        // Neither they nor an active completion menu should spawn a passive menu.
+        if (!eb->completion_menu_active && !eb->disable_undo) {
+            edit_refresh_completion_auto_menu(env, eb);
+        } else {
+            edit_refresh(env, eb);
+        }
+        return;
+    }
 
     if (env->no_hint || edit_current_line_is_empty(eb)) {
         edit_refresh(env, eb);
@@ -2320,12 +2349,20 @@ static void edit_refresh_hint(ic_env_t* env, editor_t* eb) {
 
 static void edit_undo_restore(ic_env_t* env, editor_t* eb) {
     editor_undo_restore(eb, true);
-    edit_refresh(env, eb);
+    if (env->completion_auto_menu) {
+        edit_refresh_hint(env, eb);
+    } else {
+        edit_refresh(env, eb);
+    }
 }
 
 static void edit_redo_restore(ic_env_t* env, editor_t* eb) {
     editor_redo_restore(eb);
-    edit_refresh(env, eb);
+    if (env->completion_auto_menu) {
+        edit_refresh_hint(env, eb);
+    } else {
+        edit_refresh(env, eb);
+    }
 }
 
 static void edit_cursor_left(ic_env_t* env, editor_t* eb) {
@@ -4270,6 +4307,25 @@ edit_loop_entry:
             sbuf_clear(eb.hint);
             sbuf_clear(eb.hint_help);
 
+            // Preserve the passive layout for mouse hit testing and resize events. Keyboard
+            // input dismisses the old rendering; editing operations rebuild it for the new buffer.
+            const code_t base_key = KEY_NO_MODS(c);
+            if (eb.completion_auto_menu_visible && c != KEY_NONE && c != KEY_EVENT_RESIZE &&
+                base_key != KEY_EVENT_MOUSE_OTHER && base_key != KEY_EVENT_MOUSE_WHEEL_UP &&
+                base_key != KEY_EVENT_MOUSE_WHEEL_DOWN && base_key != KEY_EVENT_FOCUS_IN &&
+                base_key != KEY_EVENT_FOCUS_OUT) {
+                eb.completion_auto_menu_visible = false;
+                sbuf_clear(eb.extra);
+                completions_clear(env->completions);
+                if (code_is_virt_key(c)) {
+                    edit_refresh(env, &eb);
+                }
+                if (c == KEY_ESC) {
+                    mem_free(eb.mem, pending_hint);
+                    continue;  // hide suggestions, not the input; the next edit reopens them
+                }
+            }
+
             bool request_submit = false;
 
             if (c == KEY_CTRL_O) {
@@ -4336,7 +4392,8 @@ edit_loop_entry:
             }
 
             if (eb.mouse_reporting_enabled && KEY_NO_MODS(c) == KEY_EVENT_MOUSE_OTHER &&
-                edit_handle_mouse_click(env, &eb, pending_hint)) {
+                (edit_activate_completion_auto_menu_on_click(env, &eb) ||
+                 edit_handle_mouse_click(env, &eb, pending_hint))) {
                 if (pending_hint != NULL) {
                     mem_free(eb.mem, pending_hint);
                     pending_hint = NULL;
@@ -4413,7 +4470,11 @@ edit_loop_entry:
                         eb.refresh_suppressed = false;
                         if (eb.refresh_pending) {
                             eb.refresh_pending = false;
-                            edit_refresh(env, &eb);
+                            if (env->completion_auto_menu) {
+                                edit_refresh_hint(env, &eb);
+                            } else {
+                                edit_refresh(env, &eb);
+                            }
                         }
                         break;
 
@@ -4458,7 +4519,8 @@ edit_loop_entry:
                         break;
                     case KEY_RIGHT:
                     case KEY_CTRL_F:
-                        if (eb.pos == sbuf_len(eb.input) && edit_pos_is_at_row_end(env, &eb)) {
+                        if (!env->completion_auto_menu && eb.pos == sbuf_len(eb.input) &&
+                            edit_pos_is_at_row_end(env, &eb)) {
                             edit_generate_completions(env, &eb, false);
                         } else {
                             edit_cursor_right(env, &eb);
@@ -4493,7 +4555,8 @@ edit_loop_entry:
                     case KEY_CTRL_RIGHT:
                     case WITH_SHIFT(KEY_RIGHT):
                     case WITH_ALT('f'):
-                        if (eb.pos == sbuf_len(eb.input) && edit_pos_is_at_row_end(env, &eb)) {
+                        if (!env->completion_auto_menu && eb.pos == sbuf_len(eb.input) &&
+                            edit_pos_is_at_row_end(env, &eb)) {
                             edit_generate_completions(env, &eb, false);
                         } else {
                             edit_cursor_next_word(env, &eb);

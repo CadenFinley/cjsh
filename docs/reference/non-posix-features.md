@@ -97,7 +97,7 @@ differences from Bash and Zsh.
 
 - **Fuzzy matching and spell correction** – Configurable through `cjshopt completion-case`,
   `cjshopt completion-spell`, `cjshopt completion-spell-enter`, `cjshopt completion-preview`,
-  `cjshopt completion-click-accept`, and
+  `cjshopt completion-auto-menu`, `cjshopt completion-click-accept`, and
   `cjshopt menu-highlighting`.
 - **Man-page scraping** – `generate-completions` and on-demand parsing of `man` pages populate a
   cache under `~/.cache/cjsh/generated_completions/` for rich option and subcommand help.

@@ -2180,6 +2180,9 @@ static bool test_builtin_docs() {
                            builtin_completions::EntryKind::Subcommand),
                 test_name,
                 "cjshopt should not include the removed completion-menu-expanded setting");
+    EXPECT_TRUE(
+        has_entry(cjshopt_doc, "completion-auto-menu", builtin_completions::EntryKind::Subcommand),
+        test_name, "cjshopt should include completion-auto-menu subcommand");
     EXPECT_TRUE(has_entry(cjshopt_doc, "completion-click-accept",
                           builtin_completions::EntryKind::Subcommand),
                 test_name, "cjshopt should include completion-click-accept subcommand");
@@ -2338,6 +2341,16 @@ static bool test_builtin_docs() {
         builtin_completions::lookup_builtin_command_doc("cjshopt-completion-menu-expanded");
     EXPECT_TRUE(completion_menu_expanded_doc == nullptr, test_name,
                 "removed completion-menu-expanded setting should not have completion docs");
+
+    const auto* completion_auto_menu_doc =
+        builtin_completions::lookup_builtin_command_doc("cjshopt-completion-auto-menu");
+    EXPECT_TRUE(completion_auto_menu_doc != nullptr, test_name,
+                "cjshopt-completion-auto-menu doc should exist");
+    for (const char* option : {"on", "off", "status"}) {
+        EXPECT_TRUE(
+            has_entry(completion_auto_menu_doc, option, builtin_completions::EntryKind::Subcommand),
+            test_name, "completion-auto-menu should include on/off/status");
+    }
 
     const auto* completion_click_accept_doc =
         builtin_completions::lookup_builtin_command_doc("cjshopt-completion-click-accept");

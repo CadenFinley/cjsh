@@ -872,6 +872,20 @@ bool ic_enable_completion_preview(bool enable);
 /// Return the current setting without changing it.
 bool ic_completion_preview_is_enabled(void);
 
+/// Show an unselected completion menu while editing (disabled by default).
+/// Tab activates the menu without accepting or extending the input, even for a single match.
+/// Until activation, navigation edits the input and menu scrolling/click acceptance are disabled.
+/// With prompt mouse capture enabled, a click activates and selects the clicked entry (or the
+/// first entry for a header/footer click), never accepting it on that activating click.
+/// After acceptance, suggestions refresh and remain passive until Tab or a click activates them.
+/// Empty lines or no matches hide the menu; Escape hides it until the next edit.
+/// The passive menu replaces inline hints, independently of the hint and preview settings.
+/// Returns the previous setting.
+bool ic_enable_completion_auto_menu(bool enable);
+
+/// Is the automatic, passive completion menu enabled?
+bool ic_completion_auto_menu_is_enabled(void);
+
 /// Enable or disable click-to-accept for completion candidates (disabled by default).
 /// Returns the previous setting.
 bool ic_enable_completion_click_accept(bool enable);

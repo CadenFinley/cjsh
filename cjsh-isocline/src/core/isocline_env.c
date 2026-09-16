@@ -204,6 +204,7 @@ static ic_env_t* ic_env_create(ic_malloc_fun_t* _malloc, ic_realloc_fun_t* _real
     env->replace_prompt_line_with_line_number = false;  // keep final prompt line visible by default
     (void)ic_env_apply_line_wrap_marker(env, NULL);     // default soft-wrap indicator
     env->complete_nopreview = false;               // completion preview (inverted: false = enabled)
+    env->completion_auto_menu = false;             // keep automatic completion menus opt-in
     env->completion_click_accept_enabled = false;  // keep click-to-accept off by default
     env->menu_highlight_mode = IC_MENU_HIGHLIGHT_NONE;  // keep menu items unhighlighted by default
     env->no_hint = false;                               // hint (inverted: false = enabled)

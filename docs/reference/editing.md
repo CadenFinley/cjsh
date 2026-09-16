@@ -253,6 +253,9 @@ Need to author new entries or override the defaults? Check the [Completion Autho
 
 **Configuration:**
 ```bash
+# Show passive completions while typing; Tab activates the menu (disabled by default)
+cjshopt completion-auto-menu on|off|status
+
 # Enable/disable completion preview (enabled by default)
 cjshopt completion-preview on|off|status
 
@@ -291,8 +294,22 @@ first). Entries without valid timestamps follow dated entries. If history is dis
 or has no eligible entries, no completions are shown. Typing a command or path prefix uses the
 usual context-aware completion sources.
 
-**Using Completions:**
-- Press `Tab` to show completions
+**Automatic completion menu:** Enable `cjshopt completion-auto-menu on` to show an unselected
+list as you type. It updates on edits without extending your input or previewing a candidate.
+While passive, arrows edit/navigate the input, Enter submits it, and the mouse wheel does not
+scroll the menu. The first `Tab` activates the menu and selects the first candidate, even if
+there is only one match; it does not accept or insert a common prefix. When mouse clicking is
+enabled at the prompt, clicking an entry also activates the menu with that entry selected.
+Clicking its header or footer activates the first entry, like Tab. The activating click never
+accepts a completion, even with `completion-click-accept on`; later clicks follow that setting.
+After accepting a completion, suggestions refresh immediately and remain visible in **passive**
+mode; press `Tab` or click the menu to activate them again. The menu disappears when there are no matches or the
+current line is empty. `Esc` hides the passive menu without deleting input; editing reopens it.
+This mode replaces inline hints (independently of `cjshopt hint`); `completion-preview` and
+`completion-click-accept` apply once the menu is active. Add the setting to `~/.cjshrc` to persist it.
+
+**Using Completions (once the menu is active):**
+- Press `Tab` to show/activate completions
 - Press `Tab` again to cycle through options
 - Use arrow keys to navigate the completion menu
 - Press `Enter` to accept a completion

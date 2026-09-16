@@ -787,6 +787,7 @@ Available subcommands:
 - `multiline-bottom-lines` - Configure the input and menu scroll margin
 - `hint-delay` - Set hint display delay in milliseconds
 - `idle-timeout` - Run idle hooks after a period without terminal input
+- `completion-auto-menu` - Show passive completions while typing; Tab activates the menu
 - `completion-preview` - Configure completion preview
 - `completion-click-accept` - Configure whether click interactions accept completion candidates
 - `menu-highlighting` - Syntax-highlight completion and history menu items
@@ -1222,6 +1223,31 @@ control to commands they launch, and restores pending input and its cursor posit
 The timeout is active only when at least one `idle` hook is registered, and it is ignored in
 non-interactive, `--secure`, and `--posix` sessions. See [Shell Hooks](hooks.md) for a Drift
 screensaver example.
+
+#### completion-auto-menu
+
+Show a live, unselected completion menu while typing. Disabled by default.
+
+```bash
+cjshopt completion-auto-menu on      # Show suggestions automatically
+cjshopt completion-auto-menu off     # Open completions only on request (default)
+cjshopt completion-auto-menu status  # Show the current setting
+```
+
+The menu is passive until `Tab` or a mouse click activates it. The first Tab selects the first
+candidate without accepting it or inserting a common prefix, including when only one candidate
+exists. With mouse clicking enabled at the prompt, clicking an entry activates and selects it;
+clicking the header or footer selects the first entry. The activating click never accepts,
+regardless of `completion-click-accept`. Mouse-disabled/menu-only capture modes still require Tab.
+Scrolling, mouse selection/click acceptance, and Enter/Right/End acceptance then follow the
+normal completion-menu settings. After acceptance, the updated menu remains visible but returns
+to passive mode, so Enter submits your input and Tab or a menu click activates completions again. No matches or
+an empty current line hide the menu. Escape hides it until the next edit without clearing input.
+
+This replaces inline hints while enabled and works even with `hint off`. Completion preview is
+only shown after activation. Add `cjshopt completion-auto-menu on` to `~/.cjshrc` to persist it.
+The isocline API exposes `ic_enable_completion_auto_menu()` and
+`ic_completion_auto_menu_is_enabled()` for the same setting.
 
 #### completion-preview
 

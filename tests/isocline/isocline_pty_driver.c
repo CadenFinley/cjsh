@@ -880,6 +880,41 @@ static int run_case(const char* scenario) {
                 (void)ic_set_multiline_bottom_line_count(0);
             }
         }
+    } else if (strncmp(scenario, "completion_auto_menu", 20) == 0) {
+        (void)ic_enable_completion_auto_menu(strstr(scenario, "_off") == NULL);
+        (void)ic_enable_completion_preview(strstr(scenario, "_nopreview") == NULL);
+        (void)ic_enable_completion_click_accept(strstr(scenario, "_selectonly") == NULL);
+        (void)ic_enable_hint(strstr(scenario, "_hints") != NULL);
+        (void)ic_enable_auto_tab(strstr(scenario, "_autotab") != NULL);
+        (void)ic_set_status_hint_mode(IC_STATUS_HINT_OFF);
+        (void)ic_enable_mouse_reporting_status_line(false);
+        (void)ic_set_mouse_clicking_mode(IC_MOUSE_CLICKING_MENU_ONLY);
+        if (strstr(scenario, "_mouse") != NULL) {
+            (void)ic_set_mouse_clicking_mode(strstr(scenario, "_smart") != NULL
+                                                 ? IC_MOUSE_CLICKING_SMART
+                                                 : IC_MOUSE_CLICKING_SIMPLE);
+            (void)ic_enable_mouse_clicking(true);
+        }
+        if (strstr(scenario, "_multiline") != NULL) {
+            (void)ic_enable_multiline(true);
+            initial_input = "echo\nx";
+        }
+        if (strstr(scenario, "_prefix") != NULL) {
+            prompt_text = "AUTO-MENU-PREFIX\npty";
+        }
+        if (strstr(scenario, "_limit") != NULL) {
+            (void)ic_set_menu_max_line_count(3);
+        }
+        if (strstr(scenario, "_single") != NULL) {
+            g_completion_mode = COMPLETION_MODE_SINGLE;
+        } else if (strstr(scenario, "_dual") != NULL) {
+            g_completion_mode = COMPLETION_MODE_DUAL;
+        } else if (strstr(scenario, "_spell") != NULL) {
+            g_completion_mode = COMPLETION_MODE_SPELL_SINGLE;
+        } else {
+            g_completion_mode = COMPLETION_MODE_MANY;
+        }
+        ic_set_default_completer(pty_completion_dispatcher, NULL);
     } else if (strcmp(scenario, "completion_many_menu") == 0 ||
                strcmp(scenario, "completion_many_menu_preview") == 0 ||
                strcmp(scenario, "completion_many_menu_off") == 0 ||

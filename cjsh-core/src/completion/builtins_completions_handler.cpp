@@ -638,6 +638,8 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_subcommand("hint-delay", "Adjust inline hint delay"),
              make_subcommand("idle-timeout", "Configure the idle hook timeout"),
              make_subcommand("completion-preview", "Toggle completion preview"),
+             make_subcommand("completion-auto-menu",
+                             "Show completions while typing; Tab activates"),
              make_subcommand("completion-click-accept",
                              "Control whether clicks accept completion entries"),
              make_subcommand("menu-highlighting",
@@ -816,6 +818,10 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
         add_doc("cjshopt-completion-preview", "",
                 {make_subcommand("on", "Enable completion preview"),
                  make_subcommand("off", "Disable completion preview"),
+                 make_subcommand("status", "Show current setting")});
+        add_doc("cjshopt-completion-auto-menu", "",
+                {make_subcommand("on", "Show passive completions while typing; Tab activates"),
+                 make_subcommand("off", "Open completions only on request (default)"),
                  make_subcommand("status", "Show current setting")});
         add_doc("cjshopt-completion-click-accept", "",
                 {make_subcommand("on", "Always accept completion entries on click"),

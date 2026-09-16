@@ -82,6 +82,10 @@ Powered by the embedded [isocline](https://github.com/cadenfinley/isocline) edit
     prompt cursor placement. Clicks can select completion/history entries,
     and `cjshopt completion-click-accept` controls whether
     clicks accept completion entries.
+- **Automatic completion menu** – Opt in with `cjshopt completion-auto-menu on` to show passive
+    suggestions while typing. Tab activates selection, scrolling, and acceptance; with prompt mouse
+    clicking enabled, clicking the menu also activates it without accepting. After acceptance,
+    the updated menu stays visible in passive mode until Tab or a click activates it again.
 - **Typeahead capture** – Keystrokes entered while a command runs are buffered and replayed when the prompt returns so you never lose input.
 - **Abbreviations** – `abbr`/`unabbr` provide fish-style expansions for frequently typed snippets.
 
@@ -109,7 +113,7 @@ for full details.
     - `cjshopt multiline`, `cjshopt multiline-indent`, `cjshopt line-numbers`,
         `cjshopt multiline-start-lines`, `cjshopt multiline-max-lines`,
         `cjshopt multiline-bottom-lines`
-      - `cjshopt completion-preview`,
+      - `cjshopt completion-auto-menu`, `cjshopt completion-preview`,
           `cjshopt completion-click-accept`, `cjshopt menu-highlighting`,
           `cjshopt completion-case`, `cjshopt completion-spell`, `cjshopt completion-spell-enter`,
           `cjshopt completion-learning`, `cjshopt auto-tab`

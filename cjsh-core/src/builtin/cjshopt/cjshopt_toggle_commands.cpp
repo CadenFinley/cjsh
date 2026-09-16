@@ -1157,6 +1157,27 @@ int completion_preview_command(const std::vector<std::string>& args) {
     return handle_toggle_command(config, args);
 }
 
+int completion_auto_menu_command(const std::vector<std::string>& args) {
+    static const std::vector<std::string> usage_lines = {
+        "Usage: completion-auto-menu <on|off|status>",
+        "Examples:", "  completion-auto-menu on      Show completions while typing; Tab activates",
+        "  completion-auto-menu off     Open completions only on request (default)",
+        "  completion-auto-menu status  Show the current setting"};
+
+    static const ToggleCommandConfig config{
+        "completion-auto-menu",
+        usage_lines,
+        [] { return ic_completion_auto_menu_is_enabled(); },
+        [](bool enable) { (void)ic_enable_completion_auto_menu(enable); },
+        "Automatic completion menu",
+        false,
+        "Add `cjshopt {command} {state}` to your ~/.cjshrc to persist this change.\n",
+        {},
+        {}};
+
+    return handle_toggle_command(config, args);
+}
+
 int completion_click_accept_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
         "Usage: completion-click-accept <on|off|status>",

@@ -429,6 +429,21 @@ ic_public bool ic_completion_preview_is_enabled(void) {
     return env != NULL && !env->complete_nopreview;
 }
 
+ic_public bool ic_enable_completion_auto_menu(bool enable) {
+    ic_env_t* env = ic_get_env();
+    if (env == NULL) {
+        return false;
+    }
+    const bool prev = env->completion_auto_menu;
+    env->completion_auto_menu = enable;
+    return prev;
+}
+
+ic_public bool ic_completion_auto_menu_is_enabled(void) {
+    ic_env_t* env = ic_get_env();
+    return env != NULL && env->completion_auto_menu;
+}
+
 ic_public bool ic_enable_completion_click_accept(bool enable) {
     ic_env_t* env = ic_get_env();
     if (env == NULL) {

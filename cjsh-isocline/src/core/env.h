@@ -119,6 +119,7 @@ struct ic_env_s {
     bool singleline_only;                  // allow only single line editing?
     bool complete_nopreview;               // do not show completion preview for each
                                            // selection in the completion menu?
+    bool completion_auto_menu;             // show passive completions while editing (Tab activates)
     bool completion_click_accept_enabled;  // should completion clicks accept immediately?
     ic_menu_highlight_mode_t menu_highlight_mode;  // syntax highlight completion/history menus
     bool complete_autotab;                         // try to keep completing after a completion?
