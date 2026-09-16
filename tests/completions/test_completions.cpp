@@ -924,7 +924,7 @@ static bool test_history_command_completion_priority() {
     config::completion_learning_enabled = false;
     config::history_enabled = true;
     const bool ok = [&] {
-        for (const char* metadata : {"# code=1\n", ""}) {
+        for (const char* metadata : {"# code=0\n", "# code=1\n", ""}) {
             EXPECT_TRUE(write_completion_history(std::string(metadata) + "historycmd_zlong\n"),
                         test_name, "history fixture should be written");
             for (ssize_t budget : {1, 2, 256}) {
@@ -932,7 +932,8 @@ static bool test_history_command_completion_priority() {
                 EXPECT_TRUE(first_generated_completion_matches("historycmd_zlong ",
                                                                "system installed command"),
                             test_name, "a used command should precede a shorter unused command");
-                EXPECT_FALSE(generated_completions_include_source("history: 1") ||
+                EXPECT_FALSE(generated_completions_include_source("history: 0") ||
+                                 generated_completions_include_source("history: 1") ||
                                  generated_completions_include_source("history"),
                              test_name, "the duplicate history result should be suppressed");
             }
@@ -945,6 +946,79 @@ static bool test_history_command_completion_priority() {
     }();
     config::completion_learning_enabled = previous_learning;
     config::history_enabled = previous_history;
+    clear_generated_completions();
+    (void)write_completion_history("");
+    return ok;
+}
+
+static bool test_successful_history_prefers_executable_completion() {
+    const char* test_name = "successful_history_prefers_executable_completion";
+    namespace fs = std::filesystem;
+    const fs::path root = cjsh_filesystem::g_user_home_path() / "history-executable-source";
+    fs::create_directories(root);
+    for (const char* name : {"lazya", "lazygit"}) {
+        std::ofstream(root / name) << "#!/bin/sh\nexit 0\n";
+        fs::permissions(root / name, fs::perms::owner_all);
+    }
+    const ScopedEnvironmentValue path("PATH", root.string());
+    completion_specs::CommandDoc doc;
+    doc.summary = "Lazygit executable description";
+    EXPECT_TRUE(completion_specs::register_command_doc("lazygit", doc), test_name,
+                "executable description should register");
+    const bool previous_learning = config::completion_learning_enabled;
+    const bool previous_history = config::history_enabled;
+    const long previous_limit = get_completion_max_results();
+    config::completion_learning_enabled = false;
+    config::history_enabled = true;
+    const bool ok = [&] {
+        for (const char* history : {"# code=0\nlazygit\n", "# code=0\nlazygit  \n"}) {
+            EXPECT_TRUE(write_completion_history(history), test_name,
+                        "successful bare-command history should be written");
+            for (const char* prefix : {"lazy", "echo done; lazy", "sudo lazy", "$(lazy"}) {
+                for (long limit : {1L, previous_limit}) {
+                    (void)set_completion_max_results(limit);
+                    for (ssize_t budget : {1, 2, 256}) {
+                        (void)run_completion_generation(prefix, &cjsh_default_completer, budget);
+                        EXPECT_TRUE(
+                            first_generated_completion_matches("lazygit ", doc.summary.c_str()),
+                            test_name,
+                            "the executable should retain history priority and its description");
+                        EXPECT_FALSE(generated_completions_include_source("history: 0"), test_name,
+                                     "successful history must not replace the executable entry");
+                        const auto replacements = generated_completion_replacements();
+                        EXPECT_TRUE(
+                            std::count(replacements.begin(), replacements.end(), "lazygit ") == 1,
+                            test_name, "the executable should appear once");
+                        ic_env_t* env = ic_get_env();
+                        stringbuf_t* buffer = sbuf_new(env->mem);
+                        sbuf_append(buffer, prefix);
+                        const auto pos =
+                            completions_apply(env->completions, 0, buffer, std::strlen(prefix));
+                        const std::string applied = sbuf_string(buffer);
+                        sbuf_free(buffer);
+                        const std::string expected =
+                            std::string(prefix).substr(0, std::strlen(prefix) - 4) + "lazygit ";
+                        EXPECT_TRUE(pos >= 0 && applied == expected, test_name,
+                                    "executable insertion should preserve context and add a space");
+                    }
+                    (void)run_hint_generation(prefix);
+                    EXPECT_TRUE(first_generated_completion_matches("lazygit ", doc.summary.c_str()),
+                                test_name, "inline hints should also use the executable entry");
+                }
+            }
+        }
+        fs::permissions(root / "lazygit", fs::perms::owner_read | fs::perms::owner_write);
+        EXPECT_TRUE(write_completion_history("# code=0\nlazygit\n"), test_name,
+                    "history should remain available for an unavailable executable");
+        (void)run_completion_generation("lazy", &cjsh_default_completer, 256);
+        EXPECT_TRUE(first_generated_completion_matches("lazygit", "history: 0"), test_name,
+                    "an unavailable executable should retain its history fallback");
+        return true;
+    }();
+    (void)completion_specs::unregister_command_doc("lazygit");
+    config::completion_learning_enabled = previous_learning;
+    config::history_enabled = previous_history;
+    (void)set_completion_max_results(previous_limit);
     clear_generated_completions();
     (void)write_completion_history("");
     return ok;
@@ -2892,6 +2966,8 @@ static const test_case_t kTests[] = {
     {"history_prefix_metadata_isolation", test_history_prefix_metadata_isolation},
     {"history_regular_completion_priority", test_history_regular_completion_priority},
     {"history_command_completion_priority", test_history_command_completion_priority},
+    {"successful_history_prefers_executable_completion",
+     test_successful_history_prefers_executable_completion},
     {"history_command_with_arguments_priority", test_history_command_with_arguments_priority},
     {"empty_prompt_history_limits", test_empty_prompt_history_limits},
     {"empty_prompt_legacy_history", test_empty_prompt_legacy_history},

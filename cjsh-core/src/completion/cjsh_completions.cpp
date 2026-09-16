@@ -1304,6 +1304,7 @@ struct HistoryMatch {
     int exit_code;
     long long timestamp = 0;
     long long frequency = 1;
+    bool defer_to_command_completion = false;
 };
 
 struct HistoryCompletionBatch {
@@ -1465,7 +1466,8 @@ bool collect_history_completion_matches(ic_completion_env_t* cenv, const char* p
 }
 
 bool history_match_is_in_group(const HistoryMatch& match, HistoryCompletionGroup group) {
-    const bool successful = match.has_exit_code && match.exit_code == 0;
+    const bool successful =
+        match.has_exit_code && match.exit_code == 0 && !match.defer_to_command_completion;
     switch (group) {
         case HistoryCompletionGroup::ALL:
             return true;
@@ -1634,7 +1636,7 @@ bool history_match_file_completion(const HistoryMatch& match, const std::string&
 void prepare_history_completions(HistoryCompletionBatch& batch,
                                  const std::string& completion_prefix,
                                  bool prioritize_command_names = false) {
-    for (const auto& match : batch.matches) {
+    for (auto& match : batch.matches) {
         completion_tracker::prioritize_completion(match.command.c_str(), batch.prefix_len);
         if (prioritize_command_names) {
             // Using a command with arguments also counts as using the command itself.
@@ -1654,6 +1656,18 @@ void prepare_history_completions(HistoryCompletionBatch& batch,
                 completion_utils::unquote_path(match.command.substr(0, word_end));
             if (!command_name.empty()) {
                 completion_tracker::prioritize_completion(command_name.c_str(), batch.prefix_len);
+                if (string_utils::trim_right_ascii_whitespace_copy(match.command) == command_name) {
+                    const auto resolution =
+                        command_lookup::resolve_command(command_name, g_shell.get(), false);
+                    // Let the regular command supply its description and trailing space.
+                    // Keep history as a fallback if that completion cannot be emitted.
+                    match.defer_to_command_completion =
+                        resolution.is_keyword ||
+                        (resolution.is_builtin && is_interactive_builtin(command_name)) ||
+                        resolution.has_alias || resolution.has_function ||
+                        (g_shell && g_shell->get_abbreviations().count(command_name) != 0) ||
+                        !cjsh_filesystem::find_executable_in_path(command_name).empty();
+                }
             }
         }
     }

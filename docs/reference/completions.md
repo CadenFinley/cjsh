@@ -45,6 +45,9 @@ preference. This also applies to inline hints and automatic menus, before result
 History-directory settings and disabled history are respected.
 Using a command with arguments also prioritizes its command name: a history entry such as
 `git clean -xdf` boosts `git` even if `git` has never been run on its own.
+For a bare command such as `lazygit`, the regular command completion takes precedence over
+its history duplicate, including after a successful run. It keeps the command description
+and trailing space while retaining its history preference.
 
 Within the same history preference, matching command names are ordered shortest first, then
 alphabetically using the completion case-sensitivity setting. For example, without matching
