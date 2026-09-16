@@ -1265,11 +1265,6 @@ again:;
     if (match_count > 0) {
         const char* query = sbuf_string(eb->input);
         bool is_filtered = (query != NULL && query[0] != '\0');
-        ssize_t total_history = history_snapshot_count(&snap) - (snap.had_pending ? 1 : 0);
-        if (total_history < 0) {
-            total_history = 0;
-        }
-
         stringbuf_t* selected_metadata_suffix = sbuf_new(env->mem);
         stringbuf_t* metadata_suffix_buffer = sbuf_new(env->mem);
         if (selected_idx >= 0 && selected_idx < match_count) {
@@ -1288,9 +1283,8 @@ again:;
 
         if (showing_all_due_to_no_matches) {
             (void)sbuf_appendf(eb->extra,
-                               "[ic-info]No matches - showing available history (%zd entr%s) - "
+                               "[ic-info]No matches - showing available history - "
                                "case %s - scope %s - nested %s - sort %s%s[/]\n",
-                               total_history, total_history == 1 ? "y" : "ies",
                                session_case_sensitive ? "sensitive" : "insensitive", scope_label,
                                nested_label, sort_label, mouse_suffix);
         } else if (is_filtered) {
@@ -1312,8 +1306,7 @@ again:;
         } else {
             (void)sbuf_appendf(
                 eb->extra,
-                "[ic-info]History (%zd entr%s) - case %s - scope %s - nested %s - sort %s%s[/]\n",
-                total_history, total_history == 1 ? "y" : "ies",
+                "[ic-info]History - case %s - scope %s - nested %s - sort %s%s[/]\n",
                 session_case_sensitive ? "sensitive" : "insensitive", scope_label, nested_label,
                 sort_label, mouse_suffix);
         }

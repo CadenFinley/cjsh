@@ -467,8 +467,7 @@ static const char* edit_completion_menu_footer(bool more_available) {
 
 static ssize_t edit_completion_menu_header_rows(ic_env_t* env, editor_t* eb, ssize_t count,
                                                 bool more_available, const char* mouse_suffix) {
-    const char* hint_suffix = (more_available ? " (more available; PgUp/PgDn or wheel to scroll)"
-                                              : " (PgUp/PgDn or wheel to scroll)");
+    const char* hint_suffix = (more_available ? " (more available)" : "");
 
     char header[384];
     (void)snprintf(header, sizeof(header), "[ic-info]Showing %zd-%zd of %zd completions%s%s[/]",
@@ -717,14 +716,7 @@ again:
     }
 
     char header[384];
-    const char* hint_suffix = "";
-    if (more_available && max_scroll_offset > 0) {
-        hint_suffix = " (more available; PgUp/PgDn or wheel to scroll)";
-    } else if (more_available) {
-        hint_suffix = " (more available)";
-    } else if (max_scroll_offset > 0) {
-        hint_suffix = " (PgUp/PgDn or wheel to scroll)";
-    }
+    const char* hint_suffix = (more_available ? " (more available)" : "");
 
     if (visible_start > 0 && visible_end >= visible_start) {
         (void)snprintf(header, sizeof(header),
