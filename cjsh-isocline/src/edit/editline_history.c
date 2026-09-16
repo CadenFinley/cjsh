@@ -1317,7 +1317,7 @@ again:;
             history_search_append_empty_selection(env, eb);
         }
 
-        ssize_t term_width = term_get_width(env->term);
+        const ssize_t content_width = edit_menu_content_width(env);
         last_status_rows = edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra));
         ssize_t footer_rows =
             (!env->no_help ? edit_menu_rendered_rows(env, eb, k_history_menu_footer) : 0);
@@ -1376,7 +1376,7 @@ again:;
                 const bool metadata_multiline =
                     (metadata_line_end != NULL &&
                      (*metadata_line_end == '\n' || *metadata_line_end == '\r'));
-                ssize_t max_metadata_columns = term_width - 8;
+                ssize_t max_metadata_columns = content_width - 6;
                 if (max_metadata_columns < 1) {
                     max_metadata_columns = 1;
                 }
@@ -1397,7 +1397,7 @@ again:;
 
             const char* display = entry->command;
             const edit_menu_preview_t preview =
-                edit_menu_preview(display, term_width - 4 - metadata_reserved_columns);
+                edit_menu_preview(display, content_width - 2 - metadata_reserved_columns);
 
             bool is_selected = (match_idx == selected_idx);
             bool show_selected_expanded =

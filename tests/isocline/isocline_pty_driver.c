@@ -845,6 +845,11 @@ static int run_case(const char* scenario) {
         (void)ic_set_hint_delay(0);
         ic_set_default_completer(pty_completion_dispatcher, NULL);
     } else if (strncmp(scenario, "menu_viewport_", 14) == 0) {
+        if (strstr(scenario, "_wide_marker") != NULL) {
+            (void)ic_set_line_wrap_marker("界");
+        } else if (strstr(scenario, "_marker_off") != NULL) {
+            (void)ic_set_line_wrap_marker("");
+        }
         if (strstr(scenario, "_mouse") != NULL) {
             (void)ic_set_mouse_clicking_mode(IC_MOUSE_CLICKING_MENU_ONLY);
         } else if (strstr(scenario, "_smart") != NULL) {

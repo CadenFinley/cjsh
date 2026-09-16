@@ -125,7 +125,7 @@ static void custom_menu_render_item(ic_env_t* env, editor_t* eb, stringbuf_t* di
         (void)sbuf_append(eb->extra, "\n");
         return;
     }
-    const edit_menu_preview_t preview = edit_menu_preview(display, term_get_width(env->term) - 4);
+    const edit_menu_preview_t preview = edit_menu_preview(display, edit_menu_content_width(env) - 2);
 
     if (is_selected) {
         (void)sbuf_append(eb->extra, "[ic-menu-selected]");

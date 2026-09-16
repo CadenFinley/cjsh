@@ -138,7 +138,7 @@ def check_scrollbars(binary: str) -> None:
     observe("custom", "_preview_mouse", [
         ("check", expect(0, count=6, selected=0)),
         ("send", drag_thumb(True)), ("idle", 0.15),
-        ("check", expect(112, selected=117)),
+        ("check", expect(112, selected=116)),
     ])
 
     # A passive completion menu displays the same track without capturing mouse input.
@@ -159,8 +159,18 @@ def check_scrollbars(binary: str) -> None:
         row = next(row for row, char in bar_cells(output) if char == "█")
         return pty_tests.mouse_left_press(cols - 1, row)
 
+    def release_on_item(output):
+        return pty_tests.mouse_left_release(4, bar_cells(output)[0][0])
+
+    observe("custom", "_mouse", [
+        ("send", press_thumb), ("idle", 0.15),
+        ("send", pty_tests.DOWN), ("idle", 0.15),
+        ("send", release_on_item), ("idle", 0.15),
+        ("check", expect(0, selected=1)),
+    ])
+
     # Focus loss, keyboard input, resize and dismissal all end temporary motion capture.
-    for ending in (pty_tests.FOCUS_OUT, pty_tests.DOWN, b"\x1b"):
+    for ending in (b"\x1b[O", pty_tests.DOWN, b"\x1b"):
         output = observe("custom", "_mouse", [
             ("send", press_thumb), ("idle", 0.15),
             ("send", ending), ("idle", 0.25),
@@ -179,6 +189,14 @@ def check_scrollbars(binary: str) -> None:
     narrow = pty_tests.terminal_screen(resized, 12, 60)
     if not any(len(line) == 59 and line[-1] in "█│" for line in narrow):
         raise AssertionError(f"scrollbar must follow the terminal width: {narrow!r}")
+
+    for marker, margin in (("_wide_marker", 2), ("_marker_off", 1)):
+        output = observe("custom", marker, [])
+        lines = screen(output)
+        items = [line for line in lines if re.match(r"[ →>]+entry\d{3}", line)]
+        if len(items) != 8 or any(len(line) != cols - margin or line[-1] not in "█│"
+                                  for line in items):
+            raise AssertionError(f"wrap marker setting moved bars off item rows: {lines!r}")
 
 
 if __name__ == "__main__":

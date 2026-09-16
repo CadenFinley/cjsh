@@ -290,27 +290,24 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
 
     const char* footer =
         (eb->mouse_reporting_enabled
-             ? "\n[ic-diminish](tab:activate completions click:activate menu ctrl+j:resize esc:hide)[/]"
-             : "\n[ic-diminish](tab:activate completions ctrl+j:resize esc:hide)[/]");
+             ? "[ic-diminish](tab:activate completions click:activate menu ctrl+j:resize esc:hide)[/]"
+             : "[ic-diminish](tab:activate completions ctrl+j:resize esc:hide)[/]");
     const char* more = (count >= IC_MAX_COMPLETIONS_TO_TRY ? " (more available)" : "");
     char header[192];
-    (void)snprintf(header, sizeof(header), "[ic-info]Showing %zd-%zd of %zd completions%s[/]\n",
-                   count, count, count, more);
+    (void)snprintf(header, sizeof(header), "[ic-info]Completions%s[/]\n", more);
     const ssize_t reserved_rows = edit_menu_input_rows(env, eb) +
                                   edit_menu_rendered_rows(env, eb, header) +
-                                  edit_menu_rendered_rows(env, eb, footer);
+                                  edit_menu_rendered_rows(env, eb, footer) + 1;
     const ssize_t available = edit_menu_available_lines(
         env, eb, reserved_rows, 1, env->completion_menu_max_line_count, eb->completion_menu_maximized);
     const edit_menu_window_t window = edit_menu_window_for(env, count, available, -1, 0);
     const ssize_t visible = window.display_count;
     ssize_t width = edit_completions_max_width(env, count, IC_LARGE_MENU_SOURCE_LIMIT) + 6;
-    const ssize_t max_width = term_get_width(env->term) - 3;
+    const ssize_t max_width = edit_menu_content_width(env) - 1;
     if (max_width > 0 && width > max_width) {
         width = max_width;
     }
 
-    (void)snprintf(header, sizeof(header), "[ic-info]Showing 1-%zd of %zd completions%s[/]\n",
-                   visible, count, more);
     eb->completion_auto_menu_header_rows = edit_menu_rendered_rows(env, eb, header);
     eb->completion_auto_menu_item_rows = visible;
     (void)sbuf_append(eb->extra, header);
@@ -321,6 +318,7 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     }
     edit_menu_scrollbar_t scrollbar = {0};
     edit_menu_append_scrollbar(env, eb, &scrollbar, items_start, &window);
+    edit_menu_append_scroll_hint(eb->extra, count, visible, window.scroll_offset);
     (void)sbuf_append(eb->extra, footer);
     eb->completion_auto_menu_rows = edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra));
     eb->completion_auto_menu_visible = true;
@@ -461,21 +459,11 @@ static ssize_t edit_completion_preview_input_rows(ic_env_t* env, editor_t* eb, s
 
 static const char* edit_completion_menu_footer(bool more_available) {
     if (more_available) {
-        return "\n[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
+        return "[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
                "pgdn:load ctrl+j:resize esc:cancel)[/]";
     }
-    return "\n[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
+    return "[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
            "pgup/pgdn:page ctrl+j:resize esc:cancel)[/]";
-}
-
-static ssize_t edit_completion_menu_header_rows(ic_env_t* env, editor_t* eb, ssize_t count,
-                                                bool more_available, const char* mouse_suffix) {
-    const char* hint_suffix = (more_available ? " (more available)" : "");
-
-    char header[384];
-    (void)snprintf(header, sizeof(header), "[ic-info]Showing %zd-%zd of %zd completions%s%s[/]",
-                   count, count, count, hint_suffix, (mouse_suffix != NULL ? mouse_suffix : ""));
-    return edit_menu_rendered_rows(env, eb, header);
 }
 
 static bool completion_menu_mouse_select(ic_env_t* env, editor_t* eb, ssize_t scroll_offset,
@@ -643,20 +631,22 @@ again:
 
     const char* footer = edit_completion_menu_footer(more_available);
     const ssize_t footer_rows = edit_menu_rendered_rows(env, eb, footer);
-    ssize_t header_rows =
-        edit_completion_menu_header_rows(env, eb, count, more_available, mouse_suffix);
+    char header[384];
+    const char* hint_suffix = (more_available ? " (more available)" : "");
+    (void)snprintf(header, sizeof(header), "[ic-info]Completions%s%s[/]\n", hint_suffix,
+                   mouse_suffix);
     const ssize_t hint_help_rows = edit_menu_rendered_rows(env, eb, sbuf_string(eb->hint_help));
-    header_rows += hint_help_rows;
+    const ssize_t header_rows = edit_menu_rendered_rows(env, eb, header) + hint_help_rows;
     ssize_t preview_len = -1;
     const ssize_t rendered_input_rows = edit_completion_preview_input_rows(
-        env, eb, selected, header_rows + footer_rows + 1, &preview_len);
+        env, eb, selected, header_rows + footer_rows + 2, &preview_len);
     count_displayed = count;
     if (selected >= count_displayed) {
         selected = (count_displayed > 0 ? count_displayed - 1 : -1);
         goto again;
     }
 
-    ssize_t twidth = term_get_width(env->term) - 1;
+    ssize_t twidth = edit_menu_content_width(env) + 1;
     ssize_t colwidth = -1;
     ssize_t visible_count = 0;
     ssize_t max_display_width =
@@ -672,7 +662,7 @@ again:
     }
 
     const ssize_t rows_for_items = edit_menu_available_lines(
-        env, eb, rendered_input_rows + header_rows + footer_rows, 1,
+        env, eb, rendered_input_rows + header_rows + footer_rows + 1, 1,
         env->completion_menu_max_line_count, eb->completion_menu_maximized);
     const edit_menu_window_t window =
         edit_menu_window_for(env, total_rows, rows_for_items, selected, scroll_offset);
@@ -709,32 +699,10 @@ again:
         (void)sbuf_append(eb->extra, "\n");
     }
     edit_menu_append_scrollbar(env, eb, &scrollbar, 0, &window);
+    edit_menu_append_scroll_hint(eb->extra, count_displayed, visible_count, scroll_offset);
     (void)sbuf_append(eb->extra, footer);
-
-    ssize_t visible_start = 0;
-    ssize_t visible_end = 0;
-    if (visible_count > 0) {
-        visible_start = row_start + 1;
-        visible_end = row_start + visible_count;
-        if (visible_end > count) {
-            visible_end = count;
-        }
-    }
-
-    char header[384];
-    const char* hint_suffix = (more_available ? " (more available)" : "");
-
-    if (visible_start > 0 && visible_end >= visible_start) {
-        (void)snprintf(header, sizeof(header),
-                       "[ic-info]Showing %zd-%zd of %zd completions%s%s[/]\n", visible_start,
-                       visible_end, count, hint_suffix, mouse_suffix);
-    } else {
-        (void)snprintf(header, sizeof(header), "[ic-info]Showing %zd of %zd completions%s%s[/]\n",
-                       (visible_count > 0 ? visible_count : count_displayed), count, hint_suffix,
-                       mouse_suffix);
-    }
     (void)sbuf_insert_at(eb->extra, header, 0);
-    last_header_rows = edit_menu_rendered_rows(env, eb, header) + hint_help_rows;
+    last_header_rows = header_rows;
     scrollbar.first_row = last_header_rows;
 
     last_rows_visible = rows_visible;

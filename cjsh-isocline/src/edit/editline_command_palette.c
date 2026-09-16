@@ -434,7 +434,7 @@ again:;
                                session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
         }
 
-        ssize_t term_width = term_get_width(env->term);
+        const ssize_t content_width = edit_menu_content_width(env);
         const ssize_t reserved_rows =
             edit_menu_input_rows(env, eb) + edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra)) +
             (!env->no_help ? edit_menu_rendered_rows(env, eb, k_command_palette_footer) : 0) + 1;
@@ -532,7 +532,7 @@ again:;
             const ssize_t tag_reserved_columns =
                 tagbuf[0] != '\0' ? (ssize_t)(strlen(tag_prefix) + strlen(tagbuf)) : 0;
             const edit_menu_preview_t preview =
-                edit_menu_preview(display, term_width - 4 - tag_reserved_columns);
+                edit_menu_preview(display, content_width - 2 - tag_reserved_columns);
 
             bool is_selected = (match_idx == selected_idx);
             if (is_selected) {

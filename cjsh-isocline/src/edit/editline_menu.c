@@ -38,6 +38,7 @@ typedef struct edit_menu_scrollbar_s {
     ssize_t max_scroll;
     bool pressed;
     bool dragging;
+    bool discard_release;
     bool motion_reporting_added;
     ssize_t drag_top;  // absolute terminal row, retained when the pointer leaves the menu
     ssize_t drag_grab;
@@ -69,6 +70,12 @@ typedef struct edit_menu_window_s {
     ssize_t scroll_offset;
 } edit_menu_window_t;
 
+static ssize_t edit_menu_content_width(ic_env_t* env) {
+    const ssize_t margin = (env->line_wrap_marker_width > 1 ? env->line_wrap_marker_width : 1);
+    const ssize_t width = term_get_width(env->term) - margin - 1;
+    return (width > 0 ? width : 1);
+}
+
 static void edit_menu_scrollbar_release(ic_env_t* env, editor_t* eb, edit_menu_scrollbar_t* bar) {
     if (bar->motion_reporting_added) {
         term_write(env->term, "\x1b[?1002l");
@@ -80,6 +87,7 @@ static void edit_menu_scrollbar_release(ic_env_t* env, editor_t* eb, edit_menu_s
     }
     if (bar->pressed) {
         eb->mouse_left_button_down = false;
+        bar->discard_release = true;
     }
     bar->pressed = false;
     bar->dragging = false;
@@ -804,6 +812,15 @@ static bool edit_menu_scrollbar_event(ic_env_t* env, editor_t* eb, edit_menu_scr
     if (!tty_get_last_mouse_event(env->tty, &event)) {
         return false;
     }
+    if (event.action == TTY_MOUSE_ACTION_LEFT_PRESS) {
+        bar->discard_release = false;
+    } else if (bar->discard_release && (event.action == TTY_MOUSE_ACTION_LEFT_DRAG ||
+                                        event.action == TTY_MOUSE_ACTION_LEFT_RELEASE)) {
+        if (event.action == TTY_MOUSE_ACTION_LEFT_RELEASE) {
+            bar->discard_release = false;
+        }
+        return true;
+    }
     if (bar->pressed && event.action != TTY_MOUSE_ACTION_LEFT_PRESS) {
         if (bar->dragging && event.row != bar->drag_last_row && bar->rows > bar->thumb_rows &&
             (event.action == TTY_MOUSE_ACTION_LEFT_DRAG ||
@@ -826,6 +843,7 @@ static bool edit_menu_scrollbar_event(ic_env_t* env, editor_t* eb, edit_menu_scr
         }
         if (event.action == TTY_MOUSE_ACTION_LEFT_RELEASE) {
             edit_menu_scrollbar_release(env, eb, bar);
+            bar->discard_release = false;
         }
         return true;
     }
@@ -844,6 +862,7 @@ static bool edit_menu_scrollbar_event(ic_env_t* env, editor_t* eb, edit_menu_scr
     }
 
     edit_menu_scrollbar_release(env, eb, bar);
+    bar->discard_release = false;
     bar->pressed = true;
     eb->mouse_left_button_down = false;
     if (bar->rows > 1 && row >= bar->thumb_row && row < bar->thumb_row + bar->thumb_rows) {
@@ -908,8 +927,8 @@ static bool edit_menu_scrollbar_render_row(const char* text, ssize_t row, ssize_
 static void edit_menu_append_scrollbar(ic_env_t* env, editor_t* eb, edit_menu_scrollbar_t* bar,
                                        ssize_t items_start, const edit_menu_window_t* window) {
     bar->rows = 0;
-    const ssize_t term_width = term_get_width(env->term);
-    if (window->max_scroll <= 0 || window->display_count <= 0 || term_width < 6) {
+    const ssize_t content_width = edit_menu_content_width(env);
+    if (window->max_scroll <= 0 || window->display_count <= 0 || content_width < 4) {
         return;
     }
     stringbuf_t* plain = sbuf_new(env->mem);
@@ -923,9 +942,9 @@ static void edit_menu_append_scrollbar(ic_env_t* env, editor_t* eb, edit_menu_sc
     const ssize_t length = sbuf_len(plain);
     const bool trailing_newline = sbuf_ends_with_newline(plain);
     rowcol_t rc = {0};
-    // Reserve two columns: one for the bar, one for the terminal's final empty cell.
-    bar->column = term_width - 2;
-    bar->rows = sbuf_get_rc_at_pos(plain, term_width - 1, 0, 0, 1, length, &rc) -
+    // Also respect the renderer's margin for a custom, wider wrap marker.
+    bar->column = content_width;
+    bar->rows = sbuf_get_rc_at_pos(plain, content_width + 1, 0, 0, 1, length, &rc) -
                 (trailing_newline ? 1 : 0);
     bar->display_count = window->display_count;
     bar->max_scroll = window->max_scroll;
@@ -944,7 +963,7 @@ static void edit_menu_append_scrollbar(ic_env_t* env, editor_t* eb, edit_menu_sc
     edit_menu_scrollbar_render_t render = {
         env, eb->extra, attrbuf_attrs(attrs, length), length, bar,
     };
-    (void)sbuf_for_each_row(plain, term_width - 1, 0, 0, 1, &edit_menu_scrollbar_render_row,
+    (void)sbuf_for_each_row(plain, content_width + 1, 0, 0, 1, &edit_menu_scrollbar_render_row,
                             &render, NULL);
     if (!trailing_newline && sbuf_ends_with_newline(eb->extra)) {
         sbuf_delete_at(eb->extra, sbuf_len(eb->extra) - 1, 1);
@@ -1093,7 +1112,7 @@ static ssize_t edit_menu_multiline_preview_row_count(ic_env_t* env, const char* 
 
     sbuf_replace(preview, display);
     rowcol_t rc_dummy = {0};
-    ssize_t rows = sbuf_get_rc_at_pos(preview, term_get_width(env->term) - 2, 2, 2,
+    ssize_t rows = sbuf_get_rc_at_pos(preview, edit_menu_content_width(env), 2, 2,
                                       env->line_wrap_marker_width, sbuf_len(preview), &rc_dummy);
     sbuf_free(preview);
     const ssize_t logical_rows = edit_menu_line_count(display);
@@ -1151,7 +1170,7 @@ static ssize_t edit_menu_multiline_preview_visible_len(ic_env_t* env, const char
 
     sbuf_replace(preview, display);
     rowcol_t rc_dummy = {0};
-    const ssize_t term_width = term_get_width(env->term) - 2;
+    const ssize_t term_width = edit_menu_content_width(env);
     const ssize_t rendered_rows = sbuf_get_rc_at_pos(
         preview, term_width, 2, 2, env->line_wrap_marker_width, display_len, &rc_dummy);
     const ssize_t logical_rows = edit_menu_line_count(display);

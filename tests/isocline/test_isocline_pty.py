@@ -238,12 +238,12 @@ def normalize_terminal_output(text: str) -> str:
     return normalized
 
 
-def assert_completion_footer_gap(output: str, rows: int, cols: int, footer: str) -> None:
+def assert_completion_footer_spacing(output: str, rows: int, cols: int, footer: str) -> None:
     screen = terminal_screen(output, rows, cols)
     footer_row = next((i for i, line in enumerate(screen) if footer in line), -1)
-    if footer_row < 2 or screen[footer_row - 1].strip() or not screen[footer_row - 2].strip():
+    if footer_row < 1 or not screen[footer_row - 1].strip():
         raise AssertionError(
-            f"completion footer should have exactly one blank row after the last item: {screen!r}"
+            f"completion footer should directly follow the list or scroll hint: {screen!r}"
         )
 
 
@@ -433,18 +433,23 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
             raise AssertionError(f"{scenario} must not select, preview, or capture the mouse: {output!r}")
 
     _, output = run_case(binary, "completion_auto_menu_off", b"s\r", capture_output=True)
-    if "tab:activate completions" in output or "Showing " in output:
+    if "tab:activate completions" in output or "Completions" in output:
         raise AssertionError("disabled automatic menu must not open while typing")
 
     _, output = run_case(binary, "completion_auto_menu_limit", b"s\r", capture_output=True)
-    if "Showing 1-3 of 12 completions" not in output or "s04" in output:
+    if "(9 more below)" not in output or "s03" not in output or "s04" in output:
         raise AssertionError(f"passive menu must respect its completion row limit: {output!r}")
 
     def check_passive_height(count: int):
         def check(output: str) -> None:
             screen = "\n".join(terminal_screen(output, 24, 100))
-            if f"Showing 1-{count} of 12 completions" not in screen:
+            entries = re.findall(r"^  s\d{2}\b", screen, re.M)
+            if "Completions" not in screen or len(entries) != count:
                 raise AssertionError(f"expected {count} passive content rows: {screen!r}")
+            if count < 12 and f"({12 - count} more below)" not in screen:
+                raise AssertionError(f"passive menu should show its hidden item count: {screen!r}")
+            if count == 12 and "more below" in screen:
+                raise AssertionError(f"fitting all items should clear the scroll hint: {screen!r}")
             if "pty> s" not in screen or "→" in screen or "ctrl+j:resize" not in screen:
                 raise AssertionError(f"Ctrl+J must not activate or edit the passive menu: {screen!r}")
         return check
@@ -465,10 +470,11 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
             if f"pty> {expected_input}".rstrip() not in screen or "→" in screen:
                 raise AssertionError(f"passive menu must preserve input and clear selection: {screen!r}")
             if count > 0:
-                if "tab:activate completions" not in screen or f"of {count} completions" not in screen:
+                entries = re.findall(r"^  (?:s\d{2}|hello)\b", screen, re.M)
+                if "tab:activate completions" not in screen or len(entries) != count:
                     raise AssertionError(f"expected {count} live passive completions: {screen!r}")
-                assert_completion_footer_gap(output, 24, 100, "tab:activate completions")
-            elif "completions" in screen:
+                assert_completion_footer_spacing(output, 24, 100, "tab:activate completions")
+            elif "Completions" in screen:
                 raise AssertionError(f"empty/no-match input must remove the menu: {screen!r}")
         return check
 
@@ -503,9 +509,9 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
 
     assert_resize_case(
         binary, "passive_menu_resize", "completion_auto_menu",
-        [("send", b"s"), ("wait", "Showing 1-12 of 12 completions"),
+        [("send", b"s"), ("wait", "  s12"),
          ("resize", (8, 100)), ("send", FOCUS_IN),
-         ("wait", "Showing 1-4 of 12 completions"), ("idle", 0.1),
+         ("wait", "(8 more below)"), ("idle", 0.1),
          ("send", b"\r")], "s", initial_cols=100,
     )
 
@@ -538,7 +544,7 @@ def assert_completion_auto_menu_mouse_cases(binary: str) -> None:
         ("completion_auto_menu_mouse_smart", "  s02", "s02", "s02", 24, 100),
         ("completion_auto_menu_mouse_selectonly", "  s02", "s02", "s02", 24, 100),
         ("completion_auto_menu_mouse_nopreview", "  s02", "s02", "s02", 24, 100),
-        ("completion_auto_menu_mouse", "Showing ", "s01", "s01", 24, 100),
+        ("completion_auto_menu_mouse", "Completions", "s01", "s01", 24, 100),
         ("completion_auto_menu_mouse", "tab:activate", "s01", "s01", 24, 100),
         ("completion_auto_menu_mouse_limit", "  s03", "s03", "s03", 24, 100),
         ("completion_auto_menu_mouse_limit", "tab:activate", "s01", "s01", 24, 100),
@@ -562,7 +568,7 @@ def assert_completion_auto_menu_mouse_cases(binary: str) -> None:
 
         result = run_resize_case(
             binary, scenario,
-            [("send", prefix), ("wait", "Showing "), ("idle", 0.1),
+            [("send", prefix), ("wait", "Completions"), ("idle", 0.1),
              ("send", click_fragment(target, rows, cols)), ("idle", 0.5),
              ("check", check_active), ("send", b"\r\r")],
             initial_rows=rows, initial_cols=cols, respond_to_cursor_queries=True,
@@ -1178,12 +1184,12 @@ def assert_completion_preview_fits(
     if prompt_index < 0:
         raise AssertionError(f"completion preview lost its prompt: {normalized!r}")
     render = normalized[prompt_index:].rstrip()
-    input_text, separator, menu = render.partition("\nShowing ")
+    input_text, separator, menu = render.partition("\nCompletions")
     if not separator or not input_text.startswith("pty> m02 first line"):
         raise AssertionError(f"completion preview should retain its beginning: {render!r}")
     if not input_text.endswith("...") or "preview line 20" in input_text:
         raise AssertionError(f"tall completion preview should end with an ellipsis: {render!r}")
-    if "Showing " in menu or not any(
+    if "Completions" in menu or not any(
         line.startswith(("→ m02", "> m02")) for line in menu.splitlines()
     ):
         raise AssertionError(f"tall completion should remain selected in one menu: {render!r}")
@@ -1197,7 +1203,7 @@ def assert_completion_preview_fits(
 
 def assert_menu_viewports(binary: str) -> None:
     menus = {
-        "completion": (b"entry\t", "Showing ", 8),
+        "completion": (b"entry\t", "Completions", 8),
         "history": (b"\x12entry", "120 matches found", 9),
         "palette": (ALT_P + b"zzviewport", "Actions found - case", 9),
         "custom": (F3, "Items - case", 9),
@@ -1233,6 +1239,18 @@ def assert_menu_viewports(binary: str) -> None:
                 f"{scenario} expected entries {first}-{first + count - 1}, selected {selected}: "
                 f"{render!r}"
             )
+        if kind == "completion":
+            above, below = first, 120 - first - count
+            if above and below:
+                hint = f"  ({above} above, {below} below)"
+            elif above or below:
+                hint = f"  ({above or below} more {'above' if above else 'below'})"
+            else:
+                hint = ""
+            if hint and hint + "\n(↑↓/tab/wheel:move" not in render:
+                raise AssertionError(f"completion scroll hint should precede the footer: {render!r}")
+            if not hint and ("more above" in render or "more below" in render):
+                raise AssertionError(f"fitting all completions should hide the scroll hint: {render!r}")
         return render
 
     for kind, (_, _, short_count) in menus.items():
@@ -3328,9 +3346,9 @@ def main() -> int:
 
     for rows in (8, 24):
         assert_resize_case(
-            binary, "completion_footer_gap", "completion_many_menu_off",
+            binary, "completion_footer_spacing", "completion_many_menu_off",
             [("send", b"s\t"), ("wait", "enter/right:accept"), ("idle", 0.1),
-             ("check", lambda output, rows=rows: assert_completion_footer_gap(
+             ("check", lambda output, rows=rows: assert_completion_footer_spacing(
                  output, rows, 100, "enter/right:accept")),
              ("send", b"\r\r")],
             "s01", initial_rows=rows, initial_cols=100,
@@ -3354,7 +3372,7 @@ def main() -> int:
     if comp_scroll != "s02":
         raise AssertionError(f"completion menu should scroll immediately, got {comp_scroll!r}")
     normalized_comp_scroll_output = normalize_terminal_output(comp_scroll_output)
-    for text in ("Showing 1-12 of 12 completions", "s11", "s12", "Mouse clicking is enabled"):
+    for text in ("Completions", "s11", "s12", "Mouse clicking is enabled"):
         if text not in normalized_comp_scroll_output:
             raise AssertionError(
                 f"completion menu should show the full list immediately; missing {text!r}: "
@@ -3450,8 +3468,8 @@ def main() -> int:
     normalized_comp_multiline_replacement_output = normalize_terminal_output(
         comp_multiline_replacement_output
     )
-    # Reserve a blank separator and both wrapped footer rows below the preview.
-    if "Showing 1-2 of 12 completions" not in normalized_comp_multiline_replacement_output:
+    # Reserve the scroll hint and both wrapped footer rows below the preview.
+    if "(10 more below)" not in normalized_comp_multiline_replacement_output:
         raise AssertionError(
             "completion menu should reserve its footer below the multiline preview, got "
             f"normalized_output={normalized_comp_multiline_replacement_output!r}"
@@ -3461,11 +3479,10 @@ def main() -> int:
             "expanded completion menu should keep its footer inside a short viewport, got "
             f"normalized_output={normalized_comp_multiline_replacement_output!r}"
         )
-    preview_menu_prefix = "pty> m02 first line\n   > m02 second line\nShowing "
-    if (
-        preview_menu_prefix + "1-5 of 12 completions"
-        in normalized_comp_multiline_replacement_output
-    ):
+    preview_menu_prefix = "pty> m02 first line\n   > m02 second line\nCompletions"
+    preview_menu = normalized_comp_multiline_replacement_output.rsplit(preview_menu_prefix, 1)[-1]
+    entries = re.findall(r"^[ →>]+m\d{2}\b", preview_menu.split("esc:cancel)", 1)[0], re.M)
+    if len(entries) != 2:
         raise AssertionError(
             "expanded completion menu rendered too many rows for the multiline preview buffer, got "
             f"normalized_output={normalized_comp_multiline_replacement_output!r}"
