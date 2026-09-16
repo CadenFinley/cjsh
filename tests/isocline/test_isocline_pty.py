@@ -1049,10 +1049,6 @@ def assert_menu_dismissal(binary: str) -> None:
                 ("number", b"2"),
             ],
         ),
-        "completion_compact": (
-            b"choice\t",
-            [("enter", DOWN + b"\r"), ("right", DOWN + RIGHT), ("number", b"2")],
-        ),
         "history": (b"\x12choice", [("enter", DOWN + b"\r"), ("tab", DOWN + b"\t")]),
         "palette": (
             ALT_P + b"zzdismiss",
@@ -2332,10 +2328,7 @@ def main() -> int:
     mouse_wheel_down_shift = b"\x1b[<69;1;1M"
     mouse_release = b"\x1b[<3;1;1m"
     mouse_click_custom_second = mouse_left_click(6, 4)
-    mouse_click_completion_expanded_second = mouse_left_click(6, 4)
-    # At 80 columns, the collapsed completion header wraps to two rows when it
-    # includes the mouse status, so the second candidate starts on screen row 5.
-    mouse_click_completion_collapsed_second = mouse_left_click(6, 5)
+    mouse_click_completion_second = mouse_left_click(6, 4)
     mouse_click_inline_hint = mouse_left_click(10, 1)
 
     assert_smart_mouse_selection_suspends(
@@ -2412,7 +2405,7 @@ def main() -> int:
     mouse_default_click = run_case(
         binary,
         "completion_many_menu_mouse_default_on",
-        b"s\t" + mouse_click_completion_collapsed_second + b"\r",
+        b"s\t" + mouse_click_completion_second + b"\r",
         initial_rows=24,
         initial_cols=80,
     )
@@ -2428,7 +2421,7 @@ def main() -> int:
         b"s\t"
         + mouse_left_press(1, 1)
         + FOCUS_IN
-        + mouse_click_completion_collapsed_second
+        + mouse_click_completion_second
         + b"\r",
         capture_output=True,
         initial_rows=24,
@@ -2446,48 +2439,31 @@ def main() -> int:
     mouse_enable_sequence = "\x1b[?1000h\x1b[?1006h"
     mouse_disable_sequence = "\x1b[?1000l\x1b[?1006l"
 
-    menu_off_collapsed_result, menu_off_collapsed_output = run_case(
+    menu_off_result, menu_off_output = run_case(
         binary,
         "completion_many_menu_off",
-        b"s\t" + mouse_click_completion_collapsed_second + b"\r\r",
+        b"s\t" + mouse_click_completion_second + b"\r",
         capture_output=True,
     )
-    if menu_off_collapsed_result != "s01":
+    if menu_off_result != "s02":
         raise AssertionError(
-            "menu-only off mode should ignore collapsed completion clicks, got "
-            f"{menu_off_collapsed_result!r}"
+            "menu-only off mode should allow completion clicks immediately, got "
+            f"{menu_off_result!r}"
         )
-    if mouse_enable_sequence in menu_off_collapsed_output:
-        raise AssertionError(
-            "menu-only off mode must not capture mouse events for collapsed completions: "
-            f"output={menu_off_collapsed_output!r}"
-        )
-
-    menu_off_expanded_result, menu_off_expanded_output = run_case(
-        binary,
-        "completion_many_menu_off",
-        b"s\t\x0a" + mouse_click_completion_expanded_second + b"\r",
-        capture_output=True,
-    )
-    if menu_off_expanded_result != "s02":
-        raise AssertionError(
-            "menu-only off mode should allow expanded completion clicks, got "
-            f"{menu_off_expanded_result!r}"
-        )
-    menu_enable_index = menu_off_expanded_output.find(mouse_enable_sequence)
-    menu_disable_index = menu_off_expanded_output.find(
+    menu_enable_index = menu_off_output.find(mouse_enable_sequence)
+    menu_disable_index = menu_off_output.find(
         mouse_disable_sequence, menu_enable_index + len(mouse_enable_sequence)
     )
     if min(menu_enable_index, menu_disable_index) < 0 or menu_disable_index < menu_enable_index:
         raise AssertionError(
-            "expanded menu-only off mode should acquire and release terminal mouse tracking: "
-            f"output={menu_off_expanded_output!r}"
+            "completion menu should acquire and release terminal mouse tracking: "
+            f"output={menu_off_output!r}"
         )
 
     all_off_result, all_off_output = run_case(
         binary,
         "completion_many_menu_all_off",
-        b"s\t" + mouse_click_completion_collapsed_second + b"\r\r",
+        b"s\t" + mouse_click_completion_second + b"\r\r",
         capture_output=True,
     )
     if all_off_result != "s01":
@@ -3098,7 +3074,7 @@ def main() -> int:
             f"completion_dual_footer expected 'planet', got {comp_footer!r}"
         )
     normalized_comp_footer_output = normalize_terminal_output(comp_footer_output)
-    if "enter/right:accept esc:cancel" not in normalized_comp_footer_output:
+    if "pgup/pgdn:page esc:cancel" not in normalized_comp_footer_output:
         raise AssertionError(
             "completion menus should show a footer even when every candidate fits, got "
             f"normalized_output={normalized_comp_footer_output!r}"
@@ -3111,149 +3087,62 @@ def main() -> int:
             f"got {comp_preview_first!r}"
         )
 
-    comp_scroll_collapsed, comp_scroll_collapsed_output = run_case(
+    comp_scroll, comp_scroll_output = run_case(
         binary,
-        "completion_many_menu",
+        "completion_many_menu_off",
         b"s\t" + mouse_wheel_down + b"\r\r",
         capture_output=True,
-    )
-    if comp_scroll_collapsed != "s01":
-        raise AssertionError(
-            "completion_many_menu collapsed expected 's01', got "
-            f"{comp_scroll_collapsed!r}"
-        )
-    normalized_comp_scroll_collapsed_output = normalize_terminal_output(
-        comp_scroll_collapsed_output
-    )
-    if "Showing 1-10 of 12 completions" not in normalized_comp_scroll_collapsed_output:
-        raise AssertionError(
-            "collapsed completion menu should use the expanded list header and show ten items, "
-            f"got normalized_output={normalized_comp_scroll_collapsed_output!r}"
-        )
-    if (
-        "s10" not in normalized_comp_scroll_collapsed_output
-        or "s11" in normalized_comp_scroll_collapsed_output
-    ):
-        raise AssertionError(
-            "collapsed completion menu should stop after its tenth item, got "
-            f"normalized_output={normalized_comp_scroll_collapsed_output!r}"
-        )
-
-    comp_click_collapsed_default = run_case(
-        binary,
-        "completion_many_menu",
-        b"s\t" + mouse_click_completion_collapsed_second + b"\r\r",
-    )
-    if comp_click_collapsed_default != "s01":
-        raise AssertionError(
-            "completion_many_menu collapsed click without toggle expected 's01', got "
-            f"{comp_click_collapsed_default!r}"
-        )
-
-    comp_click_collapsed_toggle = run_case(
-        binary,
-        "completion_many_menu",
-        F2 + b"s\t" + mouse_click_completion_collapsed_second + b"\r",
         initial_rows=24,
         initial_cols=80,
-    )
-    if comp_click_collapsed_toggle != "s02":
-        raise AssertionError(
-            "completion_many_menu collapsed click with toggle expected 's02', got "
-            f"{comp_click_collapsed_toggle!r}"
-        )
-
-    comp_toggle_collapsed_inside_menu = run_case(
-        binary,
-        "completion_many_menu",
-        b"s\t" + F2 + b"\r\r",
-    )
-    if comp_toggle_collapsed_inside_menu != "s01":
-        raise AssertionError(
-            "completion_many_menu toggle inside collapsed menu expected 's01', got "
-            f"{comp_toggle_collapsed_inside_menu!r}"
-        )
-
-    comp_click_collapsed_toggle_inside_menu = run_case(
-        binary,
-        "completion_many_menu",
-        b"s\t" + F2 + mouse_click_completion_collapsed_second + b"\r",
-        initial_rows=24,
-        initial_cols=80,
-    )
-    if comp_click_collapsed_toggle_inside_menu != "s02":
-        raise AssertionError(
-            "completion_many_menu collapsed click after in-menu toggle expected 's02', got "
-            f"{comp_click_collapsed_toggle_inside_menu!r}"
-        )
-
-    comp_click_collapsed_custom_toggle_binding = run_case(
-        binary,
-        "completion_many_menu_custom_mouse_toggle",
-        b"s\t" + F3 + mouse_click_completion_collapsed_second + b"\r",
-        initial_rows=24,
-        initial_cols=80,
-    )
-    if comp_click_collapsed_custom_toggle_binding != "s02":
-        raise AssertionError(
-            "completion_many_menu custom mouse-toggle key expected 's02', got "
-            f"{comp_click_collapsed_custom_toggle_binding!r}"
-        )
-
-    comp_click_expanded, comp_click_expanded_output = run_case(
-        binary,
-        "completion_many_menu_mouse_default_on",
-        b"s\t\x0a" + mouse_click_completion_expanded_second + b"\r",
-        capture_output=True,
-    )
-    if comp_click_expanded != "s02":
-        raise AssertionError(
-            f"completion_many_menu expanded click expected 's02', got {comp_click_expanded!r}"
-        )
-    normalized_comp_click_expanded_output = normalize_terminal_output(
-        comp_click_expanded_output
-    )
-    if "Mouse clicking is enabled" not in normalized_comp_click_expanded_output:
-        raise AssertionError(
-            "completion menu should show mouse indicator when click support is active, got "
-            f"normalized_output={normalized_comp_click_expanded_output!r}"
-        )
-
-    comp_scroll = run_case(
-        binary,
-        "completion_many_menu_mouse_default_on",
-        b"s\t\x0a" + mouse_wheel_down + b"\r\r",
     )
     if comp_scroll != "s02":
-        raise AssertionError(
-            f"completion_many_menu expected 's02', got {comp_scroll!r}"
-        )
+        raise AssertionError(f"completion menu should scroll immediately, got {comp_scroll!r}")
+    normalized_comp_scroll_output = normalize_terminal_output(comp_scroll_output)
+    for text in ("Showing 1-12 of 12 completions", "s11", "s12", "Mouse clicking is enabled"):
+        if text not in normalized_comp_scroll_output:
+            raise AssertionError(
+                f"completion menu should show the full list immediately; missing {text!r}: "
+                f"{normalized_comp_scroll_output!r}"
+            )
+    if (
+        "ctrl+j:collapse" in normalized_comp_scroll_output
+        or ":expand" in normalized_comp_scroll_output
+    ):
+        raise AssertionError("completion menu must not advertise expansion/collapse controls")
 
-    comp_scroll_release = run_case(
-        binary,
-        "completion_many_menu_mouse_default_on",
-        b"s\t\x0a" + mouse_wheel_down + mouse_release + b"\r\r",
-    )
-    if comp_scroll_release != "s02":
-        raise AssertionError(
-            "completion_many_menu with release expected 's02', got "
-            f"{comp_scroll_release!r}"
-        )
-
-    comp_scroll_shift = run_case(
-        binary,
-        "completion_many_menu_mouse_default_on",
-        b"s\t\x0a" + mouse_wheel_down_shift + b"\r\r",
-    )
-    if comp_scroll_shift != "s02":
-        raise AssertionError(
-            f"completion_many_menu shift-wheel expected 's02', got {comp_scroll_shift!r}"
-        )
+    for scenario, keys, expected in (
+        ("completion_many_menu_off", b"s\t" + mouse_click_completion_second + b"\r", "s02"),
+        ("completion_many_menu", F2 + b"s\t" + mouse_click_completion_second + b"\r", "s02"),
+        ("completion_many_menu", b"s\t" + F2 + b"\r\r", "s01"),
+        ("completion_many_menu", b"s\t" + F2 + mouse_click_completion_second + b"\r", "s02"),
+        (
+            "completion_many_menu_custom_mouse_toggle",
+            b"s\t" + F3 + mouse_click_completion_second + b"\r",
+            "s02",
+        ),
+        (
+            "completion_many_menu_mouse_default_on",
+            b"s\t" + mouse_wheel_down + mouse_release + b"\r\r",
+            "s02",
+        ),
+        (
+            "completion_many_menu_mouse_default_on",
+            b"s\t" + mouse_wheel_down_shift + b"\r\r",
+            "s02",
+        ),
+        # Arrow and Tab navigation can reach beyond the old ten-item limit immediately.
+        ("completion_many_menu", b"s\t" + DOWN * 10 + b"\r\r", "s11"),
+        ("completion_many_menu", b"s\t" + b"\t" * 11 + b"\r\r", "s12"),
+        ("completion_many_menu", b"s\t" + UP + b"\r\r", "s12"),
+    ):
+        result = run_case(binary, scenario, keys, initial_rows=24, initial_cols=80)
+        if result != expected:
+            raise AssertionError(f"{scenario}: keys={keys!r}, expected {expected!r}, got {result!r}")
 
     comp_multiline_preview, comp_multiline_preview_output = run_case(
         binary,
         "completion_many_menu_multiline",
-        b"m\t\x0a" + DOWN + b"\r\r",
+        b"m\t" + DOWN + b"\r\r",
         capture_output=True,
     )
     if comp_multiline_preview != "m02":
@@ -3291,7 +3180,7 @@ def main() -> int:
     comp_multiline_replacement, comp_multiline_replacement_output = run_case(
         binary,
         "completion_many_menu_multiline_replacement",
-        b"m\t\x0a" + DOWN + b"\r\r",
+        b"m\t" + DOWN + b"\r\r",
         capture_output=True,
         initial_rows=8,
         initial_cols=80,
@@ -3326,21 +3215,19 @@ def main() -> int:
         )
 
     tall_scenario = "completion_many_menu_tall_replacement"
-    for scenario, rows, expanded, prefix_rows in (
-        (tall_scenario, 8, False, 0),
-        (tall_scenario, 8, True, 0),
-        (tall_scenario, 24, True, 0),
-        ("completion_many_menu_tall_flattened", 24, False, 0),
-        ("completion_many_menu_tall_flattened", 24, True, 0),
-        ("completion_many_menu_tall_wrapped_input", 8, True, 0),
-        ("completion_many_menu_tall_marker_off", 8, True, 0),
-        ("completion_many_menu_tall_prompt_prefix", 8, True, 2),
+    for scenario, rows, prefix_rows in (
+        (tall_scenario, 8, 0),
+        (tall_scenario, 24, 0),
+        ("completion_many_menu_tall_flattened", 24, 0),
+        ("completion_many_menu_tall_wrapped_input", 8, 0),
+        ("completion_many_menu_tall_marker_off", 8, 0),
+        ("completion_many_menu_tall_prompt_prefix", 8, 2),
     ):
         output = observe_resize_case(
             binary,
             scenario,
             [
-                ("send", b"m\t" + (b"\x0a" if expanded else b"") + DOWN),
+                ("send", b"m\t" + DOWN),
                 ("idle", 0.1),
             ],
             initial_rows=rows,
@@ -3353,7 +3240,7 @@ def main() -> int:
             binary,
             tall_scenario,
             [
-                ("send", b"m\t\x0a" + DOWN),
+                ("send", b"m\t" + DOWN),
                 ("wait", "preview line 15..."),
                 ("resize", (8, cols)),
                 # Wake the PTY read on platforms that restart it after SIGWINCH.
@@ -3371,9 +3258,9 @@ def main() -> int:
     )
     for keys, expected in (
         (b"m\t" + DOWN + b"\r\r", expected_tall_replacement),
-        (b"m\t\x0a" + DOWN + b"\r\r", expected_tall_replacement),
-        (b"m\t\x0a" + DOWN + DOWN + b"\r\r", "m03"),
-        (b"m\t\x0a" + DOWN + b"\x0a\r\r", expected_tall_replacement),
+        (b"m\t" + DOWN + DOWN + b"\r\r", "m03"),
+        # Ctrl+J returns to normal newline editing instead of collapsing the menu.
+        (b"m\t" + DOWN + b"\x0ax\r", "m\nx"),
     ):
         result = run_case(binary, tall_scenario, keys, initial_rows=8, initial_cols=80)
         if result != expected:
@@ -3386,7 +3273,7 @@ def main() -> int:
         binary,
         tall_scenario,
         [
-            ("send", b"m\t\x0a" + DOWN),
+            ("send", b"m\t" + DOWN),
             ("wait", "preview line 04..."),
             ("send", b"\x1b"),
             ("idle", 0.5),

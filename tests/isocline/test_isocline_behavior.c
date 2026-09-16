@@ -2614,16 +2614,6 @@ static bool test_option_toggle_consistency(void) {
                  "completion preview enable should report previously disabled state");
     EXPECT_FALSE(env->complete_nopreview, "preview enable should clear inverted flag");
 
-    env->complete_menu_start_expanded = false;
-    EXPECT_FALSE(ic_enable_completion_menu_start_expanded(true),
-                 "completion menu expanded toggle should report previously disabled state");
-    EXPECT_TRUE(env->complete_menu_start_expanded,
-                "completion menu expanded toggle should enable expanded startup mode");
-    EXPECT_TRUE(ic_enable_completion_menu_start_expanded(false),
-                "completion menu expanded toggle should report previously enabled state");
-    EXPECT_FALSE(env->complete_menu_start_expanded,
-                 "completion menu expanded toggle should disable expanded startup mode");
-
     env->menu_highlight_mode = IC_MENU_HIGHLIGHT_NONE;
     EXPECT_TRUE(ic_get_menu_highlight_mode() == IC_MENU_HIGHLIGHT_NONE,
                 "menu highlighting should default to none");

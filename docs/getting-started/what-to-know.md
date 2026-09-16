@@ -71,9 +71,9 @@ Fuzzy matching powers command, path, and argument completions without additional
 **Status:** Enabled  
 **Configure:** `cjshopt completion-preview on|off|status`
 
-### Completion Menu Default Layout
-**Status:** Disabled (menus start collapsed)  
-**Configure:** `cjshopt completion-menu-expanded on|off|status`
+### Completion Menu Layout
+Menus always open as a full single-column list with scrolling and paging. Use `PgUp`/`PgDn`,
+`Shift+Up`/`Shift+Down`, or the mouse wheel to navigate.
 
 ### Menu Syntax Highlighting
 **Status:** Disabled
@@ -137,7 +137,7 @@ cjshopt mouse-clicking-status-line on|off|status
 
 Use `all-off` to prevent mouse capture everywhere, or `off` to leave prompt editing under terminal
 control while allowing completion/history menus to capture clicks and wheel events temporarily.
-Collapsed completion lists remain non-clickable until expanded. `simple` and `smart` also enable
+`simple` and `smart` also enable
 click-to-position editing. `mouse-clicking-status-line` only controls whether the `Mouse clicking
 is enabled` indicator is shown.
 
@@ -368,9 +368,6 @@ Use `cjshopt keybind --help` for the full action catalog. For custom widgets, se
 ```bash
 # Toggle completion preview for the current session
 cjshopt completion-preview off
-
-# Open completion menus in expanded mode by default
-cjshopt completion-menu-expanded on
 
 # Enable inline whitespace markers
 cjshopt visible-whitespace on

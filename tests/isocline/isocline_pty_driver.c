@@ -683,7 +683,6 @@ static int run_case(const char* scenario) {
         ic_set_check_for_continuation_or_return_callback(menu_dismiss_submit_handler, NULL);
         if (strstr(scenario, "_completion") != NULL) {
             ic_set_default_completer(menu_dismiss_completer, NULL);
-            (void)ic_enable_completion_menu_start_expanded(strstr(scenario, "_compact") == NULL);
         } else if (strstr(scenario, "_history") != NULL) {
             ic_history_clear();
             ic_history_add("choicetwo");
@@ -851,7 +850,6 @@ static int run_case(const char* scenario) {
         }
         if (strstr(scenario, "_completion") != NULL) {
             ic_set_default_completer(pty_menu_viewport_completer, NULL);
-            (void)ic_enable_completion_menu_start_expanded(true);
         } else if (strstr(scenario, "_history") != NULL) {
             ic_history_clear();
             for (int i = 119; i >= 0; --i) {

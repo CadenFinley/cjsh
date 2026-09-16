@@ -78,9 +78,9 @@ Powered by the embedded [isocline](https://github.com/cadenfinley/isocline) edit
 - **Browser shortcut** – Press `Alt+O` to search the current buffer on the web or open its URL,
     using `$BROWSER` or the system launcher, then continue at a fresh, empty prompt.
 - **Mouse-aware editing** – Configure capture with `cjshopt mouse-clicking`: `all-off` disables it
-    everywhere, `off` limits it to expanded/interactive menus, and `simple`/`smart` also support
-    prompt cursor placement. Collapsed completions are not clickable in `off`; clicks can select
-    expanded completion/history entries, and `cjshopt completion-click-accept` controls whether
+    everywhere, `off` limits it to interactive menus, and `simple`/`smart` also support
+    prompt cursor placement. Clicks can select completion/history entries,
+    and `cjshopt completion-click-accept` controls whether
     clicks accept completion entries.
 - **Typeahead capture** – Keystrokes entered while a command runs are buffered and replayed when the prompt returns so you never lose input.
 - **Abbreviations** – `abbr`/`unabbr` provide fish-style expansions for frequently typed snippets.
@@ -109,7 +109,7 @@ for full details.
     - `cjshopt multiline`, `cjshopt multiline-indent`, `cjshopt line-numbers`,
         `cjshopt multiline-start-lines`, `cjshopt multiline-max-lines`,
         `cjshopt multiline-bottom-lines`
-      - `cjshopt completion-preview`, `cjshopt completion-menu-expanded`,
+      - `cjshopt completion-preview`,
           `cjshopt completion-click-accept`, `cjshopt menu-highlighting`,
           `cjshopt completion-case`, `cjshopt completion-spell`, `cjshopt completion-spell-enter`,
           `cjshopt completion-learning`, `cjshopt auto-tab`

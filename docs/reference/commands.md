@@ -788,7 +788,6 @@ Available subcommands:
 - `hint-delay` - Set hint display delay in milliseconds
 - `idle-timeout` - Run idle hooks after a period without terminal input
 - `completion-preview` - Configure completion preview
-- `completion-menu-expanded` - Open completion menus in expanded mode by default
 - `completion-click-accept` - Configure whether click interactions accept completion candidates
 - `menu-highlighting` - Syntax-highlight completion and history menu items
 - `visible-whitespace` - Toggle visible whitespace characters in the editor
@@ -1242,27 +1241,6 @@ cjshopt completion-preview status  # Show the current setting
 
 The subcommand accepts synonyms such as `enable`, `disable`, `true`, and `false`. Add to `~/.cjshrc` to persist the preference.
 
-#### completion-menu-expanded
-
-Control whether the completion menu opens in expanded mode immediately. When enabled, pressing `Tab`
-for multi-match completions starts in the full single-column list instead of the compact collapsed
-grid. **Disabled by default.**
-
-```bash
-cjshopt completion-menu-expanded <on|off|status>
-```
-
-Examples:
-
-```bash
-cjshopt completion-menu-expanded on      # Start completion menus expanded
-cjshopt completion-menu-expanded off     # Start completion menus collapsed (default)
-cjshopt completion-menu-expanded status  # Show the current setting
-```
-
-The subcommand accepts synonyms such as `enable`, `disable`, `true`, and `false`. Add to
-`~/.cjshrc` to persist the preference.
-
 #### completion-click-accept
 
 Control whether mouse clicks immediately accept completion hints and completion-menu entries.
@@ -1522,8 +1500,7 @@ Use `cjshopt status-reporting off` if you want only your callback text without c
 
 Configure mouse capture separately for prompt editing and interactive menus.
 The default is `off`, which leaves ordinary prompt interaction to the terminal while retaining
-mouse support inside expanded completion, history, and command-palette menus. Collapsed completion
-lists remain under terminal control and their items are not clickable in this mode.
+mouse support inside completion, history, and command-palette menus.
 
 ```bash
 cjshopt mouse-clicking <all-off|off|simple|smart|status>
@@ -1533,7 +1510,7 @@ Examples:
 
 ```bash
 cjshopt mouse-clicking all-off # Never capture mouse events, including inside menus
-cjshopt mouse-clicking off     # Keep editing native; capture only in expanded/interactive menus
+cjshopt mouse-clicking off     # Keep editing native; capture only in interactive menus
 cjshopt mouse-clicking simple  # Capture mouse events until manually toggled
 cjshopt mouse-clicking smart   # Auto-suspend for terminal selection and resume for editing
 cjshopt mouse-clicking status  # Show the current setting

@@ -11,6 +11,10 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+### Changed
+
+- Completion menus now always use the full single-column list with scrolling, paging, and mouse support. Removed the collapsed menu, its expand/collapse controls, and `cjshopt completion-menu-expanded` (including the corresponding isocline API). Remove this setting from existing startup files.
+
 ## [1.5.7] - 2026-09-15
 
 ### Added

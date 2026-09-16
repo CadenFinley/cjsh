@@ -323,7 +323,7 @@ ic_status_hint_mode_t ic_get_status_hint_mode(void);
 ///   Native selection during the same drag depends on the terminal; some terminals require a
 ///   second drag after capture is released.
 /// - `IC_MOUSE_CLICKING_MENU_ONLY`: leave editing capture off and acquire it only while an
-///   expanded completion, history, or command-palette menu is open.
+///   completion, history, or command-palette menu is open.
 /// While a menu owns mouse capture, clicking outside its selectable items temporarily releases
 /// capture to the terminal. Keyboard input or a terminal focus-in event restores it.
 typedef enum ic_mouse_clicking_mode_e {
@@ -871,14 +871,6 @@ bool ic_auto_tab_is_enabled(void);
 bool ic_enable_completion_preview(bool enable);
 /// Return the current setting without changing it.
 bool ic_completion_preview_is_enabled(void);
-
-/// Configure whether completion menus open in expanded mode by default (disabled by default).
-/// When enabled, the first completion menu view uses the full single-column layout without
-/// requiring PgDn/ctrl-j to expand.
-/// Returns the previous setting.
-bool ic_enable_completion_menu_start_expanded(bool enable);
-/// Return the current setting without changing it.
-bool ic_completion_menu_start_expanded_is_enabled(void);
 
 /// Enable or disable click-to-accept for completion candidates (disabled by default).
 /// Returns the previous setting.

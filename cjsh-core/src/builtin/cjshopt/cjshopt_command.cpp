@@ -69,7 +69,6 @@ enum class CjshoptSubcommand : std::uint8_t {
     HintDelay,
     IdleTimeout,
     CompletionPreview,
-    CompletionMenuExpanded,
     CompletionClickAccept,
     MenuHighlighting,
     VisibleWhitespace,
@@ -140,8 +139,6 @@ constexpr std::array<CjshoptSubcommandDescriptor, static_cast<size_t>(CjshoptSub
          {CjshoptSubcommand::HintDelay, "hint-delay", hint_delay_command},
          {CjshoptSubcommand::IdleTimeout, "idle-timeout", idle_timeout_command},
          {CjshoptSubcommand::CompletionPreview, "completion-preview", completion_preview_command},
-         {CjshoptSubcommand::CompletionMenuExpanded, "completion-menu-expanded",
-          completion_menu_expanded_command},
          {CjshoptSubcommand::CompletionClickAccept, "completion-click-accept",
           completion_click_accept_command},
          {CjshoptSubcommand::MenuHighlighting, "menu-highlighting", menu_highlighting_command},
@@ -233,8 +230,6 @@ const std::vector<std::string>& cjshopt_usage_lines() {
         "  idle-timeout <seconds|off|status> Configure inactivity hooks (default: off)",
         std::string("  completion-preview <on|off|status> Configure completion preview ") +
             "(default: enabled)",
-        std::string("  completion-menu-expanded <on|off|status> Open completion menus expanded ") +
-            "(default: disabled)",
         std::string("  completion-click-accept <on|off|status> Control click-to-accept behavior ") +
             "for completion entries (default: disabled)",
         std::string("  menu-highlighting <none|single|all|reverse|status> Syntax-highlight ") +

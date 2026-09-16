@@ -1157,27 +1157,6 @@ int completion_preview_command(const std::vector<std::string>& args) {
     return handle_toggle_command(config, args);
 }
 
-int completion_menu_expanded_command(const std::vector<std::string>& args) {
-    static const std::vector<std::string> usage_lines = {
-        "Usage: completion-menu-expanded <on|off|status>",
-        "Examples:", "  completion-menu-expanded on      Open completion menus expanded by default",
-        "  completion-menu-expanded off     Start completion menus collapsed",
-        "  completion-menu-expanded status  Show the current setting"};
-
-    static const ToggleCommandConfig config{
-        "completion-menu-expanded",
-        usage_lines,
-        [] { return ic_completion_menu_start_expanded_is_enabled(); },
-        [](bool enable) { (void)ic_enable_completion_menu_start_expanded(enable); },
-        "Completion menu default expansion",
-        false,
-        "Add `cjshopt {command} {state}` to your ~/.cjshrc to persist this change.\n",
-        {},
-        {}};
-
-    return handle_toggle_command(config, args);
-}
-
 int completion_click_accept_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
         "Usage: completion-click-accept <on|off|status>",
@@ -1697,7 +1676,7 @@ int mouse_clicking_command(const std::vector<std::string>& args) {
         "Usage: mouse-clicking <all-off|off|simple|smart|status>",
         "Examples:",
         "  mouse-clicking all-off   Never capture mouse events, including in menus",
-        "  mouse-clicking off       Capture mouse events only in expanded/interactive menus",
+        "  mouse-clicking off       Capture mouse events only in interactive menus",
         "  mouse-clicking simple    Start with mouse capture enabled; toggle manually",
         "  mouse-clicking smart     Start enabled with automatic suspend/resume",
         "  mouse-clicking status    Show the current mode"};
@@ -1707,7 +1686,7 @@ int mouse_clicking_command(const std::vector<std::string>& args) {
             case IC_MOUSE_CLICKING_DISABLED:
                 return "all mouse clicking disabled";
             case IC_MOUSE_CLICKING_MENU_ONLY:
-                return "editing capture off; expanded/interactive menus only";
+                return "editing capture off; interactive menus only";
             case IC_MOUSE_CLICKING_SIMPLE:
                 return "manual toggle only";
             case IC_MOUSE_CLICKING_SMART:

@@ -2176,9 +2176,10 @@ static bool test_builtin_docs() {
         test_name, "cjshopt should include status-line-callback subcommand");
     EXPECT_TRUE(has_entry(cjshopt_doc, "agent-mode", builtin_completions::EntryKind::Subcommand),
                 test_name, "cjshopt should include agent-mode subcommand");
-    EXPECT_TRUE(has_entry(cjshopt_doc, "completion-menu-expanded",
-                          builtin_completions::EntryKind::Subcommand),
-                test_name, "cjshopt should include completion-menu-expanded subcommand");
+    EXPECT_TRUE(!has_entry(cjshopt_doc, "completion-menu-expanded",
+                           builtin_completions::EntryKind::Subcommand),
+                test_name,
+                "cjshopt should not include the removed completion-menu-expanded setting");
     EXPECT_TRUE(has_entry(cjshopt_doc, "completion-click-accept",
                           builtin_completions::EntryKind::Subcommand),
                 test_name, "cjshopt should include completion-click-accept subcommand");
@@ -2335,11 +2336,8 @@ static bool test_builtin_docs() {
 
     const auto* completion_menu_expanded_doc =
         builtin_completions::lookup_builtin_command_doc("cjshopt-completion-menu-expanded");
-    EXPECT_TRUE(completion_menu_expanded_doc != nullptr, test_name,
-                "cjshopt-completion-menu-expanded doc should exist");
-    EXPECT_TRUE(has_entry(completion_menu_expanded_doc, "status",
-                          builtin_completions::EntryKind::Subcommand),
-                test_name, "completion-menu-expanded should include status subcommand");
+    EXPECT_TRUE(completion_menu_expanded_doc == nullptr, test_name,
+                "removed completion-menu-expanded setting should not have completion docs");
 
     const auto* completion_click_accept_doc =
         builtin_completions::lookup_builtin_command_doc("cjshopt-completion-click-accept");

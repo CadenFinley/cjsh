@@ -62,7 +62,7 @@ See [Prompt Markup and Styling](../themes/thedetails.md) for the full markup ref
   `Alt+H/J/K/L/W` navigation, and user-defined command bindings using `cjshopt keybind` and
   `cjshopt keybind ext`.
 - **Mouse-assisted editing** – `cjshopt mouse-clicking` distinguishes hard-disabled `all-off`,
-  expanded/interactive-menu-only `off`, and prompt-enabled `simple`/`smart` modes;
+  interactive-menu-only `off`, and prompt-enabled `simple`/`smart` modes;
   `cjshopt mouse-clicking-status-line` controls the status indicator. Clicking to move the cursor or
   pick menu entries is beyond POSIX scope.
 - **Fish-style abbreviations** – `abbr` and `unabbr` provide inline text expansions, a feature not
@@ -96,14 +96,14 @@ differences from Bash and Zsh.
 ## Completion Engine
 
 - **Fuzzy matching and spell correction** – Configurable through `cjshopt completion-case`,
-  `cjshopt completion-spell`, `cjshopt completion-spell-enter`, `cjshopt completion-preview`, and
-  `cjshopt completion-menu-expanded`, `cjshopt completion-click-accept`, and
+  `cjshopt completion-spell`, `cjshopt completion-spell-enter`, `cjshopt completion-preview`,
+  `cjshopt completion-click-accept`, and
   `cjshopt menu-highlighting`.
 - **Man-page scraping** – `generate-completions` and on-demand parsing of `man` pages populate a
   cache under `~/.cache/cjsh/generated_completions/` for rich option and subcommand help.
 - **Inline preview pane & source annotations** – Completion menus display descriptions, origins
   (history, PATH, builtin), and exit-status tags; these are CJSH-specific niceties.
-- **Pointer navigation in menus** – Expanded completion and history-search menus accept mouse-wheel
+- **Pointer navigation in menus** – Completion and history-search menus accept mouse-wheel
   scrolling plus click selection.
 
 Consult the [Completion Authoring Guide](completions.md) for cache format and customization tips.

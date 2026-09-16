@@ -246,7 +246,7 @@ CJ's Shell features a sophisticated completion system that provides context-awar
 - Empty-prompt history suggestions ranked by last use, then frequency
 - Source attribution (shows where completions come from)
 - Preview of selected completion
-- Optional expanded-by-default completion menu layout
+- Full single-column completion menu with scrolling and paging
 - Automatic expansion with auto-tab
 
 Need to author new entries or override the defaults? Check the [Completion Authoring Guide](completions.md) for cache formats, nested command support, and manual customization tips.
@@ -255,9 +255,6 @@ Need to author new entries or override the defaults? Check the [Completion Autho
 ```bash
 # Enable/disable completion preview (enabled by default)
 cjshopt completion-preview on|off|status
-
-# Open completion menus expanded by default (disabled by default)
-cjshopt completion-menu-expanded on|off|status
 
 # Control whether mouse clicks immediately accept completion entries
 # (disabled by default)
@@ -300,7 +297,9 @@ usual context-aware completion sources.
 - Use arrow keys to navigate the completion menu
 - Press `Enter` to accept a completion
 - Press `Esc` to cancel
-- In expanded menus, use the mouse wheel to scroll and click entries to select/accept
+- Menus always open as a full single-column list; use `PgUp`/`PgDn` or `Shift+Up`/`Shift+Down`
+  to page through entries (when more results are available, `PgDn` loads them)
+- Use the mouse wheel to scroll and click entries to select/accept
   (`cjshopt completion-click-accept off` keeps click selection but requires Enter/Right/End to accept)
 - Completion entries stay on one row. With completion preview enabled, the selected command appears
   at the prompt; oversized previews end with `...` to keep the prompt and menu controls visible.
@@ -430,13 +429,12 @@ cjshopt completion-click-accept on|off|status
 - `off` is the default mode
 - In the editor buffer, left-click moves the cursor to the clicked position
 - In `off` mode, editing remains under terminal control while interactive menus temporarily capture
-  clicks and wheel events; collapsed completion lists remain non-clickable and `all-off` prevents
-  capture everywhere
+  clicks and wheel events; `all-off` prevents capture everywhere
 - In `smart` mode, starting a selection in the prompt/gutter or status rows, or dragging with the
   left mouse button, suspends mouse capture so the terminal can highlight text. The display stays
   in place while selecting. A reported button release resumes capture without clearing the
   highlight; the next click or keyboard input resumes repainting
-- Expanded completion, history, and command-palette menus temporarily capture mouse events in every
+- Completion, history, and command-palette menus temporarily capture mouse events in every
   mode except `all-off`
 - Clicking the prompt, menu header/help, or any area outside the selectable menu rows temporarily
   releases mouse capture; keyboard input or returning focus to the terminal restores it
@@ -1040,7 +1038,6 @@ cjshopt current-line-number-highlight on
 
 # Completion settings
 cjshopt completion-preview on
-cjshopt completion-menu-expanded off
 cjshopt auto-tab off
 cjshopt completion-case off  # Case-insensitive completions
 cjshopt completion-spell on
