@@ -1515,6 +1515,10 @@ void handle_external_sub_completions(
                                      const std::string& replacement_base) {
         std::unordered_set<std::string> seen_values;
         auto values = collect_value_candidates(entry, tokens, context, value_prefix, !is_hint);
+        std::stable_partition(values.begin(), values.end(), [&](const auto& candidate) {
+            return completion_tracker::is_completion_preferred(
+                (replacement_base + candidate.value).c_str(), delete_before);
+        });
         for (const auto& candidate : values) {
             if (completion_tracker::completion_limit_hit() || ic_stop_completing(cenv) ||
                 added >= 120) {
@@ -1576,13 +1580,12 @@ void handle_external_sub_completions(
         add_value_completions(*positional, current_prefix, {});
     }
 
+    struct Candidate {
+        std::string insert_text;
+        const CompletionEntry* entry;
+    };
+    std::vector<Candidate> candidates;
     for (const auto& entry : context.entries) {
-        if (completion_tracker::completion_limit_hit()) {
-            break;
-        }
-        if (ic_stop_completing(cenv)) {
-            break;
-        }
         if (entry.kind == EntryKind::Positional || !entry_is_available(entry, context)) {
             continue;
         }
@@ -1616,23 +1619,31 @@ void handle_external_sub_completions(
                 insert_text.push_back(' ');
             }
 
-            std::string source =
-                entry.description.empty()
-                    ? (entry.kind == EntryKind::Subcommand ? "subcommand" : "option")
-                    : entry.description;
-            if (entry.deprecated) {
-                source.insert(0, "deprecated · ");
-            }
-
-            if (!completion_tracker::safe_add_completion_prim_with_source(
-                    cenv, insert_text.c_str(), nullptr, nullptr, source.c_str(), delete_before,
-                    0)) {
-                return;
-            }
-            ++added;
-            if (added >= 120) {
-                return;
-            }
+            candidates.push_back({std::move(insert_text), &entry});
         }
+    }
+    std::stable_partition(candidates.begin(), candidates.end(), [&](const Candidate& candidate) {
+        return completion_tracker::is_completion_preferred(candidate.insert_text.c_str(),
+                                                           delete_before);
+    });
+    for (const auto& candidate : candidates) {
+        if (completion_tracker::completion_limit_hit() || ic_stop_completing(cenv) ||
+            added >= 120) {
+            break;
+        }
+        const auto& entry = *candidate.entry;
+        std::string source = entry.description.empty()
+                                 ? (entry.kind == EntryKind::Subcommand ? "subcommand" : "option")
+                                 : entry.description;
+        if (entry.deprecated) {
+            source.insert(0, "deprecated · ");
+        }
+
+        if (!completion_tracker::safe_add_completion_prim_with_source(
+                cenv, candidate.insert_text.c_str(), nullptr, nullptr, source.c_str(),
+                delete_before, 0)) {
+            return;
+        }
+        ++added;
     }
 }

@@ -664,6 +664,139 @@ static bool test_history_directory_completions() {
     return true;
 }
 
+static bool test_history_file_completion_priority() {
+    const char* test_name = "history_file_completion_priority";
+    namespace fs = std::filesystem;
+    const fs::path root = cjsh_filesystem::g_user_home_path() / "history-file-priority";
+    fs::create_directories(root / "dir_a");
+    fs::create_directories(root / "dir_z");
+    for (const char* name : {"file_a.txt", "file_z.txt", "file spaced", "run_a", "run_z"}) {
+        std::ofstream(root / name) << "fixture\n";
+    }
+    fs::permissions(root / "run_a", fs::perms::owner_all);
+    fs::permissions(root / "run_z", fs::perms::owner_all);
+    const fs::path original_directory = fs::current_path();
+    fs::current_path(root);
+    const long previous_limit = get_completion_max_results();
+    const bool previous_history = config::history_enabled;
+    config::history_enabled = true;
+
+    const bool ok = [&] {
+        struct Fixture {
+            const char* prefix;
+            const char* command;
+            const char* replacement;
+            const char* source;
+            const char* applied;
+        };
+        const Fixture fixtures[] = {
+            {"echo file_", "echo file_z.txt", "file_z.txt ", "file", "echo file_z.txt "},
+            {"echo ", "echo \"file spaced\"", "\"file spaced\" ", "file", "echo \"file spaced\" "},
+            {"cd dir_", "cd dir_z/", "dir_z/", "directory", "cd dir_z/"},
+            {"dir_", "dir_z", "dir_z/", "directory", "dir_z/"},
+            {"./run_", "./run_z", "run_z ", "executable binary", "./run_z "},
+            {"echo ./", "echo ./file_z.txt", "file_z.txt ", "file", "echo ./file_z.txt "},
+            {"echo ~/history-file-priority/file_", "echo ~/history-file-priority/file_z.txt",
+             "file_z.txt ", "file", "echo ~/history-file-priority/file_z.txt "},
+        };
+        for (const auto& fixture : fixtures) {
+            EXPECT_TRUE(write_completion_history(std::string("# code=0\n") + fixture.command +
+                                                 "\n# code=1\n" + fixture.command + "\n"),
+                        test_name, "duplicate history fixture should be written");
+            for (long limit : {1L, previous_limit}) {
+                EXPECT_TRUE(set_completion_max_results(limit), test_name,
+                            "completion limit should be configurable");
+                for (ssize_t budget : {1, 2, 256}) {
+                    const auto count =
+                        run_completion_generation(fixture.prefix, &cjsh_default_completer, budget);
+                    EXPECT_TRUE(count > 0 && count <= limit, test_name,
+                                "promoted files must respect the configured result limit");
+                    if (!first_generated_completion_matches(fixture.replacement, fixture.source)) {
+                        (void)std::fprintf(stderr, "Prefix: %s (limit %ld, budget %zd)\n",
+                                           fixture.prefix, limit, budget);
+                        ic_env_t* env = ic_get_env();
+                        (void)std::fprintf(stderr, "First: %s [%s]\n",
+                                           completions_get_replacement(env->completions, 0),
+                                           completions_get_source(env->completions, 0));
+                        EXPECT_TRUE(false, test_name,
+                                    "the history-backed regular completion should lead");
+                    }
+                    const auto replacements = generated_completion_replacements();
+                    EXPECT_TRUE(std::count(replacements.begin(), replacements.end(),
+                                           fixture.replacement) == 1,
+                                test_name, "history and file iteration must emit one result");
+                    ic_env_t* env = ic_get_env();
+                    stringbuf_t* buffer = sbuf_new(env->mem);
+                    sbuf_append(buffer, fixture.prefix);
+                    const auto pos =
+                        completions_apply(env->completions, 0, buffer, std::strlen(fixture.prefix));
+                    const std::string applied = sbuf_string(buffer);
+                    sbuf_free(buffer);
+                    EXPECT_TRUE(pos >= 0 && applied == fixture.applied, test_name,
+                                "promotion must preserve quoting, path prefixes, and suffixes");
+                }
+                EXPECT_TRUE(
+                    run_hint_generation(fixture.prefix) > 0 &&
+                        first_generated_completion_matches(fixture.replacement, fixture.source),
+                    test_name, "inline hints should share the promoted result");
+            }
+        }
+        return true;
+    }();
+    (void)set_completion_max_results(previous_limit);
+    config::history_enabled = previous_history;
+    fs::current_path(original_directory);
+    clear_generated_completions();
+    (void)write_completion_history("");
+    return ok;
+}
+
+static bool test_history_file_completion_priority_filters() {
+    const char* test_name = "history_file_completion_priority_filters";
+    namespace fs = std::filesystem;
+    const fs::path root = cjsh_filesystem::g_user_home_path() / "history-file-filters";
+    fs::create_directories(root / "pick_a");
+    fs::create_directories(root / "pick_z");
+    const fs::path original_directory = fs::current_path();
+    fs::current_path(root);
+    const bool previous_history = config::history_enabled;
+    const bool previous_scope = ic_enable_history_directory(false);
+    config::history_enabled = true;
+
+    const bool ok = [&] {
+        for (const char* prefix : {"./pick_", "pick_"}) {
+            EXPECT_TRUE(write_completion_history(""), test_name, "history should be cleared");
+            (void)run_completion_generation(prefix, &cjsh_default_completer, 256);
+            const auto baseline = generated_completion_replacements();
+            for (const std::string& header : {"# code=127", "# code=0 cwd=%2Fother"}) {
+                (void)ic_enable_history_directory(header.find("cwd=") != std::string::npos);
+                (void)ic_set_history_directory(root.c_str());
+                EXPECT_TRUE(write_completion_history(header + "\n" + prefix + "z\n"), test_name,
+                            "filtered history should be written");
+                (void)run_completion_generation(prefix, &cjsh_default_completer, 256);
+                EXPECT_TRUE(generated_completion_replacements() == baseline, test_name,
+                            "hidden and out-of-directory history must not promote a file");
+            }
+            (void)ic_enable_history_directory(false);
+            EXPECT_TRUE(write_completion_history(std::string("# code=0\n") + prefix + "z\n"),
+                        test_name, "eligible history should be written");
+            config::history_enabled = false;
+            (void)run_completion_generation(prefix, &cjsh_default_completer, 256);
+            EXPECT_TRUE(generated_completion_replacements() == baseline, test_name,
+                        "disabled history must not affect regular completion order");
+            config::history_enabled = true;
+        }
+        return true;
+    }();
+    config::history_enabled = previous_history;
+    (void)ic_enable_history_directory(previous_scope);
+    (void)ic_set_history_directory(nullptr);
+    fs::current_path(original_directory);
+    clear_generated_completions();
+    (void)write_completion_history("");
+    return ok;
+}
+
 static bool test_history_prefix_metadata_isolation() {
     const char* test_name = "history_prefix_metadata_isolation";
     EXPECT_TRUE(write_completion_history("# code=127\nunmatched command\n"
@@ -692,6 +825,214 @@ static bool test_history_prefix_metadata_isolation() {
                 test_name, "unsuccessful prefix lookup should return no history entries");
     clear_generated_completions();
     return true;
+}
+
+static bool test_history_regular_completion_priority() {
+    const char* test_name = "history_regular_completion_priority";
+    using namespace completion_specs;
+    CompletionEntry mode{"--mode", "Choose mode", EntryKind::Option};
+    mode.value.requirement = ValueRequirement::Required;
+    mode.value.type = ValueType::Enum;
+    mode.value.separator = ValueSeparator::Equals;
+    mode.value.choices = {"first", "second"};
+    CommandDoc doc;
+    doc.entries = {{"pull", "Pull changes", EntryKind::Subcommand},
+                   {"push", "Push changes", EntryKind::Subcommand},
+                   {"--alpha", "First option", EntryKind::Option},
+                   {"--zulu", "Last option", EntryKind::Option},
+                   mode};
+    EXPECT_TRUE(register_command_doc("history-priority-test", doc), test_name,
+                "completion specification should register");
+    const long previous_limit = get_completion_max_results();
+    const bool previous_history = config::history_enabled;
+    config::history_enabled = true;
+    const bool ok = [&] {
+        struct Fixture {
+            const char* prefix;
+            const char* command;
+            const char* replacement;
+            const char* source;
+        };
+        const Fixture fixtures[] = {
+            {"history-priority-test p", "history-priority-test push", "push ", "Push changes"},
+            {"history-priority-test --", "history-priority-test --zulu", "--zulu ", "Last option"},
+            {"history-priority-test --mode=", "history-priority-test --mode=second",
+             "--mode=second ", "Choose mode"},
+            {"echo done; history-priority-test p", "history-priority-test push", "push ",
+             "Push changes"},
+        };
+        for (const auto& fixture : fixtures) {
+            for (const char* metadata : {"# code=0\n", "# code=1\n", ""}) {
+                EXPECT_TRUE(
+                    write_completion_history(std::string(metadata) + fixture.command + "\n"),
+                    test_name, "history fixture should be written");
+                for (long limit : {1L, previous_limit}) {
+                    (void)set_completion_max_results(limit);
+                    for (ssize_t budget : {1, 2, 256}) {
+                        (void)run_completion_generation(fixture.prefix, &cjsh_default_completer,
+                                                        budget);
+                        if (!first_generated_completion_matches(fixture.replacement,
+                                                                fixture.source)) {
+                            (void)std::fprintf(stderr, "Prefix: %s (limit %ld, budget %zd)\n",
+                                               fixture.prefix, limit, budget);
+                            ic_env_t* env = ic_get_env();
+                            (void)std::fprintf(stderr, "First: %s [%s]\n",
+                                               completions_get_replacement(env->completions, 0),
+                                               completions_get_source(env->completions, 0));
+                            EXPECT_TRUE(false, test_name,
+                                        "used choices should lead with regular metadata");
+                        }
+                        EXPECT_FALSE(generated_completions_include_source("history: 0") ||
+                                         generated_completions_include_source("history: 1") ||
+                                         generated_completions_include_source("history"),
+                                     test_name,
+                                     "a regular result should suppress duplicate history");
+                    }
+                    (void)run_hint_generation(fixture.prefix);
+                    EXPECT_TRUE(
+                        first_generated_completion_matches(fixture.replacement, fixture.source),
+                        test_name, "inline hints should prefer the same regular choice");
+                }
+            }
+        }
+        EXPECT_TRUE(write_completion_history(""), test_name, "history should be cleared");
+        (void)run_completion_generation("history-priority-test p", &cjsh_default_completer, 256);
+        EXPECT_TRUE(first_generated_completion_matches("pull ", "Pull changes"), test_name,
+                    "history preferences must not leak into the next completion session");
+        return true;
+    }();
+    (void)unregister_command_doc("history-priority-test");
+    (void)set_completion_max_results(previous_limit);
+    config::history_enabled = previous_history;
+    clear_generated_completions();
+    (void)write_completion_history("");
+    return ok;
+}
+
+static bool test_history_command_completion_priority() {
+    const char* test_name = "history_command_completion_priority";
+    namespace fs = std::filesystem;
+    const fs::path root = cjsh_filesystem::g_user_home_path() / "history-command-priority";
+    fs::create_directories(root);
+    for (const char* name : {"historycmd_a", "historycmd_zlong"}) {
+        std::ofstream(root / name) << "#!/bin/sh\nexit 0\n";
+        fs::permissions(root / name, fs::perms::owner_all);
+    }
+    const ScopedEnvironmentValue path("PATH", root.string());
+    const bool previous_learning = config::completion_learning_enabled;
+    const bool previous_history = config::history_enabled;
+    config::completion_learning_enabled = false;
+    config::history_enabled = true;
+    const bool ok = [&] {
+        for (const char* metadata : {"# code=1\n", ""}) {
+            EXPECT_TRUE(write_completion_history(std::string(metadata) + "historycmd_zlong\n"),
+                        test_name, "history fixture should be written");
+            for (ssize_t budget : {1, 2, 256}) {
+                (void)run_completion_generation("historycmd_", &cjsh_default_completer, budget);
+                EXPECT_TRUE(first_generated_completion_matches("historycmd_zlong ",
+                                                               "system installed command"),
+                            test_name, "a used command should precede a shorter unused command");
+                EXPECT_FALSE(generated_completions_include_source("history: 1") ||
+                                 generated_completions_include_source("history"),
+                             test_name, "the duplicate history result should be suppressed");
+            }
+            (void)run_hint_generation("historycmd_");
+            EXPECT_TRUE(
+                first_generated_completion_matches("historycmd_zlong ", "system installed command"),
+                test_name, "hints should prefer the used command");
+        }
+        return true;
+    }();
+    config::completion_learning_enabled = previous_learning;
+    config::history_enabled = previous_history;
+    clear_generated_completions();
+    (void)write_completion_history("");
+    return ok;
+}
+
+static bool test_history_command_with_arguments_priority() {
+    const char* test_name = "history_command_with_arguments_priority";
+    namespace fs = std::filesystem;
+    const fs::path root = cjsh_filesystem::g_user_home_path() / "history-command-arguments";
+    fs::create_directories(root);
+    for (const char* name : {"go", "git", "github"}) {
+        std::ofstream(root / name) << "#!/bin/sh\nexit 0\n";
+        fs::permissions(root / name, fs::perms::owner_all);
+    }
+    const ScopedEnvironmentValue path("PATH", root.string());
+    const bool previous_learning = config::completion_learning_enabled;
+    const bool previous_history = config::history_enabled;
+    const bool previous_scope = ic_enable_history_directory(false);
+    const long previous_limit = get_completion_max_results();
+    config::completion_learning_enabled = false;
+    config::history_enabled = true;
+    const bool ok = [&] {
+        for (const char* command : {"git clean -xdf", "git\tclean -xdf", "g'it' clean -xdf",
+                                    "git; echo done", "git clean path/to/file"}) {
+            for (const char* metadata : {"# code=0\n", "# code=1\n", ""}) {
+                EXPECT_TRUE(write_completion_history(std::string(metadata) + command + "\n"),
+                            test_name, "history should contain only commands with arguments");
+                const bool has_full_history = std::strchr(command, '/') == nullptr;
+                const size_t command_index =
+                    has_full_history && std::strcmp(metadata, "# code=0\n") == 0 ? 1 : 0;
+                for (long limit : {2L, previous_limit}) {
+                    (void)set_completion_max_results(limit);
+                    for (ssize_t budget : {2, 256}) {
+                        (void)run_completion_generation("g", &cjsh_default_completer, budget);
+                        const auto replacements = generated_completion_replacements();
+                        EXPECT_TRUE(replacements.size() > command_index &&
+                                        replacements[command_index] == "git ",
+                                    test_name,
+                                    "using git with arguments should boost bare git above go");
+                        if (has_full_history && budget == 256 && limit == previous_limit) {
+                            EXPECT_TRUE(
+                                std::count(replacements.begin(), replacements.end(), command) == 1,
+                                test_name, "the complete history suggestion should remain");
+                        }
+                    }
+                    (void)run_hint_generation("g");
+                    const auto hints = generated_completion_replacements();
+                    EXPECT_TRUE(hints.size() > command_index && hints[command_index] == "git ",
+                                test_name, "inline hints should share the command-name preference");
+                }
+            }
+        }
+        (void)set_completion_max_results(previous_limit);
+        EXPECT_TRUE(write_completion_history("# code=1\ngithub clean -xdf\n"), test_name,
+                    "a different command with the same prefix should be written");
+        (void)run_completion_generation("g", &cjsh_default_completer, 256);
+        const auto related_names = generated_completion_replacements();
+        EXPECT_TRUE(related_names.size() >= 3 && related_names[0] == "github " &&
+                        related_names[1] == "go " && related_names[2] == "git ",
+                    test_name, "using github must not also boost git by a partial name match");
+        for (const char* header : {"# code=127", "# code=0 cwd=%2Fother"}) {
+            (void)ic_enable_history_directory(std::strstr(header, "cwd=") != nullptr);
+            (void)ic_set_history_directory(root.c_str());
+            EXPECT_TRUE(write_completion_history(std::string(header) + "\ngit clean -xdf\n"),
+                        test_name, "filtered history should be written");
+            (void)run_completion_generation("g", &cjsh_default_completer, 256);
+            const auto replacements = generated_completion_replacements();
+            EXPECT_TRUE(!replacements.empty() && replacements.front() == "go ", test_name,
+                        "filtered history must not boost its command name");
+        }
+        (void)ic_enable_history_directory(false);
+        EXPECT_TRUE(write_completion_history("# code=0\ngit clean -xdf\n"), test_name,
+                    "history fixture should be written");
+        config::history_enabled = false;
+        (void)run_completion_generation("g", &cjsh_default_completer, 256);
+        const auto replacements = generated_completion_replacements();
+        EXPECT_TRUE(!replacements.empty() && replacements.front() == "go ", test_name,
+                    "disabled history must not boost a command name");
+        return true;
+    }();
+    config::completion_learning_enabled = previous_learning;
+    config::history_enabled = previous_history;
+    (void)ic_enable_history_directory(previous_scope);
+    (void)ic_set_history_directory(nullptr);
+    (void)set_completion_max_results(previous_limit);
+    clear_generated_completions();
+    (void)write_completion_history("");
+    return ok;
 }
 
 static bool test_empty_prompt_history_ranking() {
@@ -2546,7 +2887,12 @@ static const test_case_t kTests[] = {
     {"history_completer_exit_code_ordering", test_history_completer_exit_code_ordering},
     {"empty_prompt_history_ranking", test_empty_prompt_history_ranking},
     {"history_directory_completions", test_history_directory_completions},
+    {"history_file_completion_priority", test_history_file_completion_priority},
+    {"history_file_completion_priority_filters", test_history_file_completion_priority_filters},
     {"history_prefix_metadata_isolation", test_history_prefix_metadata_isolation},
+    {"history_regular_completion_priority", test_history_regular_completion_priority},
+    {"history_command_completion_priority", test_history_command_completion_priority},
+    {"history_command_with_arguments_priority", test_history_command_with_arguments_priority},
     {"empty_prompt_history_limits", test_empty_prompt_history_limits},
     {"empty_prompt_legacy_history", test_empty_prompt_legacy_history},
     {"empty_prompt_without_history", test_empty_prompt_without_history},

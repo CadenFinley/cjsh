@@ -211,10 +211,6 @@ constexpr int kHistoryCompletionHiddenExitCode = 127;
 
 bool add_path_completion(ic_completion_env_t* cenv, const char* source, long delete_before,
                          const std::string& completion_suffix) {
-    if (delete_before == 0) {
-        return completion_tracker::safe_add_completion_with_source(cenv, completion_suffix.c_str(),
-                                                                   source);
-    }
     return completion_tracker::safe_add_completion_prim_with_source(
         cenv, completion_suffix.c_str(), nullptr, nullptr, source, delete_before, 0);
 }
@@ -264,6 +260,17 @@ struct CompletionEntry {
     }
 };
 
+bool emit_file_completion(ic_completion_env_t* cenv, const CompletionEntry& entry,
+                          long delete_before) {
+    if (ic_stop_completing(cenv) || completion_tracker::completion_limit_hit()) {
+        return false;
+    }
+    std::string suffix = completion_utils::quote_path_if_needed(entry.filename);
+    suffix += entry.directory ? "/" : " ";
+    return add_path_completion(cenv, entry.source, delete_before, suffix) &&
+           !ic_stop_completing(cenv);
+}
+
 enum class CompletionInspection : std::uint8_t {
     TypeOnly,
     Runnable,
@@ -310,16 +317,22 @@ void process_command_candidates(
     size_t prefix_len, const char* source, Extractor extractor,
     const std::function<bool(const std::string&)>& filter = {},
     const std::function<std::string(const std::string&)>& source_provider = {}) {
+    std::vector<std::string> candidates;
     for (const auto& item : container) {
+        std::string candidate = extractor(item);
+        if (completion_utils::matches_completion_prefix(candidate, prefix)) {
+            candidates.push_back(std::move(candidate));
+        }
+    }
+    std::stable_partition(candidates.begin(), candidates.end(), [&](const std::string& candidate) {
+        return completion_tracker::is_completion_preferred(candidate.c_str(), prefix_len);
+    });
+    for (const auto& candidate : candidates) {
         if (completion_tracker::completion_limit_hit()) {
             return;
         }
         if (ic_stop_completing(cenv)) {
             return;
-        }
-        std::string candidate = extractor(item);
-        if (!completion_utils::matches_completion_prefix(candidate, prefix)) {
-            continue;
         }
         if (filter && !filter(candidate)) {
             continue;
@@ -355,13 +368,7 @@ bool iterate_directory_entries(ic_completion_env_t* cenv, const std::filesystem:
 
     const long delete_before = static_cast<long>(match_prefix.length());
     auto emit_completion = [&](const CompletionEntry& entry) {
-        if (ic_stop_completing(cenv) || completion_tracker::completion_limit_hit()) {
-            return false;
-        }
-        std::string suffix = completion_utils::quote_path_if_needed(entry.filename);
-        suffix += entry.directory ? "/" : " ";
-        return add_path_completion(cenv, entry.source, delete_before, suffix) &&
-               !ic_stop_completing(cenv);
+        return emit_file_completion(cenv, entry, delete_before);
     };
 
     std::vector<CompletionEntry> deferred_entries;
@@ -661,13 +668,16 @@ void add_command_name_completions(ic_completion_env_t* cenv,
         const std::string* name;
         const CandidateGroup* group;
         std::string sort_key;
+        bool preferred;
     };
     std::vector<Candidate> candidates;
     for (const auto& group : groups) {
         for (const auto& name : group.names) {
             if (completion_utils::matches_completion_prefix(name, prefix)) {
-                candidates.push_back(
-                    {&name, &group, completion_utils::normalize_for_comparison(name)});
+                candidates.push_back({&name, &group,
+                                      completion_utils::normalize_for_comparison(name),
+                                      completion_tracker::is_completion_preferred(
+                                          name.c_str(), delete_before_length)});
             }
         }
     }
@@ -676,6 +686,9 @@ void add_command_name_completions(ic_completion_env_t* cenv,
     // Stability preserves source precedence when the same name occurs twice.
     std::stable_sort(candidates.begin(), candidates.end(),
                      [](const Candidate& lhs, const Candidate& rhs) {
+                         if (lhs.preferred != rhs.preferred) {
+                             return lhs.preferred;
+                         }
                          if (lhs.name->size() != rhs.name->size()) {
                              return lhs.name->size() < rhs.name->size();
                          }
@@ -1296,10 +1309,16 @@ struct HistoryMatch {
 struct HistoryCompletionBatch {
     size_t prefix_len{};
     std::vector<HistoryMatch> matches;
+    struct FileMatch {
+        CompletionEntry entry;
+        long delete_before;
+    };
+    std::vector<FileMatch> file_matches;
 };
 
 bool collect_history_completion_matches(ic_completion_env_t* cenv, const char* prefix,
-                                        HistoryCompletionBatch& batch, bool rank_by_usage = false) {
+                                        HistoryCompletionBatch& batch, bool rank_by_usage = false,
+                                        bool include_file_matches = false) {
     std::string prefix_str;
     size_t prefix_len = 0;
     if (!prepare_prefix_state(cenv, prefix, prefix_str, prefix_len)) {
@@ -1313,6 +1332,7 @@ bool collect_history_completion_matches(ic_completion_env_t* cenv, const char* p
 
     batch.prefix_len = prefix_len;
     batch.matches.clear();
+    batch.file_matches.clear();
     batch.matches.reserve(50);
 
     std::string line;
@@ -1409,7 +1429,7 @@ bool collect_history_completion_matches(ic_completion_env_t* cenv, const char* p
 
         if ((directory_aware && !ic_history_matches_directory(directory.c_str())) ||
             (has_last_exit_code && last_exit_code == kHistoryCompletionHiddenExitCode) ||
-            (!rank_by_usage && looks_like_file_path(entry_text)) ||
+            (!rank_by_usage && !include_file_matches && looks_like_file_path(entry_text)) ||
             string_utils::trim_ascii_whitespace_copy(entry_text).empty()) {
             continue;
         }
@@ -1520,8 +1540,8 @@ bool should_complete_directories_only(const std::string& prefix) {
 
 namespace {
 
-bool history_match_duplicates_file_completion(const HistoryMatch& match,
-                                              const std::string& completion_prefix) {
+bool history_match_file_completion(const HistoryMatch& match, const std::string& completion_prefix,
+                                   HistoryCompletionBatch::FileMatch& file_match) {
     namespace fs = std::filesystem;
 
     const std::string command = string_utils::trim_right_ascii_whitespace_copy(match.command);
@@ -1539,11 +1559,26 @@ bool history_match_duplicates_file_completion(const HistoryMatch& match,
     }
 
     const std::string candidate_path_text = completion_utils::unquote_path(raw_candidate);
-    const std::string current_path_text =
+    std::string current_path_text =
         completion_utils::unquote_path(completion_prefix.substr(path_start));
     if (candidate_path_text.empty() ||
         !completion_utils::matches_completion_prefix(candidate_path_text, current_path_text)) {
         return false;
+    }
+
+    const std::string cwd = cjsh_filesystem::safe_current_directory();
+    const std::string previous_directory = g_shell ? g_shell->get_previous_directory() : "";
+    auto expand_special_path = [&](const std::string& path) {
+        if (path == "~" || path.rfind("~/", 0) == 0 || path == "-" || path.rfind("-/", 0) == 0) {
+            return cjsh_filesystem::expand_shell_path_token(path, cwd, previous_directory).string();
+        }
+        return path;
+    };
+    current_path_text = expand_special_path(current_path_text);
+    fs::path candidate_path(expand_special_path(candidate_path_text));
+    // A saved directory may include the slash inserted by a previous completion.
+    if (candidate_path.filename().empty()) {
+        candidate_path = candidate_path.parent_path();
     }
 
     fs::path completion_dir;
@@ -1551,7 +1586,6 @@ bool history_match_duplicates_file_completion(const HistoryMatch& match,
     const bool treat_as_directory = current_path_text.empty() || current_path_text.back() == '/';
     determine_directory_target(current_path_text, treat_as_directory, completion_dir, match_prefix);
 
-    const fs::path candidate_path(candidate_path_text);
     fs::path candidate_dir = candidate_path.parent_path();
     if (candidate_dir.empty()) {
         candidate_dir = ".";
@@ -1564,7 +1598,8 @@ bool history_match_duplicates_file_completion(const HistoryMatch& match,
     if (filename.empty() ||
         (!match_prefix.empty() &&
          !completion_utils::matches_completion_prefix(filename, match_prefix)) ||
-        (match_prefix.empty() && filename[0] == '.')) {
+        (match_prefix.empty() && filename[0] == '.' &&
+         (current_path_text.empty() || current_path_text.back() != '/'))) {
         return false;
     }
 
@@ -1578,28 +1613,71 @@ bool history_match_duplicates_file_completion(const HistoryMatch& match,
         return false;
     }
 
-    if (should_complete_directories_only(completion_prefix)) {
-        ec.clear();
-        if (!entry.is_directory(ec) || ec) {
-            return false;
-        }
-    }
-
+    const bool directories_only = should_complete_directories_only(completion_prefix);
     const bool has_command_prefix = path_start > 0;
     const bool restrict_to_executables =
         !has_command_prefix &&
         completion_utils::starts_with_case_sensitive(current_path_text, "./");
-    return !restrict_to_executables || is_executable_or_script_entry(entry);
+    auto info = inspect_completion_entry(entry, directories_only ? CompletionInspection::TypeOnly
+                                                : restrict_to_executables
+                                                    ? CompletionInspection::RunnableAndSource
+                                                    : CompletionInspection::Source);
+    if ((directories_only && !info.directory) ||
+        (restrict_to_executables && !info.directory && !info.runnable)) {
+        return false;
+    }
+    info.filename = filename;
+    file_match = {std::move(info), static_cast<long>(match_prefix.size())};
+    return true;
 }
 
-void remove_history_matches_duplicated_by_files(HistoryCompletionBatch& batch,
-                                                const std::string& completion_prefix) {
+void prepare_history_completions(HistoryCompletionBatch& batch,
+                                 const std::string& completion_prefix,
+                                 bool prioritize_command_names = false) {
+    for (const auto& match : batch.matches) {
+        completion_tracker::prioritize_completion(match.command.c_str(), batch.prefix_len);
+        if (prioritize_command_names) {
+            // Using a command with arguments also counts as using the command itself.
+            // Stop at a shell word boundary, respecting quoted and escaped names.
+            utils::QuoteState quote_state;
+            size_t word_end = 0;
+            for (; word_end < match.command.size(); ++word_end) {
+                const char ch = match.command[word_end];
+                if (quote_state.consume_forward(ch) == utils::QuoteAdvanceResult::Process &&
+                    !quote_state.inside_quotes() &&
+                    (std::isspace(static_cast<unsigned char>(ch)) != 0 ||
+                     std::string_view(";|&<>()").find(ch) != std::string_view::npos)) {
+                    break;
+                }
+            }
+            const std::string command_name =
+                completion_utils::unquote_path(match.command.substr(0, word_end));
+            if (!command_name.empty()) {
+                completion_tracker::prioritize_completion(command_name.c_str(), batch.prefix_len);
+            }
+        }
+    }
     batch.matches.erase(std::remove_if(batch.matches.begin(), batch.matches.end(),
                                        [&](const HistoryMatch& match) {
-                                           return history_match_duplicates_file_completion(
-                                               match, completion_prefix);
+                                           HistoryCompletionBatch::FileMatch file_match;
+                                           if (history_match_file_completion(
+                                                   match, completion_prefix, file_match)) {
+                                               batch.file_matches.push_back(std::move(file_match));
+                                               return true;
+                                           }
+                                           return looks_like_file_path(match.command);
                                        }),
                         batch.matches.end());
+}
+
+void add_history_file_completions(ic_completion_env_t* cenv, const HistoryCompletionBatch& batch) {
+    // Emit the regular replacement before directory iteration consumes the result budget.
+    // The tracker deduplicates the later file entry while preserving its usual metadata.
+    for (const auto& match : batch.file_matches) {
+        if (!emit_file_completion(cenv, match.entry, match.delete_before)) {
+            return;
+        }
+    }
 }
 
 }  // namespace
@@ -1786,7 +1864,8 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
     if (cursor_is_inside_known_command(raw_input, raw_cursor, command_context)) {
         return;
     }
-    std::string active_prefix = command_context.segment_prefix;
+    std::string active_prefix =
+        string_utils::trim_left_ascii_whitespace_copy(command_context.segment_prefix);
     const char* current_line_prefix = active_prefix.c_str();
 
     completion_tracker::completion_session_begin(cenv, effective_prefix);
@@ -1810,10 +1889,12 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
             const std::string& command_raw_prefix = command_context.current_raw_prefix;
             const std::string& command_prefix = command_context.current_prefix;
             HistoryCompletionBatch history_matches;
-            const bool has_history_matches = collect_history_completion_matches(
-                cenv, command_raw_prefix.c_str(), history_matches);
+            const bool has_history_matches =
+                config::history_enabled &&
+                collect_history_completion_matches(cenv, command_raw_prefix.c_str(),
+                                                   history_matches, false, true);
             if (has_history_matches) {
-                remove_history_matches_duplicated_by_files(history_matches, command_raw_prefix);
+                prepare_history_completions(history_matches, command_raw_prefix, true);
             }
 
             (void)add_variable_completions(cenv, command_raw_prefix);
@@ -1829,6 +1910,7 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
                     return;
                 }
             }
+            add_history_file_completions(cenv, history_matches);
             cjsh_filename_completer(cenv, command_raw_prefix.c_str());
             if (ic_has_completions(cenv) && ic_stop_completing(cenv)) {
                 completion_tracker::completion_session_end();
@@ -1863,10 +1945,9 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
             const bool has_history_matches =
                 config::history_enabled &&
                 collect_history_completion_matches(cenv, command_context.current_raw_prefix.c_str(),
-                                                   history_matches);
+                                                   history_matches, false, true);
             if (has_history_matches) {
-                remove_history_matches_duplicated_by_files(history_matches,
-                                                           command_context.current_raw_prefix);
+                prepare_history_completions(history_matches, command_context.current_raw_prefix);
             }
             if (has_history_matches) {
                 add_history_completion_matches(cenv, history_matches,
@@ -1876,6 +1957,7 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
                     return;
                 }
             }
+            add_history_file_completions(cenv, history_matches);
             cjsh_filename_completer(cenv, command_context.current_raw_prefix.c_str());
             if (ic_stop_completing(cenv)) {
                 completion_tracker::completion_session_end();
@@ -1904,6 +1986,20 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
 
             bool ends_with_space = command_context.at_word_boundary;
 
+            HistoryCompletionBatch history_matches;
+            const bool has_history_matches =
+                config::history_enabled &&
+                collect_history_completion_matches(cenv, current_line_prefix, history_matches,
+                                                   false, true);
+            if (has_history_matches) {
+                prepare_history_completions(history_matches, current_line_prefix);
+            }
+            add_history_file_completions(cenv, history_matches);
+            if (ic_stop_completing(cenv) || completion_tracker::completion_limit_hit()) {
+                completion_tracker::completion_session_end();
+                return;
+            }
+
             (void)add_job_control_argument_completions(cenv, tokens, ends_with_space);
 
             (void)add_builtin_argument_completions(cenv, tokens, ends_with_space);
@@ -1914,34 +2010,24 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
 
             (void)add_split_unknown_command_completions(cenv, tokens, ends_with_space, prefix_str);
 
-            if (!tokens.empty() && completion_utils::equals_completion_token(tokens[0], "cd")) {
-                cjsh_filename_completer(cenv, current_line_prefix);
-            } else {
-                HistoryCompletionBatch history_matches;
-                const bool has_history_matches =
-                    config::history_enabled &&
-                    collect_history_completion_matches(cenv, current_line_prefix, history_matches);
-                if (has_history_matches) {
-                    remove_history_matches_duplicated_by_files(history_matches,
-                                                               current_line_prefix);
-                }
-                if (has_history_matches) {
-                    add_history_completion_matches(cenv, history_matches,
-                                                   HistoryCompletionGroup::SUCCESSFUL);
-                    if (ic_stop_completing(cenv)) {
-                        completion_tracker::completion_session_end();
-                        return;
-                    }
-                }
-                cjsh_filename_completer(cenv, current_line_prefix);
+            const bool offer_history =
+                tokens.empty() || !completion_utils::equals_completion_token(tokens[0], "cd");
+            if (has_history_matches && offer_history) {
+                add_history_completion_matches(cenv, history_matches,
+                                               HistoryCompletionGroup::SUCCESSFUL);
                 if (ic_stop_completing(cenv)) {
                     completion_tracker::completion_session_end();
                     return;
                 }
-                if (has_history_matches) {
-                    add_history_completion_matches(cenv, history_matches,
-                                                   HistoryCompletionGroup::REMAINING);
-                }
+            }
+            cjsh_filename_completer(cenv, current_line_prefix);
+            if (ic_stop_completing(cenv)) {
+                completion_tracker::completion_session_end();
+                return;
+            }
+            if (has_history_matches && offer_history) {
+                add_history_completion_matches(cenv, history_matches,
+                                               HistoryCompletionGroup::REMAINING);
             }
             break;
         }

@@ -38,6 +38,7 @@ namespace completion_tracker {
 
 struct CompletionTracker {
     std::unordered_set<std::string> added_completions;
+    std::unordered_set<std::string> preferred_completions;
     ic_completion_env_t* cenv;
     std::string original_prefix;
     size_t total_completions_added{};
@@ -55,6 +56,9 @@ struct CompletionTracker {
 
 void completion_session_begin(ic_completion_env_t* cenv, const char* prefix);
 void completion_session_end();
+
+void prioritize_completion(const char* completion_text, long delete_before);
+bool is_completion_preferred(const char* completion_text, long delete_before);
 
 bool safe_add_completion_with_source(ic_completion_env_t* cenv, const char* completion_text,
                                      const char* source);

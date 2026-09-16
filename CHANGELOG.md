@@ -24,6 +24,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Fixed
 
+- Regular completions now retain priority from matching history when duplicate history suggestions are removed, preserving file and directory suffixes and command, option, subcommand, and value descriptions before applying result limits. Commands used with arguments also boost the bare command name, so `git clean -xdf` in history prioritizes `git`.
 - Ranked matching command names shortest first with alphabetical ties before applying completion limits, so commands such as `git` precede `gen_bridge_metadata` for `g` in Tab completion and automatic suggestions.
 - Passive automatic completion menus now reuse the prompt's PATH cache and defer manual-page lookups and dynamic completion providers until an explicit Tab request, avoiding expensive searches on each keystroke, especially on WSL.
 

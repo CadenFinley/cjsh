@@ -38,11 +38,19 @@ At an empty or whitespace-only prompt, `Tab` shows unique history entries up to 
 for matching timestamps. Empty-prompt completion shows no candidates when history is disabled or
 no eligible history entries exist.
 
-Matching command names are ordered shortest first, then alphabetically using the completion
-case-sensitivity setting. For example, `g` offers `git` before `gen_bridge_metadata`.
+Regular completions that match eligible history entries are offered ahead of unused matches.
+When history duplicates a file, directory, command, option, subcommand, or value completion,
+the regular result keeps its description and insertion behavior while retaining the history
+preference. This also applies to inline hints and automatic menus, before result limits.
+History-directory settings and disabled history are respected.
+Using a command with arguments also prioritizes its command name: a history entry such as
+`git clean -xdf` boosts `git` even if `git` has never been run on its own.
+
+Within the same history preference, matching command names are ordered shortest first, then
+alphabetically using the completion case-sensitivity setting. For example, without matching
+history, `g` offers `git` before `gen_bridge_metadata`.
 Builtins, keywords, functions, aliases, abbreviations, and PATH commands share this ranking,
 which is applied before result limits in Tab completion, inline hints, and automatic menus.
-History and file suggestions retain their existing priority.
 
 When the cursor is inside an existing recognized command or shell keyword, cjsh offers no
 completions for that word. For example, moving just after the `t` in `then` does not suggest

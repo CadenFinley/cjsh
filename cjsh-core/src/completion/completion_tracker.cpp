@@ -137,6 +137,24 @@ void completion_session_end() {
     }
 }
 
+void prioritize_completion(const char* completion_text, long delete_before) {
+    if (g_current_completion_tracker != nullptr) {
+        auto& tracker = *g_current_completion_tracker;
+        tracker.preferred_completions.insert(canonicalize_final_result(
+            tracker.calculate_final_result(completion_text, delete_before)));
+    }
+}
+
+bool is_completion_preferred(const char* completion_text, long delete_before) {
+    if (g_current_completion_tracker == nullptr ||
+        g_current_completion_tracker->preferred_completions.empty()) {
+        return false;
+    }
+    const auto& tracker = *g_current_completion_tracker;
+    return tracker.preferred_completions.count(canonicalize_final_result(
+               tracker.calculate_final_result(completion_text, delete_before))) != 0;
+}
+
 bool safe_add_completion_with_source(ic_completion_env_t* cenv, const char* completion_text,
                                      const char* source) {
     if ((g_current_completion_tracker != nullptr) &&
