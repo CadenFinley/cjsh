@@ -38,6 +38,12 @@ At an empty or whitespace-only prompt, `Tab` shows unique history entries up to 
 for matching timestamps. Empty-prompt completion shows no candidates when history is disabled or
 no eligible history entries exist.
 
+Matching command names are ordered shortest first, then alphabetically using the completion
+case-sensitivity setting. For example, `g` offers `git` before `gen_bridge_metadata`.
+Builtins, keywords, functions, aliases, abbreviations, and PATH commands share this ranking,
+which is applied before result limits in Tab completion, inline hints, and automatic menus.
+History and file suggestions retain their existing priority.
+
 When the cursor is inside an existing recognized command or shell keyword, cjsh offers no
 completions for that word. For example, moving just after the `t` in `then` does not suggest
 `tests/`. Completion remains available for unfinished words and at the end of a word.

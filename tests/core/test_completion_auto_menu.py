@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import shlex
 import sys
 import tempfile
@@ -69,6 +70,8 @@ def main(binary: str) -> None:
         commands.mkdir()
         for number in range(1, 5):
             executable(commands / f"automenu-tool{number}")
+        for name in ("gen_bridge_metadata", "gzz", "git"):
+            executable(commands / name, f"#!/bin/sh\nprintf 'RANKING_SELECTED_{name}\\n'\n")
         calls = root / "man-calls"
         man = root / "fake-man"
         executable(
@@ -149,9 +152,33 @@ def main(binary: str) -> None:
             session.write(b"\t")
             session.wait_for(b"freshmenu-new", start)
             cancel(session)
+
+            # Rank before applying a small result limit, in both passive menus
+            # and explicit Tab completion. Accepting the first entry must run git.
+            for automatic in (True, False):
+                mode = "on" if automatic else "off"
+                session.run_command(
+                    f"cjshopt completion-learning off; cjshopt set-completion-max 2; "
+                    f"cjshopt completion-auto-menu {mode}".encode()
+                )
+                start = type_text(session, "g")
+                if not automatic:
+                    session.write(b"\t")
+                session.wait_for(b"tab:activate" if automatic else b"esc:cancel", start)
+                render = normalize_terminal_output(bytes(session.output[start:])).decode()
+                menu = render.rsplit("Completions", 1)[-1]
+                names = re.findall(r"^(?:[→>] | {2})(\S+)", menu, re.MULTILINE)
+                if names != ["git", "gzz"]:
+                    raise AssertionError(f"{mode} menu did not rank shortest commands first: {menu!r}")
+                if automatic:
+                    session.write(b"\t")
+                start = len(session.output)
+                session.write(b"\r\r")
+                session.wait_for(b"RANKING_SELECTED_git", start)
+                session.wait_for_prompt(start, command_completed=True)
         finally:
             session.close()
-    print("All 4 automatic completion menu integration tests passed")
+    print("All 6 automatic completion menu integration tests passed")
 
 
 if __name__ == "__main__":

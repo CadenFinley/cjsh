@@ -619,44 +619,6 @@ void add_command_name_completions(ic_completion_env_t* cenv,
         return;
     }
 
-    add_builtin_command_candidates(cenv, sources.builtin_cmds, prefix, delete_before_length);
-    if (completion_tracker::completion_limit_hit() || ic_stop_completing(cenv)) {
-        return;
-    }
-
-    const auto& control_structures = command_lookup::shell_control_structure_keywords();
-    process_command_candidates(
-        cenv, control_structures, prefix, delete_before_length, "control structure",
-        [](const std::string& value) { return value; }, std::function<bool(const std::string&)>{},
-        builtin_summary_for_command);
-    if (completion_tracker::completion_limit_hit() || ic_stop_completing(cenv)) {
-        return;
-    }
-
-    process_command_candidates(cenv, sources.function_names, prefix, delete_before_length,
-                               "function", [](const std::string& value) { return value; });
-    if (completion_tracker::completion_limit_hit() || ic_stop_completing(cenv)) {
-        return;
-    }
-
-    auto alias_source_provider = make_map_source_provider(sources.alias_map);
-    process_command_candidates(
-        cenv, sources.alias_names, prefix, delete_before_length, "alias",
-        [](const std::string& value) { return value; }, std::function<bool(const std::string&)>{},
-        alias_source_provider);
-    if (completion_tracker::completion_limit_hit() || ic_stop_completing(cenv)) {
-        return;
-    }
-
-    auto abbreviation_source_provider = make_map_source_provider(sources.abbreviation_map);
-    process_command_candidates(
-        cenv, sources.abbreviation_names, prefix, delete_before_length, "abbreviation",
-        [](const std::string& value) { return value; }, std::function<bool(const std::string&)>{},
-        abbreviation_source_provider);
-    if (completion_tracker::completion_limit_hit() || ic_stop_completing(cenv)) {
-        return;
-    }
-
     size_t summary_fetch_budget = delete_before_length == 0 ? 2 : 5;
     auto system_summary_provider = [&](const std::string& cmd) -> std::string {
         std::string summary = get_command_summary(cmd, false);
@@ -671,13 +633,72 @@ void add_command_name_completions(ic_completion_env_t* cenv,
         return get_command_summary(cmd, true);
     };
 
-    process_command_candidates(
-        cenv, sources.executables_in_path, prefix, delete_before_length, "system installed command",
-        [](const std::string& value) { return value; },
-        [&](const std::string& candidate) {
-            return !cjsh_filesystem::find_executable_in_path(candidate).empty();
-        },
-        system_summary_provider);
+    struct CandidateGroup {
+        const std::vector<std::string>& names;
+        const char* source;
+        std::function<bool(const std::string&)> filter;
+        std::function<std::string(const std::string&)> describe;
+    };
+    const CandidateGroup groups[] = {
+        {sources.builtin_cmds, "builtin", is_interactive_builtin, builtin_summary_for_command},
+        {command_lookup::shell_control_structure_keywords(),
+         "control structure",
+         {},
+         builtin_summary_for_command},
+        {sources.function_names, "function", {}, {}},
+        {sources.alias_names, "alias", {}, make_map_source_provider(sources.alias_map)},
+        {sources.abbreviation_names,
+         "abbreviation",
+         {},
+         make_map_source_provider(sources.abbreviation_map)},
+        {sources.executables_in_path, "system installed command",
+         [](const std::string& candidate) {
+             return !cjsh_filesystem::find_executable_in_path(candidate).empty();
+         },
+         system_summary_provider},
+    };
+    struct Candidate {
+        const std::string* name;
+        const CandidateGroup* group;
+        std::string sort_key;
+    };
+    std::vector<Candidate> candidates;
+    for (const auto& group : groups) {
+        for (const auto& name : group.names) {
+            if (completion_utils::matches_completion_prefix(name, prefix)) {
+                candidates.push_back(
+                    {&name, &group, completion_utils::normalize_for_comparison(name)});
+            }
+        }
+    }
+    // Rank all matching command names before spending the result budget. A
+    // two-result hint must see the same leading candidates as a full menu.
+    // Stability preserves source precedence when the same name occurs twice.
+    std::stable_sort(candidates.begin(), candidates.end(),
+                     [](const Candidate& lhs, const Candidate& rhs) {
+                         if (lhs.name->size() != rhs.name->size()) {
+                             return lhs.name->size() < rhs.name->size();
+                         }
+                         return lhs.sort_key == rhs.sort_key ? *lhs.name < *rhs.name
+                                                             : lhs.sort_key < rhs.sort_key;
+                     });
+    for (const auto& candidate : candidates) {
+        if (completion_tracker::completion_limit_hit() || ic_stop_completing(cenv)) {
+            break;
+        }
+        const auto& group = *candidate.group;
+        const auto& name = *candidate.name;
+        // Validate only candidates we can emit; ranking must not stat every
+        // PATH entry or fetch documentation for entries beyond the limit.
+        if (group.filter && !group.filter(name)) {
+            continue;
+        }
+        const std::string description = group.describe ? group.describe(name) : std::string{};
+        const char* source = description.empty() ? group.source : description.c_str();
+        if (!add_command_completion(cenv, name, delete_before_length, source)) {
+            break;
+        }
+    }
 
     if (should_offer_spell_corrections) {
         add_command_spell_corrections(cenv, sources, normalized_prefix, delete_before_length);

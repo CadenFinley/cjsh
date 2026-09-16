@@ -1966,6 +1966,122 @@ static bool test_tab_path_candidates_and_refresh() {
     return true;
 }
 
+static bool test_command_completion_ranking() {
+    const char* test_name = "command_completion_ranking";
+    namespace fs = std::filesystem;
+    const fs::path root = cjsh_filesystem::g_user_home_path() / "command-ranking";
+    fs::create_directories(root);
+    for (const char* name : {"gen_bridge_metadata", "Gzz", "git", "gio", "gAA", "ga", "g"}) {
+        std::ofstream(root / name) << "#!/bin/sh\nexit 0\n";
+        fs::permissions(root / name, fs::perms::owner_all);
+    }
+    // Invalid PATH entries must not consume slots ahead of real executables.
+    std::ofstream(root / "g0") << "not executable\n";
+    fs::create_directory(root / "g1");
+    fs::create_symlink(root / "missing", root / "g2");
+    const ScopedEnvironmentValue path("PATH", root.string());
+    auto previous_shell = std::move(g_shell);
+    const bool previous_case = is_completion_case_sensitive();
+    const bool previous_learning = config::completion_learning_enabled;
+    config::completion_learning_enabled = false;
+    const bool ok = [&] {
+        ic_env_t* env = ic_get_env();
+        EXPECT_TRUE(env != nullptr && env->completions != nullptr, test_name,
+                    "completion environment should be available");
+        completions_set_completer(env->completions, &cjsh_command_completer, nullptr);
+        for (bool case_sensitive : {false, true}) {
+            set_completion_case_sensitive(case_sensitive);
+            for (const char* prefix : {"g", "gi", "git"}) {
+                std::vector<std::string> expected;
+                if (std::strcmp(prefix, "g") == 0) {
+                    expected = {"g ", "ga ", "gAA ", "gio ", "git "};
+                    if (!case_sensitive) {
+                        expected.emplace_back("Gzz ");
+                    }
+                    expected.emplace_back("gen_bridge_metadata ");
+                } else if (std::strcmp(prefix, "gi") == 0) {
+                    expected = {"gio ", "git "};
+                } else {
+                    expected = {"git "};
+                }
+                for (bool hint : {false, true}) {
+                    for (ssize_t limit : {1, 2, 256}) {
+                        const auto generate =
+                            hint ? completions_generate_hint : completions_generate;
+                        (void)generate(env, env->completions, prefix,
+                                       static_cast<ssize_t>(std::strlen(prefix)), limit);
+                        auto limited = expected;
+                        limited.resize(std::min(limited.size(), static_cast<std::size_t>(limit)));
+                        EXPECT_TRUE(generated_completion_replacements() == limited, test_name,
+                                    "rank shortest names first, then alphabetically, before "
+                                    "applying limits");
+                    }
+                }
+            }
+        }
+        return true;
+    }();
+    clear_generated_completions();
+    set_completion_case_sensitive(previous_case);
+    config::completion_learning_enabled = previous_learning;
+    g_shell = std::move(previous_shell);
+    return ok;
+}
+
+static bool test_command_completion_ranking_across_sources() {
+    const char* test_name = "command_completion_ranking_across_sources";
+    namespace fs = std::filesystem;
+    const fs::path root = cjsh_filesystem::g_user_home_path() / "command-ranking-sources";
+    fs::create_directories(root);
+    for (const char* name : {"git", "gen_bridge_metadata", "getopts", "gdup"}) {
+        std::ofstream(root / name) << "#!/bin/sh\nexit 0\n";
+        fs::permissions(root / name, fs::perms::owner_all);
+    }
+    const ScopedEnvironmentValue path("PATH", root.string());
+    auto previous_shell = std::move(g_shell);
+    const bool previous_interactive = config::interactive_mode;
+    const bool previous_learning = config::completion_learning_enabled;
+    config::interactive_mode = false;
+    config::completion_learning_enabled = false;
+    g_shell = std::make_unique<Shell>();
+    const bool ok = [&] {
+        EXPECT_TRUE(g_shell->execute("gdup() { :; }; gzz_function() { :; }") == 0, test_name,
+                    "function fixtures should be defined");
+        g_shell->set_aliases({{"ga_alias", "echo alias"}, {"gdup", "echo duplicate"}});
+        g_shell->set_abbreviations({{"gb_abbr", "echo abbreviation"}});
+        (void)run_completion_generation("g", &cjsh_command_completer, 256);
+        const auto actual = generated_completion_replacements();
+        EXPECT_TRUE(!actual.empty() && actual.front() == "git ", test_name,
+                    "a short executable should precede longer builtins, functions, and aliases");
+        const std::vector<std::string> ranked = {"git ",
+                                                 "gdup ",
+                                                 "gb_abbr ",
+                                                 "getopts ",
+                                                 "ga_alias ",
+                                                 "gzz_function ",
+                                                 "gen_bridge_metadata ",
+                                                 "generate-completions "};
+        EXPECT_TRUE(actual == ranked, test_name,
+                    "command source groups should share one length and alphabetic ranking");
+        EXPECT_TRUE(std::count(actual.begin(), actual.end(), "gdup ") == 1, test_name,
+                    "identical commands from multiple sources should still deduplicate");
+        ic_env_t* env = ic_get_env();
+        EXPECT_TRUE(std::strcmp(completions_get_source(env->completions, 1), "function") == 0,
+                    test_name, "duplicate names should retain the first source's metadata");
+        EXPECT_TRUE(
+            std::strcmp(completions_get_source(env->completions, 2), "echo abbreviation") == 0,
+            test_name, "ranked abbreviations should retain their expansion metadata");
+        EXPECT_TRUE(std::strcmp(completions_get_source(env->completions, 4), "echo alias") == 0,
+                    test_name, "ranked aliases should retain their expansion metadata");
+        return true;
+    }();
+    clear_generated_completions();
+    g_shell = std::move(previous_shell);
+    config::interactive_mode = previous_interactive;
+    config::completion_learning_enabled = previous_learning;
+    return ok;
+}
+
 static bool test_hints_defer_dynamic_providers() {
     const char* test_name = "hints_defer_dynamic_providers";
     using namespace completion_specs;
@@ -2218,8 +2334,9 @@ static bool test_builtin_docs() {
     EXPECT_TRUE(
         !has_entry(cjshopt_doc, "menu-max-lines", builtin_completions::EntryKind::Subcommand),
         test_name, "cjshopt should not include the removed menu-max-lines subcommand");
-    EXPECT_TRUE(builtin_completions::lookup_builtin_command_doc("cjshopt-menu-max-lines") == nullptr,
-                test_name, "removed menu-max-lines documentation should not exist");
+    EXPECT_TRUE(
+        builtin_completions::lookup_builtin_command_doc("cjshopt-menu-max-lines") == nullptr,
+        test_name, "removed menu-max-lines documentation should not exist");
 
     const auto* exit_confirmation_doc =
         builtin_completions::lookup_builtin_command_doc("cjshopt-exit-confirmation");
@@ -2508,6 +2625,8 @@ static const test_case_t kTests[] = {
     {"rich_completion_runtime", test_rich_completion_runtime},
     {"hints_defer_documentation_fetch", test_hints_defer_documentation_fetch},
     {"tab_path_candidates_and_refresh", test_tab_path_candidates_and_refresh},
+    {"command_completion_ranking", test_command_completion_ranking},
+    {"command_completion_ranking_across_sources", test_command_completion_ranking_across_sources},
     {"hints_defer_dynamic_providers", test_hints_defer_dynamic_providers},
     {"command_context_completion_runtime", test_command_context_completion_runtime},
     {"builtin_docs", test_builtin_docs},

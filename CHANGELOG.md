@@ -24,6 +24,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Fixed
 
+- Ranked matching command names shortest first with alphabetical ties before applying completion limits, so commands such as `git` precede `gen_bridge_metadata` for `g` in Tab completion and automatic suggestions.
 - Passive automatic completion menus now reuse the prompt's PATH cache and defer manual-page lookups and dynamic completion providers until an explicit Tab request, avoiding expensive searches on each keystroke, especially on WSL.
 
 ## [1.5.7] - 2026-09-15
