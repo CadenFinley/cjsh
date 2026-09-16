@@ -1129,6 +1129,21 @@ in gaps or add custom behaviour.</p>
 <code>cjshopt set-completion-max</code> limit (default: 1000), ordered by most recent use and then frequency
 for matching timestamps. Empty-prompt completion shows no candidates when history is disabled or
 no eligible history entries exist.</p>
+<p>Regular completions that match eligible history entries are offered ahead of unused matches.
+When history duplicates a file, directory, command, option, subcommand, or value completion,
+the regular result keeps its description and insertion behavior while retaining the history
+preference. This also applies to inline hints and automatic menus, before result limits.
+History-directory settings and disabled history are respected.
+Using a command with arguments also prioritizes its command name: a history entry such as
+<code>git clean -xdf</code> boosts <code>git</code> even if <code>git</code> has never been run on its own.
+For a bare command such as <code>lazygit</code>, the regular command completion takes precedence over
+its history duplicate, including after a successful run. It keeps the command description
+and trailing space while retaining its history preference.</p>
+<p>Within the same history preference, matching command names are ordered shortest first, then
+alphabetically using the completion case-sensitivity setting. For example, without matching
+history, <code>g</code> offers <code>git</code> before <code>gen_bridge_metadata</code>.
+Builtins, keywords, functions, aliases, abbreviations, and PATH commands share this ranking,
+which is applied before result limits in Tab completion, inline hints, and automatic menus.</p>
 <p>When the cursor is inside an existing recognized command or shell keyword, cjsh offers no
 completions for that word. For example, moving just after the <code>t</code> in <code>then</code> does not suggest
 <code>tests/</code>. Completion remains available for unfinished words and at the end of a word.</p>
