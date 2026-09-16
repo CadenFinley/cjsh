@@ -242,6 +242,7 @@ again:;
     last_display_count = 0;
     last_max_scroll = 0;
     selected_preview_limit = 0;
+    menu_session.scrollbar.rows = 0;
     sbuf_clear(eb->extra);
     const char* mouse_suffix =
         (menu_session.mouse_scroll_enabled ? " | Mouse clicking is enabled" : "");
@@ -288,6 +289,7 @@ again:;
         last_max_scroll = window.max_scroll;
         scroll_offset = window.scroll_offset;
 
+        const ssize_t items_start = sbuf_len(eb->extra);
         for (ssize_t i = 0; i < last_display_count; ++i) {
             ssize_t match_idx = scroll_offset + i;
             if (match_idx >= match_count) {
@@ -300,6 +302,7 @@ again:;
             custom_menu_render_item(env, eb, display_buffer, &items[match->item_idx], match,
                                     is_filtered, match_idx == selected_idx, selected_preview_limit);
         }
+        edit_menu_append_scrollbar(env, eb, &menu_session.scrollbar, items_start, &window);
         edit_menu_append_scroll_hint(eb->extra, match_count, last_display_count, scroll_offset);
     } else {
         scroll_offset = 0;
@@ -314,7 +317,7 @@ again:;
 
     accepted_with_mouse = false;
     code_t c;
-    if (!edit_menu_read_event(env, eb, &menu_session, &c)) {
+    if (!edit_menu_read_event(env, eb, &menu_session, &c, &scroll_offset, &selected_idx)) {
         goto again;
     }
     code_t key_no_mods = KEY_NO_MODS(c);

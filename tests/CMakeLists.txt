@@ -229,6 +229,12 @@ if(Python3_Interpreter_FOUND)
     )
 
     cjsh_add_test(
+        NAME isocline_menu_scrollbar_tests
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/isocline/test_menu_scrollbars.py"
+                $<TARGET_FILE:isocline_pty_driver>
+    )
+
+    cjsh_add_test(
         NAME build_system_configuration_tests
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/build_system/test_build_system.py"
                 "${CMAKE_SOURCE_DIR}"

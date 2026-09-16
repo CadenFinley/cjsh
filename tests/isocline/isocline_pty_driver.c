@@ -444,7 +444,9 @@ static int run_history_probe_case(const char* scenario) {
 #if defined(_WIN32)
     const char* history_path = "cjsh_isocline_pty_history.tmp";
 #else
-    const char* history_path = "/tmp/cjsh_isocline_pty_history.tmp";
+    char history_path[128];
+    (void)snprintf(history_path, sizeof(history_path), "/tmp/cjsh_isocline_pty_history_%ld.tmp",
+                   (long)getpid());
 #endif
     (void)remove(history_path);
     ic_set_history(history_path, 200);
@@ -653,7 +655,9 @@ static int run_case(const char* scenario) {
 #if defined(_WIN32)
     const char* history_path = "cjsh_isocline_pty_history.tmp";
 #else
-    const char* history_path = "/tmp/cjsh_isocline_pty_history.tmp";
+    char history_path[128];
+    (void)snprintf(history_path, sizeof(history_path), "/tmp/cjsh_isocline_pty_history_%ld.tmp",
+                   (long)getpid());
 #endif
     (void)remove(history_path);
     ic_set_history(history_path, 200);
@@ -841,6 +845,15 @@ static int run_case(const char* scenario) {
         (void)ic_set_hint_delay(0);
         ic_set_default_completer(pty_completion_dispatcher, NULL);
     } else if (strncmp(scenario, "menu_viewport_", 14) == 0) {
+        if (strstr(scenario, "_mouse") != NULL) {
+            (void)ic_set_mouse_clicking_mode(IC_MOUSE_CLICKING_MENU_ONLY);
+        } else if (strstr(scenario, "_smart") != NULL) {
+            (void)ic_set_mouse_clicking_mode(IC_MOUSE_CLICKING_SMART);
+            (void)ic_enable_mouse_clicking(true);
+        }
+        if (strstr(scenario, "_passive") != NULL) {
+            (void)ic_enable_completion_auto_menu(true);
+        }
         size_t limit = 50;  // explicit viewport fixture, independent of production defaults
         if (strstr(scenario, "_default") != NULL) {
             if (strstr(scenario, "_completion") != NULL) {
@@ -898,7 +911,7 @@ static int run_case(const char* scenario) {
             if (!ic_bind_key(IC_KEY_F3, IC_KEY_ACTION_RUNOFF)) {
                 return 6;
             }
-            const bool preview = (strcmp(scenario, "menu_viewport_custom_preview") == 0);
+            const bool preview = (strstr(scenario, "_preview") != NULL);
             ic_set_unhandled_key_handler(pty_menu_viewport_handler,
                                          preview ? &g_completion_mode : NULL);
             if (strcmp(scenario, "menu_viewport_custom_no_margin") == 0) {

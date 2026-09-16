@@ -1254,6 +1254,7 @@ again:;
     }
 
     sbuf_clear(eb->extra);
+    menu_session.scrollbar.rows = 0;
     const char* mouse_suffix =
         (menu_session.mouse_scroll_enabled ? " | Mouse clicking is enabled" : "");
     char sort_label_buf[128];
@@ -1347,6 +1348,7 @@ again:;
         last_display_count = display_count;
         last_max_scroll = window.max_scroll;
 
+        const ssize_t items_start = sbuf_len(eb->extra);
         for (ssize_t i = 0; i < display_count; i++) {
             ssize_t match_idx = scroll_offset + i;
             if (match_idx >= match_count) {
@@ -1454,6 +1456,7 @@ again:;
             (void)sbuf_append(eb->extra, "\n");
         }
 
+        edit_menu_append_scrollbar(env, eb, &menu_session.scrollbar, items_start, &window);
         edit_menu_append_scroll_hint(eb->extra, match_count, display_count, scroll_offset);
         sbuf_free(metadata_suffix_buffer);
         sbuf_free(selected_metadata_suffix);
@@ -1484,7 +1487,7 @@ again:;
     edit_refresh(env, eb);
 
     code_t c;
-    if (!edit_menu_read_event(env, eb, &menu_session, &c)) {
+    if (!edit_menu_read_event(env, eb, &menu_session, &c, &scroll_offset, &selected_idx)) {
         goto again;
     }
     code_t key_no_mods = KEY_NO_MODS(c);

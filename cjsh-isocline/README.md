@@ -103,6 +103,12 @@ and all available terminal space. This does not change the configured limit and 
 menu closes. Headers and help text use separate rows. Menus share the multiline scroll margin
 configured by `ic_set_multiline_bottom_line_count()`, which defaults to 3 rows around the selection.
 
+Scrollable menus show a vertical scrollbar at the right edge of their item rows. The thumb shows
+the visible portion of the results. When menu mouse input is enabled, click the track to page or
+drag the thumb to scroll; releasing the scrollbar keeps the menu open. Scrollbars remain visible
+with mouse input disabled. Passive completion menus show the scrollbar and use their usual
+click/Tab activation before scrolling interactively.
+
 ## Testing
 
 Run all automated tests through CTest from the repository root:

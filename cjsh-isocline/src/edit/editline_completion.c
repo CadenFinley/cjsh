@@ -314,10 +314,13 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     eb->completion_auto_menu_header_rows = edit_menu_rendered_rows(env, eb, header);
     eb->completion_auto_menu_item_rows = visible;
     (void)sbuf_append(eb->extra, header);
+    const ssize_t items_start = sbuf_len(eb->extra);
     for (ssize_t idx = 0; idx < visible; idx++) {
         editor_append_completion(env, eb, idx, width, false);
         (void)sbuf_append(eb->extra, "\n");
     }
+    edit_menu_scrollbar_t scrollbar = {0};
+    edit_menu_append_scrollbar(env, eb, &scrollbar, items_start, &window);
     (void)sbuf_append(eb->extra, footer);
     eb->completion_auto_menu_rows = edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra));
     eb->completion_auto_menu_visible = true;
@@ -575,6 +578,7 @@ static void edit_completion_menu(ic_env_t* env, editor_t* eb, bool more_availabl
     bool menu_mouse_scroll_enabled = false;
     bool menu_mouse_suspended = false;
     bool menu_mouse_focus_reporting_added = false;
+    edit_menu_scrollbar_t scrollbar = {0};
     bool completion_applied = false;
     bool completion_accepted = false;
     const bool hints_enabled = !env->no_hint && !env->completion_auto_menu;
@@ -607,6 +611,7 @@ static void edit_completion_menu(ic_env_t* env, editor_t* eb, bool more_availabl
 
 again:
     sbuf_clear(eb->extra);
+    scrollbar.rows = 0;
     last_rows_visible = 0;
     last_max_scroll_offset = 0;
     last_header_rows = 1;
@@ -703,6 +708,7 @@ again:
     if (sbuf_len(eb->extra) > 0) {
         (void)sbuf_append(eb->extra, "\n");
     }
+    edit_menu_append_scrollbar(env, eb, &scrollbar, 0, &window);
     (void)sbuf_append(eb->extra, footer);
 
     ssize_t visible_start = 0;
@@ -729,6 +735,7 @@ again:
     }
     (void)sbuf_insert_at(eb->extra, header, 0);
     last_header_rows = edit_menu_rendered_rows(env, eb, header) + hint_help_rows;
+    scrollbar.first_row = last_header_rows;
 
     last_rows_visible = rows_visible;
     last_max_scroll_offset = max_scroll_offset;
@@ -769,6 +776,7 @@ read_key:
         goto cleanup;
     }
     if (c == KEY_EVENT_RESIZE || tty_term_resize_event(env->tty)) {
+        edit_menu_scrollbar_release(env, eb, &scrollbar);
         (void)edit_resize(env, eb);
         if (c == KEY_EVENT_RESIZE) {
             goto again;
@@ -778,6 +786,12 @@ read_key:
 
     code_t key_no_mods = KEY_NO_MODS(c);
 
+    if (edit_menu_scrollbar_event(env, eb, &scrollbar, c,
+                                  menu_mouse_scroll_enabled || eb->mouse_reporting_enabled,
+                                  &scroll_offset, &selected)) {
+        c = 0;
+        goto again;
+    }
     if (edit_menu_mouse_prepare_key(env, eb, c, true, &menu_mouse_scroll_enabled,
                                     &menu_mouse_suspended)) {
         c = 0;
@@ -1021,6 +1035,7 @@ read_key:
     }
 
 cleanup:
+    edit_menu_scrollbar_release(env, eb, &scrollbar);
     edit_menu_mouse_finish(env, eb, true, &menu_mouse_scroll_enabled, &menu_mouse_suspended,
                            &menu_mouse_focus_reporting_added);
     completions_clear(env->completions);
