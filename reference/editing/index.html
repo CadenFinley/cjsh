@@ -1927,6 +1927,8 @@ or has no eligible entries, no completions are shown. Typing a command or path p
 usual context-aware completion sources.</p>
 <p><strong>Automatic completion menu:</strong> Enable <code>cjshopt completion-auto-menu on</code> to show an unselected
 list as you type. It updates on edits without extending your input or previewing a candidate.
+Passive updates reuse the prompt's PATH cache, cached documentation, and static value choices.
+Press <code>Tab</code> to refresh command lookups, fetch missing documentation, or run dynamic value providers.
 While passive, arrows edit/navigate the input, Enter submits it, and the mouse wheel does not
 scroll the menu. The first <code>Tab</code> activates the menu and selects the first candidate, even if
 there is only one match; it does not accept or insert a common prefix. When mouse clicking is

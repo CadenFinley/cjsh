@@ -1132,10 +1132,11 @@ no eligible history entries exist.</p>
 <p>When the cursor is inside an existing recognized command or shell keyword, cjsh offers no
 completions for that word. For example, moving just after the <code>t</code> in <code>then</code> does not suggest
 <code>tests/</code>. Completion remains available for unfinished words and at the end of a word.</p>
-<p>Inline hints use cached documentation and static value choices. Press <code>Tab</code> to fetch missing
-manual-page data or invoke dynamic value providers. Hints, Tab completion, status-line analysis,
-and command-error suggestions share cached PATH filenames and check executability only for matching
-candidates. The next prompt, an explicit Tab request, or a <code>PATH</code> change refreshes these lookups.
+<p>Inline hints and passive automatic menus use cached documentation and static value choices. Press
+<code>Tab</code> to fetch missing manual-page data or invoke dynamic value providers. Automatic suggestions,
+Tab completion, status-line analysis, and command-error suggestions share cached PATH filenames
+and check executability only for matching candidates. The next prompt, an explicit Tab request,
+or a <code>PATH</code> change refreshes these lookups.
 Command execution and explicit queries such as <code>type</code>, <code>which</code>, and <code>command -v</code> still validate
 executable paths against the filesystem.</p>
 <h2 id="how-automatic-completions-are-generated">How automatic completions are generated</h2>
