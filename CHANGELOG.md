@@ -11,6 +11,18 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-09-15
+
+### Added
+
+- Added cursor-aware status-line command hints showing executable paths and available descriptions, builtin and keyword summaries, function sources, and alias or abbreviation expansions. Hints also work after pipes and command separators, disappear in arguments, and respect `status-reporting` settings.
+- Added regression coverage for command-hint resolution, cursor movement, literal markup escaping, and agent progress timing, animation, cancellation, and color-disabled behavior.
+
+### Changed
+
+- Replaced the agent waiting indicator with `Running [0s]: <configured command>`, showing the selected executor and elapsed time with a subtle text shimmer. Color-disabled terminals keep only the once-per-second timer, and progress resets for each request and clears on completion or cancellation.
+- Styled command-hint sources consistently with completion menus and reused cached or registered descriptions without fetching manual pages or executing prompt input while typing. Cursor-only refreshes avoid repeating syntax validation or user status callbacks.
+
 ## [1.5.6] - 2026-09-15
 
 ### Added
@@ -980,7 +992,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Included JSON prompt themes, a shared-library plugin engine, and an optional built-in AI assistant.
 - Included CMake builds, installation helpers, and shell compatibility tests.
 
-[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.6...HEAD
+[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.7...HEAD
+[1.5.7]: https://github.com/CadenFinley/cjsh/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/CadenFinley/cjsh/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/CadenFinley/cjsh/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/CadenFinley/cjsh/compare/v1.5.3...v1.5.4
