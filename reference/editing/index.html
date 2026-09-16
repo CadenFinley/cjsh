@@ -2112,6 +2112,10 @@ command run in different directories keeps a separate entry for each directory.<
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>^old^new<span class="w">      </span><span class="c1"># replace the first "old" in the previous command with "new"</span>
 </span></code></pre></div>
 <p><code>!?</code> by itself is not a complete expansion; use <code>!?text?</code> (or <code>!?text</code>) with a search string.</p>
+<p>Quick substitution requires non-empty search text: <code>^^</code> and repeated carets report an error
+instead of rerunning the previous command. The replacement may be empty (<code>^old^^</code> deletes the
+first match). A closing caret is optional; text after it is appended to the expanded command
+(for example, <code>^old^new^ extra</code>).</p>
 <p>Press <code>Alt+.</code> or <code>Alt+_</code> to insert the last argument from the previous command. Press the binding
 again to cycle through the last arguments of older history entries. You can also use <code>!$</code> when you
 want history expansion to happen as part of command submission.</p>
@@ -2155,8 +2159,8 @@ highlighter styles the prefix and the remaining natural-language request with <c
 <code>agent-request</code>; it does not interpret request punctuation as shell syntax. Both styles can be
 changed with <code>cjshopt style_def</code>. A transient <code>Running [0s]: &lt;configured command&gt;</code> status
 shows the selected executor's configured command and arguments, with elapsed seconds updating
-while it runs. A soft, left-to-right text shimmer animates only <code>Running [0s]:</code>, leaving the
-configured command unchanged. With colors disabled (including <code>NO_COLOR</code>), only the once-per-second
+while it runs. A soft, left-to-right text shimmer animates the entire status line, including the
+configured command. With colors disabled (including <code>NO_COLOR</code>), only the once-per-second
 timer updates remain. The timer and shimmer restart for each request, and the status clears before
 results or an error are displayed (or when the request is canceled).
 Use <code>Up</code>/<code>Down</code> to select a suggestion, <code>Tab</code> to insert it for review, <code>Enter</code> to submit it, or <code>Esc</code>
