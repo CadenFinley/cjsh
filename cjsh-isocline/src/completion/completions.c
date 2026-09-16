@@ -62,6 +62,9 @@ struct completions_s {
     ssize_t count;
     ssize_t len;
     completion_t* elems;
+    const char** replacement_index;  // borrowed strings; independent of elems reallocations
+    size_t replacement_index_capacity;
+    ssize_t indexed_count;
     alloc_t* mem;
     char* input;
     ssize_t input_pos;
@@ -84,6 +87,7 @@ ic_private void completions_free(completions_t* cms) {
         return;
     }
     completions_clear(cms);
+    mem_free(cms->mem, cms->replacement_index);
     if (cms->elems != NULL) {
         mem_free(cms->mem, cms->elems);
         cms->elems = NULL;
@@ -140,6 +144,11 @@ static char* completions_escape_bbcode(alloc_t* mem, const char* text) {
 }
 
 ic_private void completions_clear(completions_t* cms) {
+    if (cms->count > 0 && cms->replacement_index != NULL) {
+        memset(cms->replacement_index, 0,
+               cms->replacement_index_capacity * sizeof(*cms->replacement_index));
+    }
+    cms->indexed_count = 0;
     while (cms->count > 0) {
         completion_t* cm = cms->elems + cms->count - 1;
         mem_free(cms->mem, cm->display);
@@ -236,6 +245,64 @@ static bool completions_push(completions_t* cms, const char* replacement, const 
 ic_private ssize_t completions_count(completions_t* cms) {
     return cms->count;
 }
+
+static size_t completion_hash(const char* replacement) {
+    uint64_t hash = UINT64_C(14695981039346656037);
+    for (const unsigned char* p = (const unsigned char*)replacement; *p != 0; ++p) {
+        hash = (hash ^ *p) * UINT64_C(1099511628211);
+    }
+    return (size_t)hash;
+}
+
+static size_t completion_index_slot(const char** index, size_t capacity, const char* replacement) {
+    size_t slot = completion_hash(replacement) & (capacity - 1);
+    while (index[slot] != NULL && strcmp(index[slot], replacement) != 0) {
+        slot = (slot + 1) & (capacity - 1);
+    }
+    return slot;
+}
+
+// Keep at least half the table empty. Small hint generations need no table, and
+// allocation failure falls back to the original scan without losing completions.
+static bool completions_prepare_index(completions_t* cms) {
+    if (cms->count < 32 && cms->replacement_index == NULL) {
+        return false;
+    }
+    size_t capacity = cms->replacement_index_capacity;
+    if (capacity > (size_t)cms->count * 2 && cms->indexed_count == cms->count) {
+        return true;
+    }
+    if (capacity == 0) {
+        capacity = 128;
+    }
+    while (capacity / 2 <= (size_t)cms->count) {
+        if (capacity > (SIZE_MAX / 2) / (2 * sizeof(*cms->replacement_index))) {
+            return false;
+        }
+        capacity *= 2;
+    }
+    if (capacity != cms->replacement_index_capacity) {
+        const char** index = mem_zalloc_tp_n(cms->mem, const char*, capacity);
+        if (index == NULL) {
+            return false;
+        }
+        mem_free(cms->mem, cms->replacement_index);
+        cms->replacement_index = index;
+        cms->replacement_index_capacity = capacity;
+    } else {
+        memset(cms->replacement_index, 0, capacity * sizeof(*cms->replacement_index));
+    }
+    for (ssize_t i = 0; i < cms->count; ++i) {
+        const char* replacement = cms->elems[i].replacement;
+        if (replacement != NULL) {
+            size_t slot = completion_index_slot(cms->replacement_index, capacity, replacement);
+            cms->replacement_index[slot] = replacement;
+        }
+    }
+    cms->indexed_count = cms->count;
+    return true;
+}
+
 ic_private bool completions_add(completions_t* cms, const char* replacement, const char* display,
                                 const char* help, const char* source, ssize_t delete_before,
                                 ssize_t delete_after) {
@@ -245,11 +312,23 @@ ic_private bool completions_add(completions_t* cms, const char* replacement, con
 
     cms->completer_max--;
 
+    bool indexed = false;
+    size_t slot = 0;
     if (replacement != NULL) {
-        for (ssize_t i = 0; i < cms->count; i++) {
-            const completion_t* existing = cms->elems + i;
-            if (existing->replacement != NULL && strcmp(replacement, existing->replacement) == 0) {
+        indexed = completions_prepare_index(cms);
+        if (indexed) {
+            slot = completion_index_slot(cms->replacement_index, cms->replacement_index_capacity,
+                                         replacement);
+            if (cms->replacement_index[slot] != NULL) {
                 return true;
+            }
+        } else {
+            for (ssize_t i = 0; i < cms->count; i++) {
+                const completion_t* existing = cms->elems + i;
+                if (existing->replacement != NULL &&
+                    strcmp(replacement, existing->replacement) == 0) {
+                    return true;
+                }
             }
         }
     }
@@ -257,6 +336,10 @@ ic_private bool completions_add(completions_t* cms, const char* replacement, con
     if (!completions_push(cms, replacement, display, help, source, delete_before, delete_after)) {
         cms->completer_max++;
         return false;
+    }
+    if (indexed) {
+        cms->replacement_index[slot] = cms->elems[cms->count - 1].replacement;
+        cms->indexed_count = cms->count;
     }
     return true;
 }

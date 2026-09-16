@@ -89,6 +89,8 @@ static ssize_t char_column_width(const char* s, ssize_t n) {
         return 0;
     } else if ((uint8_t)(*s) < ' ') {
         return 0;  // also for CSI escape sequences
+    } else if ((uint8_t)(*s) < 0x7F) {
+        return 1;  // printable ASCII needs neither UTF-8 decoding nor Unicode tables
     } else {
         ssize_t w = utf8_char_width(s, n);
 #ifdef _WIN32
@@ -635,15 +637,22 @@ static ssize_t str_get_pos_at_rc(const char* s, ssize_t len, ssize_t termw, ssiz
 // String buffer
 //-------------------------------------------------------------
 static bool sbuf_ensure_extra(stringbuf_t* s, ssize_t extra) {
-    if (s->buflen >= s->count + extra) {
+    const ssize_t maxlen = (ssize_t)(SIZE_MAX / 2) - 1;  // reserve the terminating zero
+    if (extra < 0 || s->count > maxlen - extra) {
+        return false;
+    }
+    const ssize_t needed = s->count + extra;
+    if (s->buflen >= needed) {
         return true;
     }
-    // reallocate; pick good initial size and multiples to increase reuse on
-    // allocation. Use larger initial size for better performance.
-    ssize_t newlen = (s->buflen <= 0 ? 256  // Increased from 120 to 256
-                                     : (s->buflen > 1000 ? s->buflen + 1000 : 2 * s->buflen));
-    if (newlen < s->count + extra) {
-        newlen = s->count + extra;
+    // Geometric growth also applies to large pastes and rendered menus.
+    ssize_t newlen = (s->buflen <= 0 ? 256 : s->buflen);
+    if (newlen < needed) {
+        const ssize_t growth = newlen / 2;
+        newlen = (newlen > maxlen - growth ? maxlen : newlen + growth);
+        if (newlen < needed) {
+            newlen = needed;
+        }
     }
     if (s->buflen > 0) {
         debug_msg("stringbuf: reallocate: old %zd, new %zd\n", s->buflen, newlen);
@@ -651,7 +660,6 @@ static bool sbuf_ensure_extra(stringbuf_t* s, ssize_t extra) {
     char* newbuf = mem_realloc_tp(s->mem, char, s->buf,
                                   newlen + 1);  // one more for terminating zero
     if (newbuf == NULL) {
-        assert(false);
         return false;
     }
     s->buf = newbuf;

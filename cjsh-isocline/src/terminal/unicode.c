@@ -303,6 +303,9 @@ static bool unicode_is_zero_width_format(unicode_codepoint_t codepoint) {
 }
 
 int unicode_codepoint_width(unicode_codepoint_t codepoint) {
+    if (codepoint >= 0x20 && codepoint < 0x7F) {
+        return 1;
+    }
     if (!unicode_is_valid_codepoint(codepoint)) {
         return 0;
     }

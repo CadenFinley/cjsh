@@ -832,16 +832,15 @@ static void edit_history_at(ic_env_t* env, editor_t* eb, int ofs) {
         eb->modified = false;
     }
 
-    history_snapshot_t snap = (history_snapshot_t){0};
-    if (!history_snapshot_load(env->history, &snap, true)) {
+    history_snapshot_t* snap = &eb->history_snapshot;
+    if (!history_snapshot_refresh(env->history, snap, true)) {
         term_beep(env->term);
         return;
     }
 
-    ssize_t total_history = history_snapshot_count(&snap);
+    ssize_t total_history = history_snapshot_count(snap);
     if (total_history <= 0) {
         term_beep(env->term);
-        history_snapshot_free(env->history, &snap);
         return;
     }
 
@@ -870,7 +869,7 @@ static void edit_history_at(ic_env_t* env, editor_t* eb, int ofs) {
             ssize_t search_idx = current_idx + direction;
             bool match_found = false;
             while (search_idx >= 0 && search_idx < total_history) {
-                const history_entry_t* candidate_entry = history_snapshot_get(&snap, search_idx);
+                const history_entry_t* candidate_entry = history_snapshot_get(snap, search_idx);
                 if (candidate_entry == NULL || candidate_entry->command == NULL) {
                     break;
                 }
@@ -899,17 +898,15 @@ static void edit_history_at(ic_env_t* env, editor_t* eb, int ofs) {
 
         if (candidate_idx < 0 || candidate_idx >= total_history) {
             term_beep(env->term);
-            history_snapshot_free(env->history, &snap);
             return;
         }
 
         current_idx = candidate_idx;
     }
 
-    const history_entry_t* entry = history_snapshot_get(&snap, current_idx);
+    const history_entry_t* entry = history_snapshot_get(snap, current_idx);
     if (entry == NULL || entry->command == NULL) {
         term_beep(env->term);
-        history_snapshot_free(env->history, &snap);
         return;
     }
 
@@ -920,7 +917,6 @@ static void edit_history_at(ic_env_t* env, editor_t* eb, int ofs) {
     sbuf_clear(eb->extra);
 
     edit_refresh(env, eb);
-    history_snapshot_free(env->history, &snap);
 }
 
 static void edit_history_prev(ic_env_t* env, editor_t* eb) {
@@ -1305,11 +1301,10 @@ again:;
                     sort_label, mouse_suffix);
             }
         } else {
-            (void)sbuf_appendf(
-                eb->extra,
-                "[ic-info]History - case %s - scope %s - nested %s - sort %s%s[/]\n",
-                session_case_sensitive ? "sensitive" : "insensitive", scope_label, nested_label,
-                sort_label, mouse_suffix);
+            (void)sbuf_appendf(eb->extra,
+                               "[ic-info]History - case %s - scope %s - nested %s - sort %s%s[/]\n",
+                               session_case_sensitive ? "sensitive" : "insensitive", scope_label,
+                               nested_label, sort_label, mouse_suffix);
         }
 
         const bool show_empty_selection = (has_live_input && selected_idx < 0);

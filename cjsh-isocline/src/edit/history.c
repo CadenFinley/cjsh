@@ -496,6 +496,8 @@ ic_private bool history_snapshot_load(history_t* h, history_snapshot_t* snap, bo
         return false;
     }
     history_snapshot_free(h, snap);
+    snap->dedup = dedup;
+    snap->disabled = history_is_disabled(h);
     snap->max_entries = h->max_entries;
     snap->allow_duplicates = h->allow_duplicates;
     snap->directory_revision = h->directory_revision;
@@ -525,7 +527,7 @@ ic_private bool history_snapshot_load(history_t* h, history_snapshot_t* snap, bo
 
 ic_private bool history_snapshot_is_current(const history_t* h, const history_snapshot_t* snap) {
     if (h == NULL || snap == NULL || !snap->loaded || snap->max_entries != h->max_entries ||
-        snap->allow_duplicates != h->allow_duplicates ||
+        snap->disabled != history_is_disabled(h) || snap->allow_duplicates != h->allow_duplicates ||
         snap->directory_revision != h->directory_revision) {
         return false;
     }
@@ -559,6 +561,13 @@ ic_private bool history_snapshot_is_current(const history_t* h, const history_sn
 #else
     return true;
 #endif
+}
+
+ic_private bool history_snapshot_refresh(history_t* h, history_snapshot_t* snap, bool dedup) {
+    if (snap != NULL && snap->dedup == dedup && history_snapshot_is_current(h, snap)) {
+        return true;
+    }
+    return history_snapshot_load(h, snap, dedup);
 }
 
 ic_private void history_snapshot_free(history_t* h, history_snapshot_t* snap) {

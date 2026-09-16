@@ -70,6 +70,21 @@ static bool g_notify_from_completion = false;
 static bool g_flatten_completion_display = false;
 static bool g_wrap_completion_input = false;
 
+static bool history_cache_external_writer(ic_keycode_t key, void* arg) {
+    if (key != IC_KEY_F3) {
+        return false;
+    }
+    ic_env_t* env = ic_get_env();
+    history_t* writer = history_new(env->mem);
+    if (writer == NULL) {
+        return false;
+    }
+    history_load_from(writer, (const char*)arg, 200);
+    bool ok = history_push(writer, "external update");
+    history_free(writer);
+    return ok;
+}
+
 typedef struct paste_status_s {
     bool saw_complete;
     bool saw_partial;
@@ -1189,6 +1204,14 @@ static int run_case(const char* scenario) {
         ic_history_clear();
         ic_history_add("old first\n\nold middle\nold last");
         ic_history_add("new first\nnew middle\nnew last");
+    } else if (strcmp(scenario, "history_cache_external_update") == 0) {
+        ic_history_clear();
+        ic_history_add("first");
+        ic_history_add("second");
+        if (!ic_bind_key(IC_KEY_F3, IC_KEY_ACTION_RUNOFF)) {
+            return 5;
+        }
+        ic_set_unhandled_key_handler(history_cache_external_writer, (void*)history_path);
     } else if (strcmp(scenario, "history_prev") == 0 ||
                strcmp(scenario, "history_prev_prev") == 0 ||
                strcmp(scenario, "history_next_empty") == 0 ||

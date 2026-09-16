@@ -89,6 +89,9 @@ set_tests_properties(
 add_executable(isocline_behavior_tests "${CMAKE_CURRENT_SOURCE_DIR}/isocline/test_isocline_behavior.c")
 target_link_libraries(isocline_behavior_tests PRIVATE cjsh_isocline)
 
+add_executable(isocline_optimization_tests "${CMAKE_CURRENT_SOURCE_DIR}/isocline/test_isocline_optimizations.c")
+target_link_libraries(isocline_optimization_tests PRIVATE cjsh_isocline)
+
 add_executable(isocline_pty_driver "${CMAKE_CURRENT_SOURCE_DIR}/isocline/isocline_pty_driver.c")
 target_link_libraries(isocline_pty_driver PRIVATE cjsh_isocline Threads::Threads)
 
@@ -163,6 +166,7 @@ add_executable(syntax_validation_probe "${CMAKE_CURRENT_SOURCE_DIR}/core/syntax_
 target_link_libraries(syntax_validation_probe PRIVATE cjsh_core cjsh_isocline)
 
 cjsh_add_test(NAME isocline_behavior_tests COMMAND isocline_behavior_tests)
+cjsh_add_test(NAME isocline_optimization_tests COMMAND isocline_optimization_tests)
 cjsh_add_test(NAME completion_tests COMMAND completion_tests)
 cjsh_add_test(NAME syntax_highlighting_tests COMMAND syntax_highlighting_tests)
 cjsh_add_test(NAME history_expansion_tests COMMAND history_expansion_tests)
@@ -225,6 +229,12 @@ if(Python3_Interpreter_FOUND)
     cjsh_add_test(
         NAME isocline_pty_integration_tests
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/isocline/test_isocline_pty.py"
+                $<TARGET_FILE:isocline_pty_driver>
+    )
+
+    cjsh_add_test(
+        NAME isocline_optimization_pty_tests
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/isocline/test_isocline_optimizations.py"
                 $<TARGET_FILE:isocline_pty_driver>
     )
 

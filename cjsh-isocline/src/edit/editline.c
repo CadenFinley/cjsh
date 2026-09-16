@@ -73,20 +73,21 @@
 
 // editor state
 typedef struct editor_s {
-    stringbuf_t* input;           // current user input
-    stringbuf_t* extra;           // extra displayed info (for completion menu etc)
-    stringbuf_t* status;          // transient status message below the prompt
-    stringbuf_t* hint;            // hint displayed as part of the input
-    stringbuf_t* hint_help;       // help for a hint.
-    stringbuf_t* history_prefix;  // cached prefix before history navigation
-    ssize_t pos;                  // current cursor position in the input
-    ssize_t cur_rows;             // total logical rows for input and extra content
-    ssize_t input_rows;           // logical prompt/input rows before status/help content
-    ssize_t cur_row;              // logical row that has the cursor (0 based, relative to
-                                  // the prompt)
-    ssize_t view_first_row;       // first logical input row in the current viewport
-    ssize_t view_rows;            // total rows physically rendered in the current viewport
-    ssize_t view_input_rows;      // physically rendered prompt/input rows in the viewport
+    stringbuf_t* input;                   // current user input
+    stringbuf_t* extra;                   // extra displayed info (for completion menu etc)
+    stringbuf_t* status;                  // transient status message below the prompt
+    stringbuf_t* hint;                    // hint displayed as part of the input
+    stringbuf_t* hint_help;               // help for a hint.
+    stringbuf_t* history_prefix;          // cached prefix before history navigation
+    history_snapshot_t history_snapshot;  // shared by repeated Up/Down navigation
+    ssize_t pos;                          // current cursor position in the input
+    ssize_t cur_rows;                     // total logical rows for input and extra content
+    ssize_t input_rows;                   // logical prompt/input rows before status/help content
+    ssize_t cur_row;                      // logical row that has the cursor (0 based, relative to
+                                          // the prompt)
+    ssize_t view_first_row;               // first logical input row in the current viewport
+    ssize_t view_rows;                    // total rows physically rendered in the current viewport
+    ssize_t view_input_rows;              // physically rendered prompt/input rows in the viewport
     ssize_t termw;
     ssize_t termh;
     bool modified;                      // has a modification happened? (used for history navigation
@@ -560,10 +561,11 @@ ic_private char* ic_editline(ic_env_t* env, const char* prompt_text,
 //-------------------------------------------------------------
 
 // capture the current edit state
-static void editor_capture(editor_t* eb, editstate_t** es) {
+static bool editor_capture(editor_t* eb, editstate_t** es) {
     if (!eb->disable_undo) {
-        editstate_capture(eb->mem, es, sbuf_string(eb->input), eb->pos);
+        return editstate_capture(eb->mem, es, sbuf_string(eb->input), eb->pos);
     }
+    return false;
 }
 
 static void editor_undo_capture(editor_t* eb) {
@@ -574,10 +576,7 @@ static void editor_undo_forget(editor_t* eb) {
     if (eb->disable_undo) {
         return;
     }
-    const char* input = NULL;
-    ssize_t pos = 0;
-    (void)editstate_restore(eb->mem, &eb->undo, &input, &pos);
-    mem_free(eb->mem, input);
+    editstate_forget(eb->mem, &eb->undo);
 }
 
 static void editor_restore(editor_t* eb, editstate_t** from, editstate_t** to) {
@@ -588,10 +587,11 @@ static void editor_restore(editor_t* eb, editstate_t** from, editstate_t** to) {
         return;
     }
     const char* input;
-    if (to != NULL) {
-        editor_capture(eb, to);
-    }
+    const bool captured = (to != NULL && editor_capture(eb, to));
     if (!editstate_restore(eb->mem, from, &input, &eb->pos)) {
+        if (captured) {
+            editstate_forget(eb->mem, to);
+        }
         return;
     }
     sbuf_replace(eb->input, input);
@@ -3985,6 +3985,7 @@ static void edit_release_editor(ic_env_t* env, editor_t* eb) {
     sbuf_free(eb->hint);
     sbuf_free(eb->hint_help);
     sbuf_free(eb->history_prefix);
+    history_snapshot_free(env->history, &eb->history_snapshot);
     mem_free(env->mem, eb->rendered_hint_snapshot);
     mem_free(env->mem, (void*)eb->prompt_text);
     mem_free(env->mem, eb->prompt_prefix_text);
