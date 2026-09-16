@@ -238,6 +238,15 @@ def normalize_terminal_output(text: str) -> str:
     return normalized
 
 
+def assert_completion_footer_gap(output: str, rows: int, cols: int, footer: str) -> None:
+    screen = terminal_screen(output, rows, cols)
+    footer_row = next((i for i, line in enumerate(screen) if footer in line), -1)
+    if footer_row < 2 or screen[footer_row - 1].strip() or not screen[footer_row - 2].strip():
+        raise AssertionError(
+            f"completion footer should have exactly one blank row after the last item: {screen!r}"
+        )
+
+
 def terminal_state(output: str, rows: int, cols: int) -> tuple[list[str], tuple[int, int]]:
     """Replay the cursor/erase controls used by these single-column menu fixtures."""
     cells = [[" "] * cols for _ in range(rows)]
@@ -439,6 +448,7 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
             if count > 0:
                 if "tab:activate completions" not in screen or f"of {count} completions" not in screen:
                     raise AssertionError(f"expected {count} live passive completions: {screen!r}")
+                assert_completion_footer_gap(output, 24, 100, "tab:activate completions")
             elif "completions" in screen:
                 raise AssertionError(f"empty/no-match input must remove the menu: {screen!r}")
         return check
@@ -476,7 +486,7 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
         binary, "passive_menu_resize", "completion_auto_menu",
         [("send", b"s"), ("wait", "Showing 1-12 of 12 completions"),
          ("resize", (8, 100)), ("send", FOCUS_IN),
-         ("wait", "Showing 1-5 of 12 completions"), ("idle", 0.1),
+         ("wait", "Showing 1-4 of 12 completions"), ("idle", 0.1),
          ("send", b"\r")], "s", initial_cols=100,
     )
 
@@ -1168,7 +1178,7 @@ def assert_completion_preview_fits(
 
 def assert_menu_viewports(binary: str) -> None:
     menus = {
-        "completion": (b"entry\t", "Showing ", 9),
+        "completion": (b"entry\t", "Showing ", 8),
         "history": (b"\x12entry", "120 matches found", 9),
         "palette": (ALT_P + b"zzviewport", "120 actions found", 8),
         "custom": (F3, "Items (", 8),
@@ -3268,6 +3278,16 @@ def main() -> int:
             f"normalized_output={normalized_comp_footer_output!r}"
         )
 
+    for rows in (8, 24):
+        assert_resize_case(
+            binary, "completion_footer_gap", "completion_many_menu_off",
+            [("send", b"s\t"), ("wait", "enter/right:accept"), ("idle", 0.1),
+             ("check", lambda output, rows=rows: assert_completion_footer_gap(
+                 output, rows, 100, "enter/right:accept")),
+             ("send", b"\r\r")],
+            "s01", initial_rows=rows, initial_cols=100,
+        )
+
     comp_preview_first = run_case(binary, "completion_many_menu_preview", b"s\t\r\r")
     if comp_preview_first != "s01":
         raise AssertionError(
@@ -3382,8 +3402,8 @@ def main() -> int:
     normalized_comp_multiline_replacement_output = normalize_terminal_output(
         comp_multiline_replacement_output
     )
-    # With the old expand/collapse controls removed, four items fit below this preview.
-    if "Showing 1-4 of 12 completions" not in normalized_comp_multiline_replacement_output:
+    # Reserve a blank separator row as well as the footer below the preview.
+    if "Showing 1-3 of 12 completions" not in normalized_comp_multiline_replacement_output:
         raise AssertionError(
             "completion menu should reserve its footer below the multiline preview, got "
             f"normalized_output={normalized_comp_multiline_replacement_output!r}"
@@ -3434,7 +3454,7 @@ def main() -> int:
                 ("resize", (8, cols)),
                 # Wake the PTY read on platforms that restart it after SIGWINCH.
                 ("send", FOCUS_IN),
-                ("wait", "preview line 05..." if cols == 80 else "preview line 02..."),
+                ("wait", "preview line 04..." if cols == 80 else "pty> m02 first line..."),
                 ("idle", 0.1),
             ],
             initial_rows=24,
@@ -3463,7 +3483,7 @@ def main() -> int:
         tall_scenario,
         [
             ("send", b"m\t" + DOWN),
-            ("wait", "preview line 05..."),
+            ("wait", "preview line 04..."),
             ("send", b"\x1b"),
             ("idle", 0.5),
             ("send", b"\r"),

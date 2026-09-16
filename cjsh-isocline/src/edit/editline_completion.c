@@ -288,8 +288,8 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
 
     const char* footer =
         (eb->mouse_reporting_enabled
-             ? "[ic-diminish](tab:activate completions click:activate menu esc:hide)[/]"
-             : "[ic-diminish](tab:activate completions esc:hide)[/]");
+             ? "\n[ic-diminish](tab:activate completions click:activate menu esc:hide)[/]"
+             : "\n[ic-diminish](tab:activate completions esc:hide)[/]");
     const char* more = (count >= IC_MAX_COMPLETIONS_TO_TRY ? " (more available)" : "");
     char header[192];
     (void)snprintf(header, sizeof(header), "[ic-info]Showing %zd-%zd of %zd completions%s[/]\n",
@@ -455,10 +455,10 @@ static ssize_t edit_completion_preview_input_rows(ic_env_t* env, editor_t* eb, s
 
 static const char* edit_completion_menu_footer(bool more_available) {
     if (more_available) {
-        return "[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
+        return "\n[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
                "pgdn:load esc:cancel)[/]";
     }
-    return "[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
+    return "\n[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
            "pgup/pgdn:page esc:cancel)[/]";
 }
 
