@@ -1737,7 +1737,7 @@
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Limit visible multiline input rows (default: 15)</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># Independently limit menu content rows (completion: 15; history/palette/custom: 30)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># Independently limit menu content rows (default: 15 for all menus)</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>cjshopt<span class="w"> </span>completion-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>cjshopt<span class="w"> </span>history-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>cjshopt<span class="w"> </span>command-palette-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
@@ -1751,8 +1751,8 @@ command remains available for editing and submission. Completion menus and other
 laid out separately below the input viewport. The symmetric cursor margin keeps the viewport fixed
 while the cursor moves within it, uses only rows that exist in the command, and never pads the
 display with blank lines.</p>
-<p>Completion menus default to at most 15 content rows; history, command palette, and custom menus
-default to 30. These limits include expanded item previews, and menus shrink to fit the terminal. Headers and help text use separate rows.
+<p>All menus default to at most 15 content rows. These limits include expanded item previews, and
+menus shrink to fit the terminal. Headers and help text use separate rows.
 Use the per-menu <code>cjshopt</code> commands above to set independent limits, and add them to <code>~/.cjshrc</code>
 to persist them. Counts must be positive; values above 256 are clamped to 256.
 Press <strong>Ctrl+J</strong> inside any menu (including passive completion suggestions) to toggle between its
