@@ -1933,9 +1933,11 @@ there is only one match; it does not accept or insert a common prefix. When mous
 enabled at the prompt, clicking an entry also activates the menu with that entry selected.
 Clicking its header or footer activates the first entry, like Tab. The activating click never
 accepts a completion, even with <code>completion-click-accept on</code>; later clicks follow that setting.
-After accepting a completion, suggestions refresh immediately and remain visible in <strong>passive</strong>
-mode; press <code>Tab</code> or click the menu to activate them again. The menu disappears when there are no matches or the
-current line is empty. <code>Esc</code> hides the passive menu without deleting input; editing reopens it.
+After accepting a completion, suggestions refresh immediately in <strong>passive</strong> mode; press <code>Tab</code>
+or click the menu to activate them again. The menu stays hidden when the line is empty, there
+are no matches, or whitespace immediately precedes the cursor. Pressing Space or moving between
+arguments hides it until you start typing the next argument. An explicit <code>Tab</code> still opens
+completions after whitespace. <code>Esc</code> hides the passive menu without deleting input; editing reopens it.
 This mode replaces inline hints (independently of <code>cjshopt hint</code>); <code>completion-preview</code> and
 <code>completion-click-accept</code> apply once the menu is active. Add the setting to <code>~/.cjshrc</code> to persist it.</p>
 <p><strong>Using Completions (once the menu is active):</strong>
