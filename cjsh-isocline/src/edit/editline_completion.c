@@ -285,8 +285,10 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
         return;
     }
 
-    const ssize_t count = completions_generate(env, env->completions, sbuf_string(eb->input),
-                                               eb->pos, IC_MAX_COMPLETIONS_TO_TRY);
+    // Passive suggestions run on every edit. Use hint semantics to let completers reuse
+    // caches and defer process launches until Tab, while retaining the full menu budget.
+    const ssize_t count = completions_generate_hint(env, env->completions, sbuf_string(eb->input),
+                                                    eb->pos, IC_MAX_COMPLETIONS_TO_TRY);
     if (count <= 0) {
         eb->completion_menu_maximized = false;
         edit_refresh(env, eb);
@@ -296,7 +298,8 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
 
     const char* footer =
         (eb->mouse_reporting_enabled
-             ? "[ic-diminish](tab:activate completions click:activate menu ctrl+j:resize esc:hide)[/]"
+             ? "[ic-diminish](tab:activate completions click:activate menu ctrl+j:resize "
+               "esc:hide)[/]"
              : "[ic-diminish](tab:activate completions ctrl+j:resize esc:hide)[/]");
     const char* more = (count >= IC_MAX_COMPLETIONS_TO_TRY ? " (more available)" : "");
     char header[192];
@@ -304,8 +307,9 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     const ssize_t reserved_rows = edit_menu_input_rows(env, eb) +
                                   edit_menu_rendered_rows(env, eb, header) +
                                   edit_menu_rendered_rows(env, eb, footer) + 1;
-    const ssize_t available = edit_menu_available_lines(
-        env, eb, reserved_rows, 1, env->completion_menu_max_line_count, eb->completion_menu_maximized);
+    const ssize_t available =
+        edit_menu_available_lines(env, eb, reserved_rows, 1, env->completion_menu_max_line_count,
+                                  eb->completion_menu_maximized);
     const edit_menu_window_t window = edit_menu_window_for(env, count, available, -1, 0);
     const ssize_t visible = window.display_count;
     ssize_t width = edit_completions_max_width(env, count, IC_LARGE_MENU_SOURCE_LIMIT) + 6;

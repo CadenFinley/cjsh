@@ -22,6 +22,10 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Removed the shared `ic_set_menu_max_line_count()` / `ic_get_menu_max_line_count()` API and `cjshopt menu-max-lines`. Use the per-menu isocline APIs or `cjshopt` settings instead, and replace the old option in startup files.
 - Completion menus now always use the full single-column list with scrolling, paging, and mouse support. Removed the collapsed menu, its expand/collapse controls, and `cjshopt completion-menu-expanded` (including the corresponding isocline API). Remove this setting from existing startup files.
 
+### Fixed
+
+- Passive automatic completion menus now reuse the prompt's PATH cache and defer manual-page lookups and dynamic completion providers until an explicit Tab request, avoiding expensive searches on each keystroke, especially on WSL.
+
 ## [1.5.7] - 2026-09-15
 
 ### Added

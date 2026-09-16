@@ -30,6 +30,8 @@
 
 #include "undo.h"
 
+#include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -66,11 +68,15 @@ ic_private void editstate_done(alloc_t* mem, editstate_t** es) {
 }
 
 ic_private bool editstate_capture(alloc_t* mem, editstate_t** es, const char* input, ssize_t pos) {
+    const ssize_t len = (input == NULL ? 0 : ic_strlen(input));
     if (input == NULL) {
         input = "";
     }
     editstate_t* previous = *es;
-    const ssize_t len = ic_strlen(input);
+    const ssize_t maxsize = (ssize_t)(SIZE_MAX / 2);
+    if (len < 0 || len == maxsize) {
+        return false;  // the buffer capacity must also include a terminator
+    }
     ssize_t prefix = 0;
     ssize_t suffix = 0;
     if (previous != NULL) {
@@ -107,15 +113,9 @@ ic_private bool editstate_capture(alloc_t* mem, editstate_t** es, const char* in
     ssize_t capacity = (previous == NULL ? 0 : previous->capacity);
     char* buffer = (previous == NULL ? NULL : previous->input);
     if (capacity <= len) {
-        const ssize_t maxsize = (ssize_t)(SIZE_MAX / 2);
         const ssize_t growth = (capacity > 0 ? capacity / 2 : 256);
         capacity = (capacity > maxsize - growth ? maxsize : capacity + growth);
         if (capacity <= len) {
-            if (len == maxsize) {
-                mem_free(mem, removed);
-                mem_free(mem, entry);
-                return false;
-            }
             capacity = len + 1;
         }
         buffer = mem_realloc_tp(mem, char, buffer, capacity);

@@ -36,16 +36,17 @@
 #include "common.h"
 #include "completions.h"
 #include "history.h"
+#include "isocline.h"
 #include "stringbuf.h"
 #include "undo.h"
 #include "unicode.h"
 
-#define CHECK(condition)                                                    \
-    do {                                                                    \
-        if (!(condition)) {                                                 \
-            fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #condition); \
-            return false;                                                   \
-        }                                                                   \
+#define CHECK(condition)                                                          \
+    do {                                                                          \
+        if (!(condition)) {                                                       \
+            (void)fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #condition); \
+            exit(EXIT_FAILURE);                                                   \
+        }                                                                         \
     } while (0)
 
 // Track requested memory rather than wall-clock thresholds, so regression checks
@@ -186,8 +187,8 @@ static bool test_large_completions(void) {
     completions_set_completer(cms, large_completer, &fixture);
     clock_t start = clock();
     CHECK(completions_generate(NULL, cms, "", 0, fixture.count * 2) == fixture.count);
-    printf("BENCH completion_10000_with_duplicates_ms=%.3f\n",
-           1000.0 * (double)(clock() - start) / CLOCKS_PER_SEC);
+    (void)printf("BENCH completion_10000_with_duplicates_ms=%.3f\n",
+                 1000.0 * (double)(clock() - start) / CLOCKS_PER_SEC);
     CHECK(!fixture.failed && verify_completions(cms, fixture.count));
     // Exercise clearing/reuse after a large generation, and regeneration as hints.
     for (int round = 0; round < 3; ++round) {
@@ -275,9 +276,9 @@ static bool test_undo_memory_growth(void) {
         input[i] = 'x';
         input[i + 1] = '\0';
     }
-    printf("BENCH undo_10000_ms=%.3f requested_bytes=%zu peak_bytes=%zu\n",
-           1000.0 * (double)(clock() - start) / CLOCKS_PER_SEC, allocation.requested,
-           allocation.peak_bytes);
+    (void)printf("BENCH undo_10000_ms=%.3f requested_bytes=%zu peak_bytes=%zu\n",
+                 1000.0 * (double)(clock() - start) / CLOCKS_PER_SEC, allocation.requested,
+                 allocation.peak_bytes);
     CHECK(allocation.peak_bytes < 2 * 1024 * 1024);
     CHECK(allocation.requested < 3 * 1024 * 1024);
     for (ssize_t i = 9999; i >= 0; --i) {
@@ -307,7 +308,7 @@ static bool model_capture(model_stack_t* stack, const char* input, ssize_t pos) 
     CHECK(stack->count < 4096);
     char* copy = malloc(strlen(input) + 1);
     CHECK(copy != NULL);
-    strcpy(copy, input);
+    memcpy(copy, input, strlen(input) + 1);
     CHECK(editstate_capture(&allocator, &stack->actual, input, pos));
     stack->expected[stack->count++] = (model_state_t){copy, pos};
     return true;
@@ -319,7 +320,7 @@ static bool model_restore(model_stack_t* stack, char* input, ssize_t* pos) {
     const char* restored = NULL;
     CHECK(editstate_restore(&allocator, &stack->actual, &restored, pos));
     CHECK(*pos == expected.pos && strcmp(restored, expected.input) == 0);
-    strcpy(input, restored);
+    memcpy(input, restored, strlen(restored) + 1);
     tracked_free((void*)restored);
     free(expected.input);
     return true;
@@ -430,8 +431,8 @@ static bool test_stringbuf_growth_and_failure(void) {
     for (ssize_t i = 0; i < count; ++i) {
         CHECK(sbuf_insert_char_at(input, (char)('a' + i % 26), i) == i + 1);
     }
-    printf("BENCH stringbuf_1MiB_reallocations=%zu requested_bytes=%zu\n", allocation.reallocations,
-           allocation.requested);
+    (void)printf("BENCH stringbuf_1MiB_reallocations=%zu requested_bytes=%zu\n",
+                 allocation.reallocations, allocation.requested);
     CHECK(allocation.reallocations < 40);
     CHECK(allocation.requested < 5 * 1024 * 1024);
     CHECK(sbuf_len(input) == count && sbuf_string(input)[count] == '\0');
@@ -514,8 +515,8 @@ static bool test_history_cache_reuse(void) {
         CHECK(history_snapshot_refresh(history, &snap, true));
         CHECK(snap.entries == original);
     }
-    printf("BENCH cached_history_refresh_ms=%.6f allocations=%zu\n",
-           (double)(clock() - start) / CLOCKS_PER_SEC, allocation.attempts);
+    (void)printf("BENCH cached_history_refresh_ms=%.6f allocations=%zu\n",
+                 (double)(clock() - start) / CLOCKS_PER_SEC, allocation.attempts);
     CHECK(allocation.attempts == 0);
     history_snapshot_free(history, &snap);
     history_free(history);
@@ -616,12 +617,12 @@ int main(void) {
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); ++i) {
         reset_measurements();
         if (!tests[i].run() || allocation.live_blocks != 0 || allocation.live_bytes != 0) {
-            fprintf(stderr, "FAIL %s (live blocks: %zu, bytes: %zu)\n", tests[i].name,
-                    allocation.live_blocks, allocation.live_bytes);
+            (void)fprintf(stderr, "FAIL %s (live blocks: %zu, bytes: %zu)\n", tests[i].name,
+                          allocation.live_blocks, allocation.live_bytes);
             return 1;
         }
-        printf("PASS %s\n", tests[i].name);
+        (void)printf("PASS %s\n", tests[i].name);
     }
-    printf("All %zu isocline optimization tests passed\n", sizeof(tests) / sizeof(tests[0]));
+    (void)printf("All %zu isocline optimization tests passed\n", sizeof(tests) / sizeof(tests[0]));
     return 0;
 }

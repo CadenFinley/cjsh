@@ -61,6 +61,7 @@ def main(binary: str) -> None:
         ),
     ]
     for label, key_bytes, expected in compressed_undo_cases:
+        print(f"Checking {label}", flush=True)
         assert_case(binary, label, "insert_backspace", key_bytes, expected)
 
     assert_case(

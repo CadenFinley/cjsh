@@ -312,6 +312,8 @@ usual context-aware completion sources.
 
 **Automatic completion menu:** Enable `cjshopt completion-auto-menu on` to show an unselected
 list as you type. It updates on edits without extending your input or previewing a candidate.
+Passive updates reuse the prompt's PATH cache, cached documentation, and static value choices.
+Press `Tab` to refresh command lookups, fetch missing documentation, or run dynamic value providers.
 While passive, arrows edit/navigate the input, Enter submits it, and the mouse wheel does not
 scroll the menu. The first `Tab` activates the menu and selects the first candidate, even if
 there is only one match; it does not accept or insert a common prefix. When mouse clicking is

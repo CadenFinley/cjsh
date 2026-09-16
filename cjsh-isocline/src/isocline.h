@@ -881,6 +881,7 @@ bool ic_completion_preview_is_enabled(void);
 /// Empty lines, no matches, or whitespace immediately before the cursor hide the passive menu.
 /// Tab still opens completions after whitespace. Escape hides the menu until the next edit.
 /// The passive menu replaces inline hints, independently of the hint and preview settings.
+/// Passive completion callbacks report ic_completion_is_hint() so they can defer expensive work.
 /// Returns the previous setting.
 bool ic_enable_completion_auto_menu(bool enable);
 
@@ -1285,8 +1286,8 @@ const char* ic_completion_input(ic_completion_env_t* cenv, long* cursor);
 /// Get the completion argument passed to `ic_set_completer`.
 void* ic_completion_arg(const ic_completion_env_t* cenv);
 
-/// Is this an automatic inline hint? Completers should avoid expensive work
-/// such as launching processes when this returns true.
+/// Is this an automatic suggestion (inline hint or passive completion menu)?
+/// Completers should avoid expensive work such as launching processes when this returns true.
 bool ic_completion_is_hint(const ic_completion_env_t* cenv);
 
 /// Do we have already some completions?

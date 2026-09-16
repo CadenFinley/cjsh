@@ -93,7 +93,7 @@ typedef bool(ic_completion_fun_with_source_t)(ic_env_t* env, void* funenv, const
 
 struct ic_completion_env_s {
     ic_env_t* env;                  // the isocline environment
-    bool is_hint;                   // automatic hint rather than explicit completion
+    bool is_hint;                   // automatic suggestion rather than explicit completion
     const char* input;              // current full input
     long cursor;                    // current cursor position
     void* arg;                      // argument given to `ic_set_completer`

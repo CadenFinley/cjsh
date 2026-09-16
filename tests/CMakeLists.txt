@@ -271,6 +271,11 @@ if(Python3_Interpreter_FOUND)
 
     if(UNIX)
         cjsh_add_test(
+            NAME completion_auto_menu_integration_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/core/test_completion_auto_menu.py"
+                    $<TARGET_FILE:cjsh>
+        )
+        cjsh_add_test(
             NAME idle_hook_interactive_tests
             COMMAND
                 "${Python3_EXECUTABLE}"

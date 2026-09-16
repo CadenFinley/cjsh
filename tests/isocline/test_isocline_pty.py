@@ -915,6 +915,7 @@ def run_case(
     output = bytearray()
     deadline = time.monotonic() + timeout_s
     sent = False
+    sent_bytes = 0
     cursor_report_sent = False
 
     try:
@@ -934,9 +935,14 @@ def run_case(
                 and TYPEAHEAD_CAPTURE_READY_MARKER in output
             )
             if not sent and (b"pty> " in output or capture_ready):
-                if key_bytes:
-                    os.write(fd, key_bytes)
-                sent = True
+                # Nonblocking PTYs can accept only part of a large paste.
+                # Keep pumping output and retry the remaining bytes next time.
+                if sent_bytes < len(key_bytes):
+                    try:
+                        sent_bytes += os.write(fd, key_bytes[sent_bytes:])
+                    except BlockingIOError:
+                        pass
+                sent = sent_bytes == len(key_bytes)
 
             waited_pid, status = os.waitpid(pid, os.WNOHANG)
             if waited_pid == pid:
@@ -1002,6 +1008,7 @@ def run_case_timed(
     deadline = time.monotonic() + timeout_s
     next_send_at = time.monotonic() + initial_delay_s
     send_index = 0
+    chunk_offset = 0
     prompt_seen = False
     last_output_at = time.monotonic()
     reprompt_output_start: int | None = None
@@ -1027,19 +1034,24 @@ def run_case_timed(
                 ready_to_send = prompt_after_marker and (now - last_output_at) >= reprompt_idle_s
             if ready_to_send:
                 chunk_to_send = chunks[send_index]
-                os.write(fd, chunk_to_send)
-                send_index += 1
-                if (
-                    wait_for_reprompt
-                    and send_index < len(chunks)
-                    and chunk_to_send.endswith((b"\r", b"\n"))
-                ):
-                    # History triplet cases emit a marker after each hidden readline.
-                    # Wait for the marker and the following fresh prompt.
-                    reprompt_output_start = len(output)
-                else:
-                    reprompt_output_start = None
-                next_send_at = now + step_delay_s
+                try:
+                    chunk_offset += os.write(fd, chunk_to_send[chunk_offset:])
+                except BlockingIOError:
+                    pass
+                if chunk_offset == len(chunk_to_send):
+                    chunk_offset = 0
+                    send_index += 1
+                    if (
+                        wait_for_reprompt
+                        and send_index < len(chunks)
+                        and chunk_to_send.endswith((b"\r", b"\n"))
+                    ):
+                        # History triplet cases emit a marker after each hidden readline.
+                        # Wait for the marker and the following fresh prompt.
+                        reprompt_output_start = len(output)
+                    else:
+                        reprompt_output_start = None
+                    next_send_at = now + step_delay_s
 
             waited_pid, status = os.waitpid(pid, os.WNOHANG)
             if waited_pid == pid:
@@ -1147,6 +1159,9 @@ def run_resize_case(
                 elif action == "idle":
                     if time.monotonic() - last_output_at < float(value):
                         break
+                elif action == "wait_until":
+                    if not value(output.decode("utf-8", errors="replace")):
+                        break
                 elif action == "send":
                     keys = (
                         value(output.decode("utf-8", errors="replace"))
@@ -1229,6 +1244,8 @@ def run_resize_case(
             missing = f"fragment {value!r}"
         elif action == "idle":
             missing = f"idle {value!r}"
+        elif action == "wait_until":
+            missing = "expected terminal state"
         elif action == "send":
             missing = f"send {value!r}"
         else:
@@ -1310,6 +1327,21 @@ def assert_menu_viewports(binary: str) -> None:
                 # Clear the fixture completer's inserted common prefix before reopening.
                 actions += [("send", b"\x1b"), ("wait", "pty> "), ("idle", 0.1)]
             actions += [("send", reopen), ("wait", marker), ("idle", 0.1)]
+
+        def viewport_ready(output):
+            render = normalize_terminal_output(output).rsplit(marker, 1)[-1]
+            entries = [int(value) for value in re.findall(r"^[ →>]+entry(\d{3})", render, re.M)]
+            selection = re.search(r"^[→>] entry(\d{3})", render, re.M)
+            return (
+                entries == list(range(first, first + count))
+                and selection is not None
+                and int(selection.group(1)) == selected
+            )
+
+        # A quiet interval can occur halfway through a redraw when ASan or
+        # other test workers delay the driver. Observe the expected viewport
+        # before allowing the footer/cursor output to settle.
+        actions += [("wait_until", viewport_ready), ("idle", 0.1)]
         output = observe_resize_case(
             binary,
             scenario,
