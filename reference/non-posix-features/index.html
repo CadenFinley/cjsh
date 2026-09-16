@@ -1191,7 +1191,7 @@ necessary.</p>
   <code>Alt+H/J/K/L/W</code> navigation, and user-defined command bindings using <code>cjshopt keybind</code> and
   <code>cjshopt keybind ext</code>.</li>
 <li><strong>Mouse-assisted editing</strong> – <code>cjshopt mouse-clicking</code> distinguishes hard-disabled <code>all-off</code>,
-  expanded/interactive-menu-only <code>off</code>, and prompt-enabled <code>simple</code>/<code>smart</code> modes;
+  interactive-menu-only <code>off</code>, and prompt-enabled <code>simple</code>/<code>smart</code> modes;
   <code>cjshopt mouse-clicking-status-line</code> controls the status indicator. Clicking to move the cursor or
   pick menu entries is beyond POSIX scope.</li>
 <li><strong>Fish-style abbreviations</strong> – <code>abbr</code> and <code>unabbr</code> provide inline text expansions, a feature not
@@ -1224,14 +1224,14 @@ differences from Bash and Zsh.</p>
 <h2 id="completion-engine">Completion Engine</h2>
 <ul>
 <li><strong>Fuzzy matching and spell correction</strong> – Configurable through <code>cjshopt completion-case</code>,
-  <code>cjshopt completion-spell</code>, <code>cjshopt completion-spell-enter</code>, <code>cjshopt completion-preview</code>, and
-  <code>cjshopt completion-menu-expanded</code>, <code>cjshopt completion-click-accept</code>, and
+  <code>cjshopt completion-spell</code>, <code>cjshopt completion-spell-enter</code>, <code>cjshopt completion-preview</code>,
+  <code>cjshopt completion-auto-menu</code>, <code>cjshopt completion-click-accept</code>, and
   <code>cjshopt menu-highlighting</code>.</li>
 <li><strong>Man-page scraping</strong> – <code>generate-completions</code> and on-demand parsing of <code>man</code> pages populate a
   cache under <code>~/.cache/cjsh/generated_completions/</code> for rich option and subcommand help.</li>
 <li><strong>Inline preview pane &amp; source annotations</strong> – Completion menus display descriptions, origins
   (history, PATH, builtin), and exit-status tags; these are CJSH-specific niceties.</li>
-<li><strong>Pointer navigation in menus</strong> – Expanded completion and history-search menus accept mouse-wheel
+<li><strong>Pointer navigation in menus</strong> – Completion and history-search menus accept mouse-wheel
   scrolling plus click selection.</li>
 </ul>
 <p>Consult the <a href="../completions/">Completion Authoring Guide</a> for cache format and customization tips.</p>

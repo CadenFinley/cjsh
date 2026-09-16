@@ -651,10 +651,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#completion-menu-default-layout" class="md-nav__link">
+  <a href="#completion-menu-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Completion Menu Default Layout
+        Completion Menu Layout
       
     </span>
   </a>
@@ -1559,9 +1559,9 @@ Fuzzy matching powers command, path, and argument completions without additional
 <h3 id="completion-preview">Completion Preview</h3>
 <p><strong>Status:</strong> Enabled<br>
 <strong>Configure:</strong> <code>cjshopt completion-preview on|off|status</code></p>
-<h3 id="completion-menu-default-layout">Completion Menu Default Layout</h3>
-<p><strong>Status:</strong> Disabled (menus start collapsed)<br>
-<strong>Configure:</strong> <code>cjshopt completion-menu-expanded on|off|status</code></p>
+<h3 id="completion-menu-layout">Completion Menu Layout</h3>
+<p>Menus always open as a full single-column list with scrolling and paging. Use <code>PgUp</code>/<code>PgDn</code>,
+<code>Shift+Up</code>/<code>Shift+Down</code>, or the mouse wheel to navigate.</p>
 <h3 id="menu-syntax-highlighting">Menu Syntax Highlighting</h3>
 <p><strong>Status:</strong> Disabled
 <strong>Configure:</strong> <code>cjshopt menu-highlighting none|single|all|reverse|status</code></p>
@@ -1607,7 +1607,7 @@ Fuzzy matching powers command, path, and argument completions without additional
 </span></code></pre></div>
 <p>Use <code>all-off</code> to prevent mouse capture everywhere, or <code>off</code> to leave prompt editing under terminal
 control while allowing completion/history menus to capture clicks and wheel events temporarily.
-Collapsed completion lists remain non-clickable until expanded. <code>simple</code> and <code>smart</code> also enable
+<code>simple</code> and <code>smart</code> also enable
 click-to-position editing. <code>mouse-clicking-status-line</code> only controls whether the <code>Mouse clicking
 is enabled</code> indicator is shown.</p>
 <h3 id="visible-whitespace-markers">Visible Whitespace Markers</h3>
@@ -1791,17 +1791,14 @@ later history write failures disable further writes for the session after one di
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Toggle completion preview for the current session</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>off
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Open completion menus in expanded mode by default</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>cjshopt<span class="w"> </span>completion-menu-expanded<span class="w"> </span>on
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Enable inline whitespace markers</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>on
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Enable inline whitespace markers</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>on
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Add Vim-inspired navigation bindings (add to ~/.cjshrc to persist)</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>vim
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Add Vim-inspired navigation bindings (add to ~/.cjshrc to persist)</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>vim
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Increase history retention</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">20000</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Increase history retention</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">20000</span>
 </span></code></pre></div>
 <p>Run <code>cjshopt --help</code> for a complete list of interactive toggles and their detailed help screens.</p>
 

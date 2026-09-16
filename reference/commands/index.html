@@ -2011,10 +2011,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#menu-max-lines" class="md-nav__link">
+  <a href="#per-menu-height-limits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        menu-max-lines
+        Per-menu height limits
       
     </span>
   </a>
@@ -2055,10 +2055,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#completion-preview" class="md-nav__link">
+  <a href="#completion-auto-menu" class="md-nav__link">
     <span class="md-ellipsis">
       
-        completion-preview
+        completion-auto-menu
       
     </span>
   </a>
@@ -2066,10 +2066,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#completion-menu-expanded" class="md-nav__link">
+  <a href="#completion-preview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        completion-menu-expanded
+        completion-preview
       
     </span>
   </a>
@@ -3043,12 +3043,15 @@ without printing a literal newline).</p>
 - <code>current-line-number-highlight</code> - Toggle highlighting of the current line number
 - <code>multiline-start-lines</code> - Configure how many prompt lines are preallocated in multiline mode
 - <code>multiline-max-lines</code> - Limit how many multiline input rows are visible at once
-- <code>menu-max-lines</code> - Limit visible content rows in all isocline menus
+- <code>completion-menu-max-lines</code> - Limit active and passive completion menu content rows
+- <code>history-menu-max-lines</code> - Limit history menu content rows, including previews
+- <code>command-palette-max-lines</code> - Limit command palette content rows
+- <code>custom-menu-max-lines</code> - Limit custom menu content rows, including previews
 - <code>multiline-bottom-lines</code> - Configure the input and menu scroll margin
 - <code>hint-delay</code> - Set hint display delay in milliseconds
 - <code>idle-timeout</code> - Run idle hooks after a period without terminal input
+- <code>completion-auto-menu</code> - Show passive completions while typing; Tab activates the menu
 - <code>completion-preview</code> - Configure completion preview
-- <code>completion-menu-expanded</code> - Open completion menus in expanded mode by default
 - <code>completion-click-accept</code> - Configure whether click interactions accept completion candidates
 - <code>menu-highlighting</code> - Syntax-highlight completion and history menu items
 - <code>visible-whitespace</code> - Toggle visible whitespace characters in the editor
@@ -3276,40 +3279,54 @@ space and do not count toward this limit.</p>
 </span></code></pre></div>
 <p>Values are clamped to the supported range of 1 through 256. Add the command to <code>~/.cjshrc</code> to
 persist the setting across sessions.</p>
-<h4 id="menu-max-lines">menu-max-lines</h4>
-<p>Limit visible content rows in completion, history, command palette, and custom menus. The default
-is 50 rows, including expanded item previews. Headers and help text use separate rows, and menus
-shrink to fit the terminal.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-96-1"><a id="__codelineno-96-1" name="__codelineno-96-1" href="#__codelineno-96-1"></a>cjshopt<span class="w"> </span>menu-max-lines<span class="w"> </span><span class="m">8</span><span class="w">       </span><span class="c1"># Show up to eight menu content rows</span>
-</span><span id="__span-96-2"><a id="__codelineno-96-2" name="__codelineno-96-2" href="#__codelineno-96-2"></a>cjshopt<span class="w"> </span>menu-max-lines<span class="w"> </span><span class="m">50</span><span class="w">      </span><span class="c1"># Restore the default</span>
-</span><span id="__span-96-3"><a id="__codelineno-96-3" name="__codelineno-96-3" href="#__codelineno-96-3"></a>cjshopt<span class="w"> </span>menu-max-lines<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current limit</span>
+<h4 id="per-menu-height-limits">Per-menu height limits</h4>
+<p>Set independent content-row limits with these commands:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-96-1"><a id="__codelineno-96-1" name="__codelineno-96-1" href="#__codelineno-96-1"></a>cjshopt<span class="w"> </span>completion-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-96-2"><a id="__codelineno-96-2" name="__codelineno-96-2" href="#__codelineno-96-2"></a>cjshopt<span class="w"> </span>history-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-96-3"><a id="__codelineno-96-3" name="__codelineno-96-3" href="#__codelineno-96-3"></a>cjshopt<span class="w"> </span>command-palette-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-96-4"><a id="__codelineno-96-4" name="__codelineno-96-4" href="#__codelineno-96-4"></a>cjshopt<span class="w"> </span>custom-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span></code></pre></div>
-<p>The count must be a positive integer; values above 256 are clamped to 256. Add the command to
-<code>~/.cjshrc</code> to persist the setting. Use <code>cjshopt multiline-bottom-lines</code> to adjust the shared
-scroll margin, which defaults to 3 rows.</p>
+<p>Completion menus default to <strong>15 rows</strong>. History, command palette, and custom menus default to
+<strong>30 rows</strong> each. Counts must be positive integers; values above <strong>256</strong> are clamped
+to 256. Expanded item previews count toward the limit, but headers and help text use separate
+rows. Menus always shrink to fit the terminal. The completion setting applies to both active
+menus and passive suggestions shown while typing.</p>
+<p>For example, add these commands to <code>~/.cjshrc</code> to persist different heights:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-97-1"><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>cjshopt<span class="w"> </span>completion-menu-max-lines<span class="w"> </span><span class="m">8</span>
+</span><span id="__span-97-2"><a id="__codelineno-97-2" name="__codelineno-97-2" href="#__codelineno-97-2"></a>cjshopt<span class="w"> </span>history-menu-max-lines<span class="w"> </span><span class="m">20</span>
+</span><span id="__span-97-3"><a id="__codelineno-97-3" name="__codelineno-97-3" href="#__codelineno-97-3"></a>cjshopt<span class="w"> </span>command-palette-max-lines<span class="w"> </span><span class="m">12</span>
+</span><span id="__span-97-4"><a id="__codelineno-97-4" name="__codelineno-97-4" href="#__codelineno-97-4"></a>cjshopt<span class="w"> </span>custom-menu-max-lines<span class="w"> </span><span class="m">16</span>
+</span></code></pre></div>
+<p>Use <code>cjshopt history-menu-max-lines status</code> (or <code>--status</code>) to inspect a setting, and <code>--help</code>
+for each command's usage. Changing one limit does not change the others, the multiline input
+height, or the shared <code>multiline-bottom-lines</code> scroll margin.</p>
+<p>Inside a menu, <strong>Ctrl+J</strong> temporarily toggles between its configured height and all available
+terminal space. It does not change the configured setting and resets when the menu closes.
+The old shared <code>cjshopt menu-max-lines</code> option is no longer supported; replace it in startup
+files with the desired per-menu settings.</p>
 <h4 id="multiline-bottom-lines">multiline-bottom-lines</h4>
 <p>Configure a symmetric cursor margin within the multiline viewport. The editor keeps up to this many
 existing input rows visible below the cursor when moving down and above it when moving up. The
 viewport stays fixed while the cursor is within those margins. It does not add blank rows when the
 command has less remaining content. The default is 3. This setting also controls the scroll margin
 around the selected item in completion, history, command palette, and custom menus.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-97-1"><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-98-1"><a id="__codelineno-98-1" name="__codelineno-98-1" href="#__codelineno-98-1"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-98-1"><a id="__codelineno-98-1" name="__codelineno-98-1" href="#__codelineno-98-1"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span><span class="m">3</span><span class="w">      </span><span class="c1"># Keep a three-row cursor margin</span>
-</span><span id="__span-98-2"><a id="__codelineno-98-2" name="__codelineno-98-2" href="#__codelineno-98-2"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span><span class="m">0</span><span class="w">      </span><span class="c1"># Disable the cursor margin</span>
-</span><span id="__span-98-3"><a id="__codelineno-98-3" name="__codelineno-98-3" href="#__codelineno-98-3"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the current margin</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-99-1"><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span><span class="m">3</span><span class="w">      </span><span class="c1"># Keep a three-row cursor margin</span>
+</span><span id="__span-99-2"><a id="__codelineno-99-2" name="__codelineno-99-2" href="#__codelineno-99-2"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span><span class="m">0</span><span class="w">      </span><span class="c1"># Disable the cursor margin</span>
+</span><span id="__span-99-3"><a id="__codelineno-99-3" name="__codelineno-99-3" href="#__codelineno-99-3"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the current margin</span>
 </span></code></pre></div>
 <p>Values are clamped to the supported range of 0 through 256. Add the command to <code>~/.cjshrc</code> to
 persist the setting across sessions.</p>
 <h4 id="hint-delay">hint-delay</h4>
 <p>Configure the delay (in milliseconds) before inline hints are displayed. This controls how quickly the shell shows suggestions and hints as you type.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-99-1"><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span>&lt;milliseconds<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-100-1"><a id="__codelineno-100-1" name="__codelineno-100-1" href="#__codelineno-100-1"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span>&lt;milliseconds<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-100-1"><a id="__codelineno-100-1" name="__codelineno-100-1" href="#__codelineno-100-1"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">100</span><span class="w">     </span><span class="c1"># Set hint delay to 100 milliseconds</span>
-</span><span id="__span-100-2"><a id="__codelineno-100-2" name="__codelineno-100-2" href="#__codelineno-100-2"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">0</span><span class="w">       </span><span class="c1"># Show hints immediately</span>
-</span><span id="__span-100-3"><a id="__codelineno-100-3" name="__codelineno-100-3" href="#__codelineno-100-3"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current delay</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-101-1"><a id="__codelineno-101-1" name="__codelineno-101-1" href="#__codelineno-101-1"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">100</span><span class="w">     </span><span class="c1"># Set hint delay to 100 milliseconds</span>
+</span><span id="__span-101-2"><a id="__codelineno-101-2" name="__codelineno-101-2" href="#__codelineno-101-2"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">0</span><span class="w">       </span><span class="c1"># Show hints immediately</span>
+</span><span id="__span-101-3"><a id="__codelineno-101-3" name="__codelineno-101-3" href="#__codelineno-101-3"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current delay</span>
 </span></code></pre></div>
 <ul>
 <li>Accepted input: any non-negative integer</li>
@@ -3320,41 +3337,47 @@ persist the setting across sessions.</p>
 <h4 id="idle-timeout">idle-timeout</h4>
 <p>Configure how many seconds the interactive prompt waits without terminal input before running
 registered <code>idle</code> hooks. The feature is disabled by default.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-101-1"><a id="__codelineno-101-1" name="__codelineno-101-1" href="#__codelineno-101-1"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>&lt;seconds<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-102-1"><a id="__codelineno-102-1" name="__codelineno-102-1" href="#__codelineno-102-1"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>&lt;seconds<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-102-1"><a id="__codelineno-102-1" name="__codelineno-102-1" href="#__codelineno-102-1"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span><span class="m">120</span><span class="w">     </span><span class="c1"># Run idle hooks after two minutes</span>
-</span><span id="__span-102-2"><a id="__codelineno-102-2" name="__codelineno-102-2" href="#__codelineno-102-2"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable idle detection</span>
-</span><span id="__span-102-3"><a id="__codelineno-102-3" name="__codelineno-102-3" href="#__codelineno-102-3"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-103-1"><a id="__codelineno-103-1" name="__codelineno-103-1" href="#__codelineno-103-1"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span><span class="m">120</span><span class="w">     </span><span class="c1"># Run idle hooks after two minutes</span>
+</span><span id="__span-103-2"><a id="__codelineno-103-2" name="__codelineno-103-2" href="#__codelineno-103-2"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable idle detection</span>
+</span><span id="__span-103-3"><a id="__codelineno-103-3" name="__codelineno-103-3" href="#__codelineno-103-3"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>The editor restores canonical terminal state before the hooks run, gives foreground terminal
 control to commands they launch, and restores pending input and its cursor position afterward.
 The timeout is active only when at least one <code>idle</code> hook is registered, and it is ignored in
 non-interactive, <code>--secure</code>, and <code>--posix</code> sessions. See <a href="../hooks/">Shell Hooks</a> for a Drift
 screensaver example.</p>
+<h4 id="completion-auto-menu">completion-auto-menu</h4>
+<p>Show a live, unselected completion menu while typing. Disabled by default.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-104-1"><a id="__codelineno-104-1" name="__codelineno-104-1" href="#__codelineno-104-1"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>on<span class="w">      </span><span class="c1"># Show suggestions automatically</span>
+</span><span id="__span-104-2"><a id="__codelineno-104-2" name="__codelineno-104-2" href="#__codelineno-104-2"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>off<span class="w">     </span><span class="c1"># Open completions only on request (default)</span>
+</span><span id="__span-104-3"><a id="__codelineno-104-3" name="__codelineno-104-3" href="#__codelineno-104-3"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+</span></code></pre></div>
+<p>The menu is passive until <code>Tab</code> or a mouse click activates it. The first Tab selects the first
+candidate without accepting it or inserting a common prefix, including when only one candidate
+exists. With mouse clicking enabled at the prompt, clicking an entry activates and selects it;
+clicking the header or footer selects the first entry. The activating click never accepts,
+regardless of <code>completion-click-accept</code>. Mouse-disabled/menu-only capture modes still require Tab.
+Scrolling, mouse selection/click acceptance, and Enter/Right/End acceptance then follow the
+normal completion-menu settings. After acceptance, the updated menu remains visible but returns
+to passive mode, so Enter submits your input and Tab or a menu click activates completions again. No matches or
+an empty current line hide the menu. Escape hides it until the next edit without clearing input.</p>
+<p>This replaces inline hints while enabled and works even with <code>hint off</code>. Completion preview is
+only shown after activation. Add <code>cjshopt completion-auto-menu on</code> to <code>~/.cjshrc</code> to persist it.
+The isocline API exposes <code>ic_enable_completion_auto_menu()</code> and
+<code>ic_completion_auto_menu_is_enabled()</code> for the same setting.</p>
 <h4 id="completion-preview">completion-preview</h4>
 <p>Toggle the completion preview feature, which shows a preview of the selected completion as you navigate through completion options.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-103-1"><a id="__codelineno-103-1" name="__codelineno-103-1" href="#__codelineno-103-1"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-105-1"><a id="__codelineno-105-1" name="__codelineno-105-1" href="#__codelineno-105-1"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-104-1"><a id="__codelineno-104-1" name="__codelineno-104-1" href="#__codelineno-104-1"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on<span class="w">      </span><span class="c1"># Enable completion preview</span>
-</span><span id="__span-104-2"><a id="__codelineno-104-2" name="__codelineno-104-2" href="#__codelineno-104-2"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable completion preview</span>
-</span><span id="__span-104-3"><a id="__codelineno-104-3" name="__codelineno-104-3" href="#__codelineno-104-3"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-106-1"><a id="__codelineno-106-1" name="__codelineno-106-1" href="#__codelineno-106-1"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on<span class="w">      </span><span class="c1"># Enable completion preview</span>
+</span><span id="__span-106-2"><a id="__codelineno-106-2" name="__codelineno-106-2" href="#__codelineno-106-2"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable completion preview</span>
+</span><span id="__span-106-3"><a id="__codelineno-106-3" name="__codelineno-106-3" href="#__codelineno-106-3"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>The subcommand accepts synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code>. Add to <code>~/.cjshrc</code> to persist the preference.</p>
-<h4 id="completion-menu-expanded">completion-menu-expanded</h4>
-<p>Control whether the completion menu opens in expanded mode immediately. When enabled, pressing <code>Tab</code>
-for multi-match completions starts in the full single-column list instead of the compact collapsed
-grid. <strong>Disabled by default.</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-105-1"><a id="__codelineno-105-1" name="__codelineno-105-1" href="#__codelineno-105-1"></a>cjshopt<span class="w"> </span>completion-menu-expanded<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
-</span></code></pre></div>
-<p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-106-1"><a id="__codelineno-106-1" name="__codelineno-106-1" href="#__codelineno-106-1"></a>cjshopt<span class="w"> </span>completion-menu-expanded<span class="w"> </span>on<span class="w">      </span><span class="c1"># Start completion menus expanded</span>
-</span><span id="__span-106-2"><a id="__codelineno-106-2" name="__codelineno-106-2" href="#__codelineno-106-2"></a>cjshopt<span class="w"> </span>completion-menu-expanded<span class="w"> </span>off<span class="w">     </span><span class="c1"># Start completion menus collapsed (default)</span>
-</span><span id="__span-106-3"><a id="__codelineno-106-3" name="__codelineno-106-3" href="#__codelineno-106-3"></a>cjshopt<span class="w"> </span>completion-menu-expanded<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
-</span></code></pre></div>
-<p>The subcommand accepts synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code>. Add to
-<code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="completion-click-accept">completion-click-accept</h4>
 <p>Control whether mouse clicks immediately accept completion hints and completion-menu entries.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-107-1"><a id="__codelineno-107-1" name="__codelineno-107-1" href="#__codelineno-107-1"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
@@ -3523,13 +3546,12 @@ no longer accepted; <code>0</code> and <code>1</code> are literal marker charact
 <h4 id="mouse-clicking">mouse-clicking</h4>
 <p>Configure mouse capture separately for prompt editing and interactive menus.
 The default is <code>off</code>, which leaves ordinary prompt interaction to the terminal while retaining
-mouse support inside expanded completion, history, and command-palette menus. Collapsed completion
-lists remain under terminal control and their items are not clickable in this mode.</p>
+mouse support inside completion, history, and command-palette menus.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-130-1"><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>&lt;all-off<span class="p">|</span>off<span class="p">|</span>simple<span class="p">|</span>smart<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-131-1"><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>all-off<span class="w"> </span><span class="c1"># Never capture mouse events, including inside menus</span>
-</span><span id="__span-131-2"><a id="__codelineno-131-2" name="__codelineno-131-2" href="#__codelineno-131-2"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>off<span class="w">     </span><span class="c1"># Keep editing native; capture only in expanded/interactive menus</span>
+</span><span id="__span-131-2"><a id="__codelineno-131-2" name="__codelineno-131-2" href="#__codelineno-131-2"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>off<span class="w">     </span><span class="c1"># Keep editing native; capture only in interactive menus</span>
 </span><span id="__span-131-3"><a id="__codelineno-131-3" name="__codelineno-131-3" href="#__codelineno-131-3"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>simple<span class="w">  </span><span class="c1"># Capture mouse events until manually toggled</span>
 </span><span id="__span-131-4"><a id="__codelineno-131-4" name="__codelineno-131-4" href="#__codelineno-131-4"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>smart<span class="w">   </span><span class="c1"># Auto-suspend for terminal selection and resume for editing</span>
 </span><span id="__span-131-5"><a id="__codelineno-131-5" name="__codelineno-131-5" href="#__codelineno-131-5"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>

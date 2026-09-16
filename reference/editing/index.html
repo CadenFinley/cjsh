@@ -1737,23 +1737,32 @@
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Limit visible multiline input rows (default: 15)</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># Limit visible menu content rows (default: 50)</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>cjshopt<span class="w"> </span>menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1"># Configure the input and menu scroll margin (default: 3)</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># Independently limit menu content rows (completion: 15; history/palette/custom: 30)</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>cjshopt<span class="w"> </span>completion-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>cjshopt<span class="w"> </span>history-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>cjshopt<span class="w"> </span>command-palette-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>cjshopt<span class="w"> </span>custom-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># Configure the input and menu scroll margin (default: 3)</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span></code></pre></div><p></p>
 <p>When a command exceeds the viewport limit, the visible rows scroll with the cursor while the full
 command remains available for editing and submission. Completion menus and other helper rows are
 laid out separately below the input viewport. The symmetric cursor margin keeps the viewport fixed
 while the cursor moves within it, uses only rows that exist in the command, and never pads the
 display with blank lines.</p>
-<p>Completion, history, command palette, and custom menus default to at most 50 content rows, including
-expanded item previews, and shrink to fit the terminal. Headers and help text use separate rows.
-Use <code>cjshopt menu-max-lines</code> to change the limit. The isocline API also exposes it through
-<code>ic_set_menu_max_line_count()</code> and
-<code>ic_get_menu_max_line_count()</code>. Menus use the same <code>multiline-bottom-lines</code> scroll margin (3 by
-default) around the selected item.</p>
+<p>Completion menus default to at most 15 content rows; history, command palette, and custom menus
+default to 30. These limits include expanded item previews, and menus shrink to fit the terminal. Headers and help text use separate rows.
+Use the per-menu <code>cjshopt</code> commands above to set independent limits, and add them to <code>~/.cjshrc</code>
+to persist them. Counts must be positive; values above 256 are clamped to 256.
+Press <strong>Ctrl+J</strong> inside any menu (including passive completion suggestions) to toggle between its
+configured height and all available terminal space. The toggle resets when the menu closes and
+does not alter its configured limit. Outside menus, Ctrl+J still inserts a newline.</p>
+<p>Embedding applications can set independent limits through <code>ic_set_completion_menu_max_line_count()</code>,
+<code>ic_set_history_menu_max_line_count()</code>, <code>ic_set_command_palette_max_line_count()</code>, and
+<code>ic_set_custom_menu_max_line_count()</code>, with matching <code>ic_get_*</code> functions. Each limit clamps to
+1 through 256. The shared menu-height API and <code>cjshopt menu-max-lines</code> have been removed.
+Menus use the same <code>multiline-bottom-lines</code> scroll margin (3 by default) around the selected item.</p>
 <p><strong>Multiline Detection:</strong>
 CJ's Shell automatically enters multiline mode when:
 - A line ends with a backslash (<code>\</code>)
@@ -1869,15 +1878,15 @@ The syntax highlighter can be temporarily disabled with the <code>--no-syntax-hi
 - Empty-prompt history suggestions ranked by last use, then frequency
 - Source attribution (shows where completions come from)
 - Preview of selected completion
-- Optional expanded-by-default completion menu layout
+- Full single-column completion menu with scrolling and paging
 - Automatic expansion with auto-tab</p>
 <p>Need to author new entries or override the defaults? Check the <a href="../completions/">Completion Authoring Guide</a> for cache formats, nested command support, and manual customization tips.</p>
 <p><strong>Configuration:</strong>
-</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Enable/disable completion preview (enabled by default)</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Show passive completions while typing; Tab activates the menu (disabled by default)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Open completion menus expanded by default (disabled by default)</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>cjshopt<span class="w"> </span>completion-menu-expanded<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Enable/disable completion preview (enabled by default)</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Control whether mouse clicks immediately accept completion entries</span>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># (disabled by default)</span>
@@ -1911,13 +1920,28 @@ timestamp are ordered by frequency, then by their position in the history file (
 first). Entries without valid timestamps follow dated entries. If history is disabled, missing,
 or has no eligible entries, no completions are shown. Typing a command or path prefix uses the
 usual context-aware completion sources.</p>
-<p><strong>Using Completions:</strong>
-- Press <code>Tab</code> to show completions
+<p><strong>Automatic completion menu:</strong> Enable <code>cjshopt completion-auto-menu on</code> to show an unselected
+list as you type. It updates on edits without extending your input or previewing a candidate.
+While passive, arrows edit/navigate the input, Enter submits it, and the mouse wheel does not
+scroll the menu. The first <code>Tab</code> activates the menu and selects the first candidate, even if
+there is only one match; it does not accept or insert a common prefix. When mouse clicking is
+enabled at the prompt, clicking an entry also activates the menu with that entry selected.
+Clicking its header or footer activates the first entry, like Tab. The activating click never
+accepts a completion, even with <code>completion-click-accept on</code>; later clicks follow that setting.
+After accepting a completion, suggestions refresh immediately and remain visible in <strong>passive</strong>
+mode; press <code>Tab</code> or click the menu to activate them again. The menu disappears when there are no matches or the
+current line is empty. <code>Esc</code> hides the passive menu without deleting input; editing reopens it.
+This mode replaces inline hints (independently of <code>cjshopt hint</code>); <code>completion-preview</code> and
+<code>completion-click-accept</code> apply once the menu is active. Add the setting to <code>~/.cjshrc</code> to persist it.</p>
+<p><strong>Using Completions (once the menu is active):</strong>
+- Press <code>Tab</code> to show/activate completions
 - Press <code>Tab</code> again to cycle through options
 - Use arrow keys to navigate the completion menu
 - Press <code>Enter</code> to accept a completion
 - Press <code>Esc</code> to cancel
-- In expanded menus, use the mouse wheel to scroll and click entries to select/accept
+- Menus always open as a full single-column list; use <code>PgUp</code>/<code>PgDn</code> or <code>Shift+Up</code>/<code>Shift+Down</code>
+  to page through entries (when more results are available, <code>PgDn</code> loads them)
+- Use the mouse wheel to scroll and click entries to select/accept
   (<code>cjshopt completion-click-accept off</code> keeps click selection but requires Enter/Right/End to accept)
 - Completion entries stay on one row. With completion preview enabled, the selected command appears
   at the prompt; oversized previews end with <code>...</code> to keep the prompt and menu controls visible.
@@ -2022,13 +2046,12 @@ Press <code>F1</code> at any time to display the complete key binding cheat shee
 - <code>off</code> is the default mode
 - In the editor buffer, left-click moves the cursor to the clicked position
 - In <code>off</code> mode, editing remains under terminal control while interactive menus temporarily capture
-  clicks and wheel events; collapsed completion lists remain non-clickable and <code>all-off</code> prevents
-  capture everywhere
+  clicks and wheel events; <code>all-off</code> prevents capture everywhere
 - In <code>smart</code> mode, starting a selection in the prompt/gutter or status rows, or dragging with the
   left mouse button, suspends mouse capture so the terminal can highlight text. The display stays
   in place while selecting. A reported button release resumes capture without clearing the
   highlight; the next click or keyboard input resumes repainting
-- Expanded completion, history, and command-palette menus temporarily capture mouse events in every
+- Completion, history, and command-palette menus temporarily capture mouse events in every
   mode except <code>all-off</code>
 - Clicking the prompt, menu header/help, or any area outside the selectable menu rows temporarily
   releases mouse capture; keyboard input or returning focus to the terminal restores it
@@ -2500,32 +2523,31 @@ Commands can pre-populate the input buffer (used by <code>fc</code> command for 
 </span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>
 </span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># Completion settings</span>
 </span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on
-</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>cjshopt<span class="w"> </span>completion-menu-expanded<span class="w"> </span>off
-</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>off
-</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>off<span class="w">  </span><span class="c1"># Case-insensitive completions</span>
-</span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on
-</span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>off
-</span><span id="__span-30-14"><a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a>
-</span><span id="__span-30-15"><a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a><span class="c1"># Hint settings</span>
-</span><span id="__span-30-16"><a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>on
-</span><span id="__span-30-17"><a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">100</span><span class="w">  </span><span class="c1"># 100ms delay before showing hints</span>
-</span><span id="__span-30-18"><a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a>
-</span><span id="__span-30-19"><a id="__codelineno-30-19" name="__codelineno-30-19" href="#__codelineno-30-19"></a><span class="c1"># Help settings</span>
-</span><span id="__span-30-20"><a id="__codelineno-30-20" name="__codelineno-30-20" href="#__codelineno-30-20"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>on
-</span><span id="__span-30-21"><a id="__codelineno-30-21" name="__codelineno-30-21" href="#__codelineno-30-21"></a>
-</span><span id="__span-30-22"><a id="__codelineno-30-22" name="__codelineno-30-22" href="#__codelineno-30-22"></a><span class="c1"># History</span>
-</span><span id="__span-30-23"><a id="__codelineno-30-23" name="__codelineno-30-23" href="#__codelineno-30-23"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">10000</span>
-</span><span id="__span-30-24"><a id="__codelineno-30-24" name="__codelineno-30-24" href="#__codelineno-30-24"></a>
-</span><span id="__span-30-25"><a id="__codelineno-30-25" name="__codelineno-30-25" href="#__codelineno-30-25"></a><span class="c1"># Key bindings</span>
-</span><span id="__span-30-26"><a id="__codelineno-30-26" name="__codelineno-30-26" href="#__codelineno-30-26"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>emacs
-</span><span id="__span-30-27"><a id="__codelineno-30-27" name="__codelineno-30-27" href="#__codelineno-30-27"></a>
-</span><span id="__span-30-28"><a id="__codelineno-30-28" name="__codelineno-30-28" href="#__codelineno-30-28"></a><span class="c1"># Syntax highlighting styles</span>
-</span><span id="__span-30-29"><a id="__codelineno-30-29" name="__codelineno-30-29" href="#__codelineno-30-29"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>keyword<span class="w"> </span><span class="s2">"bold blue"</span>
-</span><span id="__span-30-30"><a id="__codelineno-30-30" name="__codelineno-30-30" href="#__codelineno-30-30"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>system<span class="w"> </span><span class="s2">"green"</span>
-</span><span id="__span-30-31"><a id="__codelineno-30-31" name="__codelineno-30-31" href="#__codelineno-30-31"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>ic-error<span class="w"> </span><span class="s2">"bold red"</span>
-</span><span id="__span-30-32"><a id="__codelineno-30-32" name="__codelineno-30-32" href="#__codelineno-30-32"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>string<span class="w"> </span><span class="s2">"#ffaa00"</span>
-</span><span id="__span-30-33"><a id="__codelineno-30-33" name="__codelineno-30-33" href="#__codelineno-30-33"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>comment<span class="w"> </span><span class="s2">"italic #888888"</span>
-</span><span id="__span-30-34"><a id="__codelineno-30-34" name="__codelineno-30-34" href="#__codelineno-30-34"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>operator<span class="w"> </span><span class="s2">"bold"</span>
+</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>off
+</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>off<span class="w">  </span><span class="c1"># Case-insensitive completions</span>
+</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on
+</span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>off
+</span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a>
+</span><span id="__span-30-14"><a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a><span class="c1"># Hint settings</span>
+</span><span id="__span-30-15"><a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>on
+</span><span id="__span-30-16"><a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">100</span><span class="w">  </span><span class="c1"># 100ms delay before showing hints</span>
+</span><span id="__span-30-17"><a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a>
+</span><span id="__span-30-18"><a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a><span class="c1"># Help settings</span>
+</span><span id="__span-30-19"><a id="__codelineno-30-19" name="__codelineno-30-19" href="#__codelineno-30-19"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>on
+</span><span id="__span-30-20"><a id="__codelineno-30-20" name="__codelineno-30-20" href="#__codelineno-30-20"></a>
+</span><span id="__span-30-21"><a id="__codelineno-30-21" name="__codelineno-30-21" href="#__codelineno-30-21"></a><span class="c1"># History</span>
+</span><span id="__span-30-22"><a id="__codelineno-30-22" name="__codelineno-30-22" href="#__codelineno-30-22"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">10000</span>
+</span><span id="__span-30-23"><a id="__codelineno-30-23" name="__codelineno-30-23" href="#__codelineno-30-23"></a>
+</span><span id="__span-30-24"><a id="__codelineno-30-24" name="__codelineno-30-24" href="#__codelineno-30-24"></a><span class="c1"># Key bindings</span>
+</span><span id="__span-30-25"><a id="__codelineno-30-25" name="__codelineno-30-25" href="#__codelineno-30-25"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>emacs
+</span><span id="__span-30-26"><a id="__codelineno-30-26" name="__codelineno-30-26" href="#__codelineno-30-26"></a>
+</span><span id="__span-30-27"><a id="__codelineno-30-27" name="__codelineno-30-27" href="#__codelineno-30-27"></a><span class="c1"># Syntax highlighting styles</span>
+</span><span id="__span-30-28"><a id="__codelineno-30-28" name="__codelineno-30-28" href="#__codelineno-30-28"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>keyword<span class="w"> </span><span class="s2">"bold blue"</span>
+</span><span id="__span-30-29"><a id="__codelineno-30-29" name="__codelineno-30-29" href="#__codelineno-30-29"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>system<span class="w"> </span><span class="s2">"green"</span>
+</span><span id="__span-30-30"><a id="__codelineno-30-30" name="__codelineno-30-30" href="#__codelineno-30-30"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>ic-error<span class="w"> </span><span class="s2">"bold red"</span>
+</span><span id="__span-30-31"><a id="__codelineno-30-31" name="__codelineno-30-31" href="#__codelineno-30-31"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>string<span class="w"> </span><span class="s2">"#ffaa00"</span>
+</span><span id="__span-30-32"><a id="__codelineno-30-32" name="__codelineno-30-32" href="#__codelineno-30-32"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>comment<span class="w"> </span><span class="s2">"italic #888888"</span>
+</span><span id="__span-30-33"><a id="__codelineno-30-33" name="__codelineno-30-33" href="#__codelineno-30-33"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>operator<span class="w"> </span><span class="s2">"bold"</span>
 </span></code></pre></div>
 <h3 id="minimal-configuration">Minimal Configuration</h3>
 <p>For a minimal, fast setup (<code>--minimal</code> disables colors, completions and completion learning, syntax highlighting, smart <code>cd</code>, rc sourcing, the title line, history expansion, the status line, multiline line numbers, the startup time banner, error suggestions, prompt vars, and special lifecycle handlers):</p>

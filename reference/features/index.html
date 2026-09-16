@@ -1213,10 +1213,14 @@ POSIX, Bash, or Zsh behavior is not identical.</p>
 <li><strong>Browser shortcut</strong> – Press <code>Alt+O</code> to search the current buffer on the web or open its URL,
     using <code>$BROWSER</code> or the system launcher, then continue at a fresh, empty prompt.</li>
 <li><strong>Mouse-aware editing</strong> – Configure capture with <code>cjshopt mouse-clicking</code>: <code>all-off</code> disables it
-    everywhere, <code>off</code> limits it to expanded/interactive menus, and <code>simple</code>/<code>smart</code> also support
-    prompt cursor placement. Collapsed completions are not clickable in <code>off</code>; clicks can select
-    expanded completion/history entries, and <code>cjshopt completion-click-accept</code> controls whether
+    everywhere, <code>off</code> limits it to interactive menus, and <code>simple</code>/<code>smart</code> also support
+    prompt cursor placement. Clicks can select completion/history entries,
+    and <code>cjshopt completion-click-accept</code> controls whether
     clicks accept completion entries.</li>
+<li><strong>Automatic completion menu</strong> – Opt in with <code>cjshopt completion-auto-menu on</code> to show passive
+    suggestions while typing. Tab activates selection, scrolling, and acceptance; with prompt mouse
+    clicking enabled, clicking the menu also activates it without accepting. After acceptance,
+    the updated menu stays visible in passive mode until Tab or a click activates it again.</li>
 <li><strong>Typeahead capture</strong> – Keystrokes entered while a command runs are buffered and replayed when the prompt returns so you never lose input.</li>
 <li><strong>Abbreviations</strong> – <code>abbr</code>/<code>unabbr</code> provide fish-style expansions for frequently typed snippets.</li>
 </ul>
@@ -1243,7 +1247,7 @@ for full details.</p>
 <li><code>cjshopt multiline</code>, <code>cjshopt multiline-indent</code>, <code>cjshopt line-numbers</code>,
     <code>cjshopt multiline-start-lines</code>, <code>cjshopt multiline-max-lines</code>,
     <code>cjshopt multiline-bottom-lines</code></li>
-<li><code>cjshopt completion-preview</code>, <code>cjshopt completion-menu-expanded</code>,
+<li><code>cjshopt completion-auto-menu</code>, <code>cjshopt completion-preview</code>,
       <code>cjshopt completion-click-accept</code>, <code>cjshopt menu-highlighting</code>,
       <code>cjshopt completion-case</code>, <code>cjshopt completion-spell</code>, <code>cjshopt completion-spell-enter</code>,
       <code>cjshopt completion-learning</code>, <code>cjshopt auto-tab</code></li>
