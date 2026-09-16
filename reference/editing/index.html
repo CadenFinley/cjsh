@@ -1763,6 +1763,11 @@ does not alter its configured limit. Outside menus, Ctrl+J still inserts a newli
 <code>ic_set_custom_menu_max_line_count()</code>, with matching <code>ic_get_*</code> functions. Each limit clamps to
 1 through 256. The shared menu-height API and <code>cjshopt menu-max-lines</code> have been removed.
 Menus use the same <code>multiline-bottom-lines</code> scroll margin (3 by default) around the selected item.</p>
+<p>When a menu has more items than fit on screen, a scrollbar appears beside its item rows. Click
+above or below the thumb to page, or drag the thumb to scroll. Releasing it keeps the menu open.
+These interactions use the existing menu mouse settings; <code>mouse-clicking all-off</code> leaves the
+scrollbar visible for keyboard navigation. Passive completion suggestions show the scrollbar;
+press <strong>Tab</strong> or click the menu to activate it before scrolling interactively.</p>
 <p><strong>Multiline Detection:</strong>
 CJ's Shell automatically enters multiline mode when:
 - A line ends with a backslash (<code>\</code>)
