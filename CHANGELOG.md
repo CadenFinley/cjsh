@@ -13,10 +13,13 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Added
 
+- Added independent isocline menu-height setters/getters for completion, history, command palette, and custom menus, exposed through `cjshopt completion-menu-max-lines`, `history-menu-max-lines`, `command-palette-max-lines`, and `custom-menu-max-lines` (`<count|status>`). Ctrl+J inside any menu temporarily toggles between its configured limit and all available terminal space; closing the menu resets the toggle.
 - Added opt-in `cjshopt completion-auto-menu on|off|status` and matching isocline APIs. Typing shows an unselected, live completion list; Tab activates navigation, mouse interaction, preview, and acceptance without inserting a common prefix or accepting a lone match. With prompt mouse clicking enabled, clicking a passive entry activates and selects it; header/footer clicks select the first entry. The activating click never accepts. After acceptance, refreshed suggestions stay visible in passive mode until Tab or another menu click activates them.
 
 ### Changed
 
+- Menu content-row defaults are now 15 for completions and 30 for history, command palette, and custom menus. Per-menu `cjshopt` overrides and the temporary Ctrl+J height toggle remain available.
+- Removed the shared `ic_set_menu_max_line_count()` / `ic_get_menu_max_line_count()` API and `cjshopt menu-max-lines`. Use the per-menu isocline APIs or `cjshopt` settings instead, and replace the old option in startup files.
 - Completion menus now always use the full single-column list with scrolling, paging, and mouse support. Removed the collapsed menu, its expand/collapse controls, and `cjshopt completion-menu-expanded` (including the corresponding isocline API). Remove this setting from existing startup files.
 
 ## [1.5.7] - 2026-09-15

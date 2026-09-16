@@ -1109,7 +1109,7 @@ static void edit_yank_last_arg(ic_env_t* env, editor_t* eb) {
 
 static const char* const k_history_menu_footer =
     "[ic-diminish](↑↓/wheel:navigate shift+↑/↓:page enter:run tab:edit alt+c:case "
-    "alt+d:directory alt+n:nested alt+s:sort esc:cancel)[/]";
+    "alt+d:directory alt+n:nested alt+s:sort ctrl+j:resize esc:cancel)[/]";
 
 static void edit_history_fuzzy_search(ic_env_t* env, editor_t* eb, char* initial) {
     history_snapshot_t snap = {0};
@@ -1328,7 +1328,8 @@ again:;
         ssize_t footer_rows =
             (!env->no_help ? edit_menu_rendered_rows(env, eb, k_history_menu_footer) : 0);
         ssize_t reserved_rows = edit_menu_input_rows(env, eb) + last_status_rows + footer_rows + 1;
-        ssize_t available_lines = edit_menu_available_lines(env, eb, reserved_rows, 1);
+        ssize_t available_lines = edit_menu_available_lines(
+            env, eb, reserved_rows, 1, env->history_menu_max_line_count, menu_session.maximized);
 
         ssize_t rows_for_items = available_lines;
         ssize_t selected_preview_limit = 0;

@@ -783,7 +783,10 @@ Available subcommands:
 - `current-line-number-highlight` - Toggle highlighting of the current line number
 - `multiline-start-lines` - Configure how many prompt lines are preallocated in multiline mode
 - `multiline-max-lines` - Limit how many multiline input rows are visible at once
-- `menu-max-lines` - Limit visible content rows in all isocline menus
+- `completion-menu-max-lines` - Limit active and passive completion menu content rows
+- `history-menu-max-lines` - Limit history menu content rows, including previews
+- `command-palette-max-lines` - Limit command palette content rows
+- `custom-menu-max-lines` - Limit custom menu content rows, including previews
 - `multiline-bottom-lines` - Configure the input and menu scroll margin
 - `hint-delay` - Set hint display delay in milliseconds
 - `idle-timeout` - Run idle hooks after a period without terminal input
@@ -1140,21 +1143,40 @@ cjshopt multiline-max-lines status # Show the current limit
 Values are clamped to the supported range of 1 through 256. Add the command to `~/.cjshrc` to
 persist the setting across sessions.
 
-#### menu-max-lines
+#### Per-menu height limits
 
-Limit visible content rows in completion, history, command palette, and custom menus. The default
-is 50 rows, including expanded item previews. Headers and help text use separate rows, and menus
-shrink to fit the terminal.
+Set independent content-row limits with these commands:
 
 ```bash
-cjshopt menu-max-lines 8       # Show up to eight menu content rows
-cjshopt menu-max-lines 50      # Restore the default
-cjshopt menu-max-lines status  # Show the current limit
+cjshopt completion-menu-max-lines <count|status>
+cjshopt history-menu-max-lines <count|status>
+cjshopt command-palette-max-lines <count|status>
+cjshopt custom-menu-max-lines <count|status>
 ```
 
-The count must be a positive integer; values above 256 are clamped to 256. Add the command to
-`~/.cjshrc` to persist the setting. Use `cjshopt multiline-bottom-lines` to adjust the shared
-scroll margin, which defaults to 3 rows.
+Completion menus default to **15 rows**. History, command palette, and custom menus default to
+**30 rows** each. Counts must be positive integers; values above **256** are clamped
+to 256. Expanded item previews count toward the limit, but headers and help text use separate
+rows. Menus always shrink to fit the terminal. The completion setting applies to both active
+menus and passive suggestions shown while typing.
+
+For example, add these commands to `~/.cjshrc` to persist different heights:
+
+```bash
+cjshopt completion-menu-max-lines 8
+cjshopt history-menu-max-lines 20
+cjshopt command-palette-max-lines 12
+cjshopt custom-menu-max-lines 16
+```
+
+Use `cjshopt history-menu-max-lines status` (or `--status`) to inspect a setting, and `--help`
+for each command's usage. Changing one limit does not change the others, the multiline input
+height, or the shared `multiline-bottom-lines` scroll margin.
+
+Inside a menu, **Ctrl+J** temporarily toggles between its configured height and all available
+terminal space. It does not change the configured setting and resets when the menu closes.
+The old shared `cjshopt menu-max-lines` option is no longer supported; replace it in startup
+files with the desired per-menu settings.
 
 #### multiline-bottom-lines
 

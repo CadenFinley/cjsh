@@ -274,6 +274,7 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     sbuf_clear(eb->extra);
     eb->completion_auto_menu_visible = false;
     if (edit_current_line_is_empty(eb) || eb->pos <= 0) {
+        eb->completion_menu_maximized = false;
         edit_refresh(env, eb);
         return;
     }
@@ -281,6 +282,7 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     const ssize_t count = completions_generate(env, env->completions, sbuf_string(eb->input),
                                                eb->pos, IC_MAX_COMPLETIONS_TO_TRY);
     if (count <= 0) {
+        eb->completion_menu_maximized = false;
         edit_refresh(env, eb);
         return;
     }
@@ -288,8 +290,8 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
 
     const char* footer =
         (eb->mouse_reporting_enabled
-             ? "\n[ic-diminish](tab:activate completions click:activate menu esc:hide)[/]"
-             : "\n[ic-diminish](tab:activate completions esc:hide)[/]");
+             ? "\n[ic-diminish](tab:activate completions click:activate menu ctrl+j:resize esc:hide)[/]"
+             : "\n[ic-diminish](tab:activate completions ctrl+j:resize esc:hide)[/]");
     const char* more = (count >= IC_MAX_COMPLETIONS_TO_TRY ? " (more available)" : "");
     char header[192];
     (void)snprintf(header, sizeof(header), "[ic-info]Showing %zd-%zd of %zd completions%s[/]\n",
@@ -297,7 +299,8 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     const ssize_t reserved_rows = edit_menu_input_rows(env, eb) +
                                   edit_menu_rendered_rows(env, eb, header) +
                                   edit_menu_rendered_rows(env, eb, footer);
-    const ssize_t available = edit_menu_available_lines(env, eb, reserved_rows, 1);
+    const ssize_t available = edit_menu_available_lines(
+        env, eb, reserved_rows, 1, env->completion_menu_max_line_count, eb->completion_menu_maximized);
     const edit_menu_window_t window = edit_menu_window_for(env, count, available, -1, 0);
     const ssize_t visible = window.display_count;
     ssize_t width = edit_completions_max_width(env, count, IC_LARGE_MENU_SOURCE_LIMIT) + 6;
@@ -456,10 +459,10 @@ static ssize_t edit_completion_preview_input_rows(ic_env_t* env, editor_t* eb, s
 static const char* edit_completion_menu_footer(bool more_available) {
     if (more_available) {
         return "\n[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
-               "pgdn:load esc:cancel)[/]";
+               "pgdn:load ctrl+j:resize esc:cancel)[/]";
     }
     return "\n[ic-diminish](↑↓/tab/wheel:move shift+↑/↓:page enter/right:accept "
-           "pgup/pgdn:page esc:cancel)[/]";
+           "pgup/pgdn:page ctrl+j:resize esc:cancel)[/]";
 }
 
 static ssize_t edit_completion_menu_header_rows(ic_env_t* env, editor_t* eb, ssize_t count,
@@ -664,8 +667,9 @@ again:
         total_rows = 1;
     }
 
-    const ssize_t rows_for_items =
-        edit_menu_available_lines(env, eb, rendered_input_rows + header_rows + footer_rows, 1);
+    const ssize_t rows_for_items = edit_menu_available_lines(
+        env, eb, rendered_input_rows + header_rows + footer_rows, 1,
+        env->completion_menu_max_line_count, eb->completion_menu_maximized);
     const edit_menu_window_t window =
         edit_menu_window_for(env, total_rows, rows_for_items, selected, scroll_offset);
     const ssize_t rows_visible = window.display_count;
@@ -784,6 +788,12 @@ read_key:
 
     if (edit_menu_mouse_prepare_key(env, eb, c, true, &menu_mouse_scroll_enabled,
                                     &menu_mouse_suspended)) {
+        c = 0;
+        goto again;
+    }
+
+    if (c == KEY_LINEFEED) {
+        eb->completion_menu_maximized = !eb->completion_menu_maximized;
         c = 0;
         goto again;
     }
@@ -1059,6 +1069,7 @@ cleanup:
     }
 
     eb->completion_menu_active = false;
+    eb->completion_menu_maximized = false;
     if (env->completion_auto_menu) {
         sbuf_clear(eb->extra);
         sbuf_clear(eb->hint);

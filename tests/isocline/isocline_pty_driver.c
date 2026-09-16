@@ -841,12 +841,37 @@ static int run_case(const char* scenario) {
         (void)ic_set_hint_delay(0);
         ic_set_default_completer(pty_completion_dispatcher, NULL);
     } else if (strncmp(scenario, "menu_viewport_", 14) == 0) {
-        if (strstr(scenario, "_limit") != NULL) {
-            (void)ic_set_menu_max_line_count(8);
+        size_t limit = 50;  // explicit viewport fixture, independent of production defaults
+        if (strstr(scenario, "_default") != NULL) {
+            if (strstr(scenario, "_completion") != NULL) {
+                limit = ic_get_completion_menu_max_line_count();
+            } else if (strstr(scenario, "_history") != NULL) {
+                limit = ic_get_history_menu_max_line_count();
+            } else if (strstr(scenario, "_palette") != NULL) {
+                limit = ic_get_command_palette_max_line_count();
+            } else {
+                limit = ic_get_custom_menu_max_line_count();
+            }
+        } else if (strstr(scenario, "_limit") != NULL) {
+            limit = 8;
         } else if (strstr(scenario, "_large") != NULL) {
-            (void)ic_set_menu_max_line_count(75);
+            limit = 75;
         } else if (strstr(scenario, "_single") != NULL) {
-            (void)ic_set_menu_max_line_count(1);
+            limit = 1;
+        }
+        // Deliberately give the other menus different limits to catch cross-menu coupling.
+        (void)ic_set_completion_menu_max_line_count(2);
+        (void)ic_set_history_menu_max_line_count(3);
+        (void)ic_set_command_palette_max_line_count(4);
+        (void)ic_set_custom_menu_max_line_count(5);
+        if (strstr(scenario, "_completion") != NULL) {
+            (void)ic_set_completion_menu_max_line_count(limit);
+        } else if (strstr(scenario, "_history") != NULL) {
+            (void)ic_set_history_menu_max_line_count(limit);
+        } else if (strstr(scenario, "_palette") != NULL) {
+            (void)ic_set_command_palette_max_line_count(limit);
+        } else {
+            (void)ic_set_custom_menu_max_line_count(limit);
         }
         if (strstr(scenario, "_completion") != NULL) {
             ic_set_default_completer(pty_menu_viewport_completer, NULL);
@@ -903,7 +928,7 @@ static int run_case(const char* scenario) {
             prompt_text = "AUTO-MENU-PREFIX\npty";
         }
         if (strstr(scenario, "_limit") != NULL) {
-            (void)ic_set_menu_max_line_count(3);
+            (void)ic_set_completion_menu_max_line_count(3);
         }
         if (strstr(scenario, "_single") != NULL) {
             g_completion_mode = COMPLETION_MODE_SINGLE;

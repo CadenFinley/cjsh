@@ -632,7 +632,10 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                              "Toggle current line number highlighting"),
              make_subcommand("multiline-start-lines", "Set default multiline prompt height"),
              make_subcommand("multiline-max-lines", "Limit visible multiline input rows"),
-             make_subcommand("menu-max-lines", "Limit visible menu content rows"),
+             make_subcommand("completion-menu-max-lines", "Limit completion menu content rows"),
+             make_subcommand("history-menu-max-lines", "Limit history menu content rows"),
+             make_subcommand("command-palette-max-lines", "Limit command palette content rows"),
+             make_subcommand("custom-menu-max-lines", "Limit custom menu content rows"),
              make_subcommand("multiline-bottom-lines", "Set the input and menu scroll margin"),
 
              make_subcommand("hint-delay", "Adjust inline hint delay"),
@@ -920,8 +923,14 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                 {make_subcommand("status", "Show current multiline height")});
         add_doc("cjshopt-multiline-max-lines", "",
                 {make_subcommand("status", "Show the multiline viewport limit")});
-        add_doc("cjshopt-menu-max-lines", "Limit visible menu content rows",
-                {make_subcommand("status", "Show the menu height limit")});
+        add_doc("cjshopt-completion-menu-max-lines", "Limit completion menu content rows",
+                {make_subcommand("status", "Show the completion menu height limit")});
+        add_doc("cjshopt-history-menu-max-lines", "Limit history menu content rows",
+                {make_subcommand("status", "Show the history menu height limit")});
+        add_doc("cjshopt-command-palette-max-lines", "Limit command palette content rows",
+                {make_subcommand("status", "Show the command palette height limit")});
+        add_doc("cjshopt-custom-menu-max-lines", "Limit custom menu content rows",
+                {make_subcommand("status", "Show the custom menu height limit")});
         add_doc("cjshopt-multiline-bottom-lines", "",
                 {make_subcommand("status", "Show the cursor scroll margin")});
         return map;

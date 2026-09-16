@@ -152,7 +152,10 @@ struct ic_env_s {
     size_t multiline_start_line_count;   // prefill multiline prompts with this many lines
     size_t multiline_max_line_count;     // maximum visible input rows in multiline mode
     size_t multiline_bottom_line_count;  // content-row margin around the cursor or menu selection
-    size_t menu_max_line_count;          // maximum visible menu content rows
+    size_t completion_menu_max_line_count;  // maximum visible content rows per menu
+    size_t history_menu_max_line_count;
+    size_t command_palette_max_line_count;
+    size_t custom_menu_max_line_count;
     long hint_delay;                     // delay before displaying a hint in milliseconds
     long idle_timeout;                   // inactivity timeout in milliseconds (0 disables)
 

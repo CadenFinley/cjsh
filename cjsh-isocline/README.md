@@ -88,11 +88,20 @@ Users can type to fuzzy-filter labels, descriptions, and keywords. Up/Down, Ctrl
 Shift+Up/Down, Enter/Tab, Escape, Alt+C, and menu mouse interactions follow the existing Isocline
 menu controls.
 
-All menus default to a maximum of 50 visible content rows, including expanded previews, and shrink
-to fit the terminal. Use `ic_set_menu_max_line_count(count)` to change the limit (1 through 256)
-and `ic_get_menu_max_line_count()` to read it. Headers and help text use separate rows. Menus share
-the multiline scroll margin configured by `ic_set_multiline_bottom_line_count()`, which defaults
-to 3 rows around the selection.
+Completion menus default to a maximum of 15 visible content rows; history, command palette, and
+custom menus default to 30. These limits include expanded previews, and menus shrink to fit the terminal. Each menu has independent setters/getters (limits clamp to 1 through 256):
+
+| Menu | Setter | Getter |
+| --- | --- | --- |
+| Completion (active and passive) | `ic_set_completion_menu_max_line_count(count)` | `ic_get_completion_menu_max_line_count()` |
+| History | `ic_set_history_menu_max_line_count(count)` | `ic_get_history_menu_max_line_count()` |
+| Command palette | `ic_set_command_palette_max_line_count(count)` | `ic_get_command_palette_max_line_count()` |
+| Custom | `ic_set_custom_menu_max_line_count(count)` | `ic_get_custom_menu_max_line_count()` |
+
+Each setter returns its previous limit. Ctrl+J toggles the open menu between its configured height
+and all available terminal space. This does not change the configured limit and resets when the
+menu closes. Headers and help text use separate rows. Menus share the multiline scroll margin
+configured by `ic_set_multiline_bottom_line_count()`, which defaults to 3 rows around the selection.
 
 ## Testing
 

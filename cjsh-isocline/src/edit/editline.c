@@ -95,6 +95,7 @@ typedef struct editor_s {
     bool refresh_suppressed;            // batch screen updates during high-volume input
     bool refresh_pending;               // remember to refresh when suppression lifts
     bool completion_auto_menu_visible;  // passive list owned by the main editor
+    bool completion_menu_maximized;     // reset when the active/passive menu closes
     bool completion_menu_active;        // an interactive completion menu owns input
     ssize_t completion_auto_menu_header_rows;  // passive layout used for click activation
     ssize_t completion_auto_menu_item_rows;
@@ -4300,6 +4301,12 @@ edit_loop_entry:
                 continue;
             }
 
+            if (eb.completion_auto_menu_visible && c == KEY_LINEFEED) {
+                eb.completion_menu_maximized = !eb.completion_menu_maximized;
+                edit_refresh_completion_auto_menu(env, &eb);
+                continue;
+            }
+
             // clear hint only after a potential resize (so resize row calculations
             // are correct)
             const bool had_hint = (sbuf_len(eb.hint) > 0);
@@ -4315,6 +4322,7 @@ edit_loop_entry:
                 base_key != KEY_EVENT_MOUSE_WHEEL_DOWN && base_key != KEY_EVENT_FOCUS_IN &&
                 base_key != KEY_EVENT_FOCUS_OUT) {
                 eb.completion_auto_menu_visible = false;
+                eb.completion_menu_maximized = false;
                 sbuf_clear(eb.extra);
                 completions_clear(env->completions);
                 if (code_is_virt_key(c)) {

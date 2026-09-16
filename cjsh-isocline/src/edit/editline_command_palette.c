@@ -34,6 +34,10 @@
 
 #define MAX_COMMAND_PALETTE_RESULTS 128
 
+static const char* const k_command_palette_footer =
+    "[ic-diminish](↑↓/wheel:navigate shift+↑/↓:page enter/tab:run alt+c:case "
+    "ctrl+j:resize esc:cancel)[/]";
+
 typedef struct command_palette_action_entry_s {
     ic_key_action_t action;
     const char* name;
@@ -435,7 +439,11 @@ again:;
         }
 
         ssize_t term_width = term_get_width(env->term);
-        ssize_t available_lines = edit_menu_available_lines(env, eb, 4, 3);
+        const ssize_t reserved_rows =
+            edit_menu_input_rows(env, eb) + edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra)) +
+            (!env->no_help ? edit_menu_rendered_rows(env, eb, k_command_palette_footer) : 0) + 1;
+        ssize_t available_lines = edit_menu_available_lines(
+            env, eb, reserved_rows, 1, env->command_palette_max_line_count, menu_session.maximized);
         edit_menu_window_t window =
             edit_menu_window_for(env, match_count, available_lines, selected_idx, scroll_offset);
         ssize_t display_count = window.display_count;
@@ -568,9 +576,7 @@ again:;
     }
 
     if (!env->no_help) {
-        (void)sbuf_append(eb->extra,
-                          "[ic-diminish](↑↓/wheel:navigate shift+↑/↓:page enter/tab:run alt+c:case "
-                          "esc:cancel)[/]");
+        (void)sbuf_append(eb->extra, k_command_palette_footer);
     }
 
     edit_refresh(env, eb);

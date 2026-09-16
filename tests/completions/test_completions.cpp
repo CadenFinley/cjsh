@@ -2204,15 +2204,22 @@ static bool test_builtin_docs() {
         has_entry(multiline_max_lines_doc, "status", builtin_completions::EntryKind::Subcommand),
         test_name, "multiline-max-lines should include status subcommand");
 
+    for (const std::string command : {"completion-menu-max-lines", "history-menu-max-lines",
+                                      "command-palette-max-lines", "custom-menu-max-lines"}) {
+        EXPECT_TRUE(has_entry(cjshopt_doc, command, builtin_completions::EntryKind::Subcommand),
+                    test_name, "cjshopt should include each per-menu height subcommand");
+        const auto* menu_doc =
+            builtin_completions::lookup_builtin_command_doc("cjshopt-" + command);
+        EXPECT_TRUE(menu_doc != nullptr, test_name, "per-menu height documentation should exist");
+        EXPECT_TRUE(has_entry(menu_doc, "status", builtin_completions::EntryKind::Subcommand),
+                    test_name, "per-menu height subcommands should complete status");
+    }
+
     EXPECT_TRUE(
-        has_entry(cjshopt_doc, "menu-max-lines", builtin_completions::EntryKind::Subcommand),
-        test_name, "cjshopt should include menu-max-lines subcommand");
-    const auto* menu_max_lines_doc =
-        builtin_completions::lookup_builtin_command_doc("cjshopt-menu-max-lines");
-    EXPECT_TRUE(menu_max_lines_doc != nullptr, test_name,
-                "cjshopt-menu-max-lines doc should exist");
-    EXPECT_TRUE(has_entry(menu_max_lines_doc, "status", builtin_completions::EntryKind::Subcommand),
-                test_name, "menu-max-lines should include status subcommand");
+        !has_entry(cjshopt_doc, "menu-max-lines", builtin_completions::EntryKind::Subcommand),
+        test_name, "cjshopt should not include the removed menu-max-lines subcommand");
+    EXPECT_TRUE(builtin_completions::lookup_builtin_command_doc("cjshopt-menu-max-lines") == nullptr,
+                test_name, "removed menu-max-lines documentation should not exist");
 
     const auto* exit_confirmation_doc =
         builtin_completions::lookup_builtin_command_doc("cjshopt-exit-confirmation");

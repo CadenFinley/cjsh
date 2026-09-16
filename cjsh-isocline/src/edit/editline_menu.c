@@ -29,6 +29,7 @@
 /* Shared helpers for editline menus. This file is included in editline.c. */
 
 typedef struct edit_menu_session_s {
+    bool maximized;  // temporary for this invocation, never changes configured limits
     const char* prompt_text;
     const char* inline_right_text;
     bool prompt_replacement;
@@ -684,7 +685,7 @@ static ssize_t edit_menu_input_rows(ic_env_t* env, editor_t* eb) {
 }
 
 static ssize_t edit_menu_available_lines(ic_env_t* env, editor_t* eb, ssize_t reserved_rows,
-                                         ssize_t min_lines) {
+                                         ssize_t min_lines, size_t max_lines, bool maximized) {
     if (env == NULL || eb == NULL) {
         return min_lines;
     }
@@ -693,8 +694,8 @@ static ssize_t edit_menu_available_lines(ic_env_t* env, editor_t* eb, ssize_t re
     if (available_lines < min_lines) {
         available_lines = min_lines;
     }
-    if (available_lines > (ssize_t)env->menu_max_line_count) {
-        available_lines = (ssize_t)env->menu_max_line_count;
+    if (!maximized && available_lines > (ssize_t)max_lines) {
+        available_lines = (ssize_t)max_lines;
     }
     return available_lines;
 }
@@ -729,7 +730,7 @@ static edit_menu_window_t edit_menu_window_for(ic_env_t* env, ssize_t item_count
     }
 
     const editline_viewport_t viewport =
-        editline_viewport_for(item_count, 0, selected_idx, requested_rows, env->menu_max_line_count,
+        editline_viewport_for(item_count, 0, selected_idx, requested_rows, (size_t)requested_rows,
                               env->multiline_bottom_line_count, scroll_offset);
     edit_menu_window_t window = {
         .display_count = viewport.input_row_count,
@@ -1289,8 +1290,15 @@ static bool edit_menu_read_event(ic_env_t* env, editor_t* eb, edit_menu_session_
         (void)edit_resize(env, eb);
     }
     sbuf_clear(eb->extra);
-    return !edit_menu_mouse_prepare_key(env, eb, *key, true, &session->mouse_scroll_enabled,
-                                        &session->mouse_suspended);
+    if (edit_menu_mouse_prepare_key(env, eb, *key, true, &session->mouse_scroll_enabled,
+                                    &session->mouse_suspended)) {
+        return false;
+    }
+    if (*key == KEY_LINEFEED) {
+        session->maximized = !session->maximized;
+        return false;  // redraw without changing the query or selection
+    }
+    return true;
 }
 
 static edit_menu_input_t edit_menu_handle_input(ic_env_t* env, editor_t* eb, code_t key,

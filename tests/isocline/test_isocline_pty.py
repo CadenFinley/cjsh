@@ -438,7 +438,26 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
 
     _, output = run_case(binary, "completion_auto_menu_limit", b"s\r", capture_output=True)
     if "Showing 1-3 of 12 completions" not in output or "s04" in output:
-        raise AssertionError(f"passive menu must respect menu-max-lines: {output!r}")
+        raise AssertionError(f"passive menu must respect its completion row limit: {output!r}")
+
+    def check_passive_height(count: int):
+        def check(output: str) -> None:
+            screen = "\n".join(terminal_screen(output, 24, 100))
+            if f"Showing 1-{count} of 12 completions" not in screen:
+                raise AssertionError(f"expected {count} passive content rows: {screen!r}")
+            if "pty> s" not in screen or "→" in screen or "ctrl+j:resize" not in screen:
+                raise AssertionError(f"Ctrl+J must not activate or edit the passive menu: {screen!r}")
+        return check
+
+    assert_resize_case(
+        binary, "passive_height_toggle", "completion_auto_menu_limit",
+        [("send", b"s"), ("idle", 0.1), ("check", check_passive_height(3)),
+         ("send", b"\n"), ("idle", 0.1), ("check", check_passive_height(12)),
+         ("send", b"\n"), ("idle", 0.1), ("check", check_passive_height(3)),
+         ("send", b"\n"), ("idle", 0.1), ("send", b"\x1b"), ("idle", 0.3),
+         ("send", b"x\x7f"), ("idle", 0.1), ("check", check_passive_height(3)),
+         ("send", b"\r")], "s", initial_cols=100,
+    )
 
     def check_passive(expected_input: str, count: int):
         def check(output: str) -> None:
@@ -1180,17 +1199,27 @@ def assert_menu_viewports(binary: str) -> None:
     menus = {
         "completion": (b"entry\t", "Showing ", 8),
         "history": (b"\x12entry", "120 matches found", 9),
-        "palette": (ALT_P + b"zzviewport", "120 actions found", 8),
-        "custom": (F3, "Items (", 8),
+        "palette": (ALT_P + b"zzviewport", "120 actions found", 9),
+        "custom": (F3, "Items (", 9),
     }
 
-    def check(kind, keys, first, count, selected, suffix="", rows=80):
+    def check(kind, keys, first, count, selected, suffix="", rows=80, reopen=None,
+              resize_to=None):
         opening, marker, _ = menus[kind]
         scenario = "menu_viewport_" + kind + suffix
+        actions = [("send", opening + keys), ("wait", marker), ("idle", 0.1)]
+        if resize_to is not None:
+            actions += [("resize", (resize_to, 160)), ("send", FOCUS_IN), ("idle", 0.2)]
+        if reopen is not None:
+            actions += [("send", b"\x1b"), ("idle", 0.3)]
+            if kind == "completion":
+                # Clear the fixture completer's inserted common prefix before reopening.
+                actions += [("send", b"\x1b"), ("idle", 0.3)]
+            actions += [("send", reopen), ("idle", 0.1)]
         output = observe_resize_case(
             binary,
             scenario,
-            [("send", opening + keys), ("wait", marker), ("idle", 0.1)],
+            actions,
             initial_rows=rows,
             initial_cols=160,
         )
@@ -1207,8 +1236,24 @@ def assert_menu_viewports(binary: str) -> None:
         return render
 
     for kind, (_, _, short_count) in menus.items():
+        default_rows = 15 if kind == "completion" else 30
+        check(kind, b"", 0, default_rows, 0, suffix="_default")
+        check(kind, b"\n", 0, 68 + short_count, 0, suffix="_default")
+        check(kind, b"\n\n", 0, default_rows, 0, suffix="_default")
         check(kind, b"", 0, 50, 0)
         check(kind, b"", 0, 8, 0, suffix="_limit")
+        # Ctrl+J bypasses only this invocation's cap, then restores it without moving selection.
+        check(kind, b"\n", 0, 68 + short_count, 0, suffix="_limit")
+        check(kind, b"\n\n", 0, 8, 0, suffix="_limit")
+        check(kind, b"\n", 0, short_count, 0, suffix="_limit", resize_to=12)
+        check(kind, b"\n", 0, 68 + short_count, 0, suffix="_limit", rows=12, resize_to=80)
+        check(kind, DOWN * 4 + b"\n\n", 0, 8, 4, suffix="_limit")
+        # Expanding with fewer results than terminal rows must not create blank items.
+        check(kind, b"\n", 0, 120, 0, suffix="_limit", rows=160)
+        # Closing and reopening resets the temporary height even after maximizing.
+        reopen = {"completion": b"entry\t", "history": b"\x12entry",
+                  "palette": ALT_P + b"zzviewport", "custom": F3}[kind]
+        check(kind, b"\n", 0, 8, 0, suffix="_limit", reopen=reopen)
         check(kind, b"", 0, 75, 0, suffix="_large", rows=100)
         check(kind, DOWN * 4, 4, 1, 4, suffix="_single")
         check(kind, DOWN * 47, 51 - short_count, short_count, 47, rows=12)
@@ -1593,7 +1638,8 @@ def main() -> int:
         ("notification_edit", LEFT + b"\x1b[17~X\r", "aXb"),
         ("notification_edit", b"c\x1b[17~\x1f\r", "ab"),
         ("notification_edit", b"c\x1f\x1b[17~\x19\r", "abc"),
-        ("notification_completion", b"\t\x1b\r\r", "plan"),
+        # Encode Escape explicitly so the following Enter is not decoded as Alt+Enter/Ctrl+J.
+        ("notification_completion", b"\t\x1b[27u\r", "plan"),
         ("notification_submit", b"\r", "ab"),
         (
             "notification_multiline",
@@ -3271,8 +3317,10 @@ def main() -> int:
         raise AssertionError(
             f"completion_dual_footer expected 'planet', got {comp_footer!r}"
         )
-    normalized_comp_footer_output = normalize_terminal_output(comp_footer_output)
-    if "pgup/pgdn:page esc:cancel" not in normalized_comp_footer_output:
+    normalized_comp_footer_output = re.sub(
+        r"[←↵]\n", "", normalize_terminal_output(comp_footer_output)
+    )
+    if "pgup/pgdn:page ctrl+j:resize esc:cancel" not in normalized_comp_footer_output:
         raise AssertionError(
             "completion menus should show a footer even when every candidate fits, got "
             f"normalized_output={normalized_comp_footer_output!r}"
@@ -3402,8 +3450,8 @@ def main() -> int:
     normalized_comp_multiline_replacement_output = normalize_terminal_output(
         comp_multiline_replacement_output
     )
-    # Reserve a blank separator row as well as the footer below the preview.
-    if "Showing 1-3 of 12 completions" not in normalized_comp_multiline_replacement_output:
+    # Reserve a blank separator and both wrapped footer rows below the preview.
+    if "Showing 1-2 of 12 completions" not in normalized_comp_multiline_replacement_output:
         raise AssertionError(
             "completion menu should reserve its footer below the multiline preview, got "
             f"normalized_output={normalized_comp_multiline_replacement_output!r}"
@@ -3454,7 +3502,7 @@ def main() -> int:
                 ("resize", (8, cols)),
                 # Wake the PTY read on platforms that restart it after SIGWINCH.
                 ("send", FOCUS_IN),
-                ("wait", "preview line 04..." if cols == 80 else "pty> m02 first line..."),
+                ("wait", "preview line 03..." if cols == 80 else "pty> m02 first line..."),
                 ("idle", 0.1),
             ],
             initial_rows=24,
@@ -3468,8 +3516,9 @@ def main() -> int:
     for keys, expected in (
         (b"m\t" + DOWN + b"\r\r", expected_tall_replacement),
         (b"m\t" + DOWN + DOWN + b"\r\r", "m03"),
-        # Ctrl+J returns to normal newline editing instead of collapsing the menu.
-        (b"m\t" + DOWN + b"\x0ax\r", "m\nx"),
+        # Resizing must preserve the full replacement even when the preview is shortened.
+        (b"m\t" + DOWN + b"\n\r\r", expected_tall_replacement),
+        (b"m\t" + DOWN + b"\n\n\r\r", expected_tall_replacement),
     ):
         result = run_case(binary, tall_scenario, keys, initial_rows=8, initial_cols=80)
         if result != expected:
@@ -3483,7 +3532,7 @@ def main() -> int:
         tall_scenario,
         [
             ("send", b"m\t" + DOWN),
-            ("wait", "preview line 04..."),
+            ("wait", "preview line 03..."),
             ("send", b"\x1b"),
             ("idle", 0.5),
             ("send", b"\r"),

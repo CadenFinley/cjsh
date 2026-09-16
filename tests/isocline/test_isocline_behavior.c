@@ -492,19 +492,32 @@ static bool test_multiline_bottom_line_count_defaults_and_clamps(void) {
 
 static bool test_menu_max_line_count_defaults_and_clamps(void) {
     EXPECT_TRUE(ensure_env() != NULL, "menu configuration requires an environment");
-    EXPECT_TRUE(ic_get_menu_max_line_count() == 50, "menus should default to 50 content rows");
-    EXPECT_TRUE(ic_set_menu_max_line_count(0) == 50,
-                "menu maximum setter should return the previous limit");
-    EXPECT_TRUE(ic_get_menu_max_line_count() == 1, "menu maximum should clamp zero to one row");
-    EXPECT_TRUE(ic_set_menu_max_line_count((size_t)-1) == 1,
-                "menu maximum setter should accept large unsigned values");
-    EXPECT_TRUE(ic_get_menu_max_line_count() == 256, "menu maximum should clamp to 256 rows");
-    EXPECT_TRUE(ic_set_menu_max_line_count(75) == 256 && ic_get_menu_max_line_count() == 75,
-                "menu maximum should allow limits above the default");
+    size_t (*setters[])(size_t) = {ic_set_completion_menu_max_line_count,
+                                  ic_set_history_menu_max_line_count,
+                                  ic_set_command_palette_max_line_count,
+                                  ic_set_custom_menu_max_line_count};
+    size_t (*getters[])(void) = {ic_get_completion_menu_max_line_count,
+                               ic_get_history_menu_max_line_count,
+                               ic_get_command_palette_max_line_count,
+                               ic_get_custom_menu_max_line_count};
+    const size_t defaults[] = {15, 30, 30, 30};
+    for (size_t i = 0; i < 4; i++) {
+        EXPECT_TRUE(getters[i]() == defaults[i], "each menu should use its own default row limit");
+        EXPECT_TRUE(setters[i](0) == defaults[i], "setter should return the previous limit");
+        EXPECT_TRUE(getters[i]() == 1, "zero should clamp to one row");
+        EXPECT_TRUE(setters[i]((size_t)-1) == 1, "setter should accept large unsigned values");
+        EXPECT_TRUE(getters[i]() == 256, "maximum should clamp to 256 rows");
+        EXPECT_TRUE(setters[i](75) == 256 && getters[i]() == 75,
+                    "maximum should allow limits above the default");
+        for (size_t j = 0; j < 4; j++) {
+            EXPECT_TRUE(getters[j]() == (i == j ? 75 : defaults[j]),
+                        "changing one menu must not change any other menu");
+        }
+        (void)setters[i](defaults[i]);
+    }
     EXPECT_TRUE(
         ic_get_multiline_max_line_count() == 15 && ic_get_multiline_bottom_line_count() == 3,
         "menu maximum should not change multiline height or the scroll margin");
-    (void)ic_set_menu_max_line_count(50);
     return true;
 }
 

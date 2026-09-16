@@ -216,7 +216,10 @@ static ic_env_t* ic_env_create(ic_malloc_fun_t* _malloc, ic_realloc_fun_t* _real
     env->multiline_start_line_count = 1;         // preallocated prompt lines when multiline is on
     env->multiline_max_line_count = 15;          // visible input rows before viewport scrolling
     env->multiline_bottom_line_count = 3;        // row margin around the cursor or menu selection
-    env->menu_max_line_count = 50;               // visible menu content rows before scrolling
+    env->completion_menu_max_line_count = 15;   // visible content rows before scrolling
+    env->history_menu_max_line_count = 30;
+    env->command_palette_max_line_count = 30;
+    env->custom_menu_max_line_count = 30;
     env->last_readline_disposition = IC_READLINE_DISPOSITION_ERROR;
     env->status_hint_mode = IC_STATUS_HINT_NORMAL;  // default to legacy behavior
     env->mouse_reporting_mode =

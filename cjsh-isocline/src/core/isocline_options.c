@@ -587,25 +587,62 @@ ic_public size_t ic_get_multiline_bottom_line_count(void) {
     return env->multiline_bottom_line_count;
 }
 
-ic_public size_t ic_set_menu_max_line_count(size_t line_count) {
-    ic_env_t* env = ic_get_env();
-    if (env == NULL) {
-        return 50;
+static size_t ic_set_menu_line_limit(size_t* limit, size_t line_count, size_t default_limit) {
+    if (limit == NULL) {
+        return default_limit;
     }
-
-    const size_t prev = env->menu_max_line_count;
+    const size_t prev = *limit;
     if (line_count < 1) {
         line_count = 1;
     } else if (line_count > 256) {
         line_count = 256;
     }
-    env->menu_max_line_count = line_count;
+    *limit = line_count;
     return prev;
 }
 
-ic_public size_t ic_get_menu_max_line_count(void) {
+ic_public size_t ic_set_completion_menu_max_line_count(size_t line_count) {
     ic_env_t* env = ic_get_env();
-    return (env == NULL ? 50 : env->menu_max_line_count);
+    return ic_set_menu_line_limit(env == NULL ? NULL : &env->completion_menu_max_line_count,
+                                  line_count, 15);
+}
+
+ic_public size_t ic_get_completion_menu_max_line_count(void) {
+    ic_env_t* env = ic_get_env();
+    return (env == NULL ? 15 : env->completion_menu_max_line_count);
+}
+
+ic_public size_t ic_set_history_menu_max_line_count(size_t line_count) {
+    ic_env_t* env = ic_get_env();
+    return ic_set_menu_line_limit(env == NULL ? NULL : &env->history_menu_max_line_count,
+                                  line_count, 30);
+}
+
+ic_public size_t ic_get_history_menu_max_line_count(void) {
+    ic_env_t* env = ic_get_env();
+    return (env == NULL ? 30 : env->history_menu_max_line_count);
+}
+
+ic_public size_t ic_set_command_palette_max_line_count(size_t line_count) {
+    ic_env_t* env = ic_get_env();
+    return ic_set_menu_line_limit(env == NULL ? NULL : &env->command_palette_max_line_count,
+                                  line_count, 30);
+}
+
+ic_public size_t ic_get_command_palette_max_line_count(void) {
+    ic_env_t* env = ic_get_env();
+    return (env == NULL ? 30 : env->command_palette_max_line_count);
+}
+
+ic_public size_t ic_set_custom_menu_max_line_count(size_t line_count) {
+    ic_env_t* env = ic_get_env();
+    return ic_set_menu_line_limit(env == NULL ? NULL : &env->custom_menu_max_line_count,
+                                  line_count, 30);
+}
+
+ic_public size_t ic_get_custom_menu_max_line_count(void) {
+    ic_env_t* env = ic_get_env();
+    return (env == NULL ? 30 : env->custom_menu_max_line_count);
 }
 
 ic_public bool ic_enable_line_numbers(bool enable) {

@@ -949,14 +949,23 @@ size_t ic_set_multiline_bottom_line_count(size_t line_count);
 /// Get the preferred number of content rows retained around the cursor or menu selection.
 size_t ic_get_multiline_bottom_line_count(void);
 
-/// Configure the maximum visible content rows in completion, history, command palette, and custom
-/// menus, including expanded item previews. The default is 50. Headers and help text use separate
-/// rows, and menus shrink to fit the terminal. Values are clamped to the range 1 through 256.
-/// Returns the previous configured line count.
-size_t ic_set_menu_max_line_count(size_t line_count);
+/// Configure independent menu content-row limits, including expanded item previews.
+/// Completion menus default to 15 rows; history, command palette, and custom menus
+/// default to 30. Values are clamped to 1 through 256. Headers and help text use
+/// separate rows, and menus shrink to fit the terminal. Ctrl+J temporarily toggles the
+/// open menu between its configured limit and all available terminal space, without
+/// changing these settings. The toggle resets when the menu closes.
+/// Each setter returns that menu's previous configured line count.
+size_t ic_set_completion_menu_max_line_count(size_t line_count);
+size_t ic_set_history_menu_max_line_count(size_t line_count);
+size_t ic_set_command_palette_max_line_count(size_t line_count);
+size_t ic_set_custom_menu_max_line_count(size_t line_count);
 
-/// Get the current maximum number of visible menu content rows.
-size_t ic_get_menu_max_line_count(void);
+/// Get each menu's configured maximum number of visible content rows.
+size_t ic_get_completion_menu_max_line_count(void);
+size_t ic_get_history_menu_max_line_count(void);
+size_t ic_get_command_palette_max_line_count(void);
+size_t ic_get_custom_menu_max_line_count(void);
 
 /// Enable or disable line numbers in multiline input mode. (enabled by default)
 /// When enabled, each line will be prefixed with a line number (e.g., "2| ", "3| ", etc.).

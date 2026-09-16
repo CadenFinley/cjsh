@@ -75,8 +75,11 @@ cjshopt multiline-start-lines <count|status>
 # Limit visible multiline input rows (default: 15)
 cjshopt multiline-max-lines <count|status>
 
-# Limit visible menu content rows (default: 50)
-cjshopt menu-max-lines <count|status>
+# Independently limit menu content rows (completion: 15; history/palette/custom: 30)
+cjshopt completion-menu-max-lines <count|status>
+cjshopt history-menu-max-lines <count|status>
+cjshopt command-palette-max-lines <count|status>
+cjshopt custom-menu-max-lines <count|status>
 
 # Configure the input and menu scroll margin (default: 3)
 cjshopt multiline-bottom-lines <count|status>
@@ -88,12 +91,19 @@ laid out separately below the input viewport. The symmetric cursor margin keeps 
 while the cursor moves within it, uses only rows that exist in the command, and never pads the
 display with blank lines.
 
-Completion, history, command palette, and custom menus default to at most 50 content rows, including
-expanded item previews, and shrink to fit the terminal. Headers and help text use separate rows.
-Use `cjshopt menu-max-lines` to change the limit. The isocline API also exposes it through
-`ic_set_menu_max_line_count()` and
-`ic_get_menu_max_line_count()`. Menus use the same `multiline-bottom-lines` scroll margin (3 by
-default) around the selected item.
+Completion menus default to at most 15 content rows; history, command palette, and custom menus
+default to 30. These limits include expanded item previews, and menus shrink to fit the terminal. Headers and help text use separate rows.
+Use the per-menu `cjshopt` commands above to set independent limits, and add them to `~/.cjshrc`
+to persist them. Counts must be positive; values above 256 are clamped to 256.
+Press **Ctrl+J** inside any menu (including passive completion suggestions) to toggle between its
+configured height and all available terminal space. The toggle resets when the menu closes and
+does not alter its configured limit. Outside menus, Ctrl+J still inserts a newline.
+
+Embedding applications can set independent limits through `ic_set_completion_menu_max_line_count()`,
+`ic_set_history_menu_max_line_count()`, `ic_set_command_palette_max_line_count()`, and
+`ic_set_custom_menu_max_line_count()`, with matching `ic_get_*` functions. Each limit clamps to
+1 through 256. The shared menu-height API and `cjshopt menu-max-lines` have been removed.
+Menus use the same `multiline-bottom-lines` scroll margin (3 by default) around the selected item.
 
 **Multiline Detection:**
 CJ's Shell automatically enters multiline mode when:

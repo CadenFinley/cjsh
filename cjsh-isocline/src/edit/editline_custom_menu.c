@@ -30,6 +30,10 @@
 // Application-provided menu: this file is included in editline.c
 //-------------------------------------------------------------
 
+static const char* const k_custom_menu_footer =
+    "[ic-diminish](↑↓/wheel:navigate shift+↑/↓:page enter/tab:select "
+    "alt+c:case ctrl+j:resize esc:cancel)[/]";
+
 typedef struct custom_menu_match_s {
     ssize_t item_idx;
     int score;
@@ -264,7 +268,11 @@ again:;
             }
         }
 
-        ssize_t available_lines = edit_menu_available_lines(env, eb, 4, 3);
+        const ssize_t reserved_rows =
+            edit_menu_input_rows(env, eb) + edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra)) +
+            (!env->no_help ? edit_menu_rendered_rows(env, eb, k_custom_menu_footer) : 0) + 1;
+        ssize_t available_lines = edit_menu_available_lines(
+            env, eb, reserved_rows, 1, env->custom_menu_max_line_count, menu_session.maximized);
         if (selected_preview_limit > available_lines) {
             selected_preview_limit = available_lines;
         }
@@ -301,9 +309,7 @@ again:;
     }
 
     if (!env->no_help) {
-        (void)sbuf_append(eb->extra,
-                          "[ic-diminish](↑↓/wheel:navigate shift+↑/↓:page enter/tab:select "
-                          "alt+c:case esc:cancel)[/]");
+        (void)sbuf_append(eb->extra, k_custom_menu_footer);
     }
     edit_refresh(env, eb);
 
