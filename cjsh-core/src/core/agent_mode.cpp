@@ -737,11 +737,7 @@ bool show_setup_help() {
 class ScopedWaitingStatus {
    public:
     explicit ScopedWaitingStatus(const std::string& command) {
-        // Status messages use BBCode; display the configured command literally.
         for (unsigned char ch : command) {
-            if (ch == '[' || ch == '\\') {
-                command_display_.push_back('\\');
-            }
             command_display_.push_back(std::iscntrl(ch) ? ' ' : static_cast<char>(ch));
         }
         advance();
@@ -766,15 +762,19 @@ class ScopedWaitingStatus {
         }
         last_frame_ = frame;
 
-        const std::string label = "Running [" + std::to_string(seconds) + "s]:";
+        const std::string label =
+            "Running [" + std::to_string(seconds) + "s]: " + command_display_;
+        const auto character_count = std::count_if(label.begin(), label.end(), [](unsigned char ch) {
+            return (ch & 0xC0) != 0x80;
+        });
         std::ostringstream message;
         message << "[ic-info]";
         // A soft light sweeps left to right, then pauses offscreen before repeating.
-        // Only the ASCII label gets per-character styling; the executor stays ic-info.
         const double peak = std::fmod(std::chrono::duration<double>(elapsed).count() * 25.0,
-                                      static_cast<double>(label.size()) + 35.0) -
+                                      static_cast<double>(character_count) + 35.0) -
                             12.0;
-        for (size_t index = 0; index < label.size(); ++index) {
+        size_t index = 0;
+        for (size_t offset = 0; offset < label.size(); ++index) {
             if (animate) {
                 const double distance = static_cast<double>(index) - peak;
                 const auto brightness = static_cast<unsigned int>(
@@ -782,15 +782,21 @@ class ScopedWaitingStatus {
                 message << "[color=#" << std::hex << std::setfill('0') << std::setw(6)
                         << brightness * 0x010101U << "]";
             }
-            if (label[index] == '[') {
+            // Status messages use BBCode; keep the entire status literal.
+            if (label[offset] == '[' || label[offset] == '\\') {
                 message << '\\';
             }
-            message << label[index];
+            message << label[offset++];
+            // Keep UTF-8 continuation bytes inside the same style span.
+            while (offset < label.size() &&
+                   (static_cast<unsigned char>(label[offset]) & 0xC0) == 0x80) {
+                message << label[offset++];
+            }
             if (animate) {
                 message << "[/]";
             }
         }
-        message << ' ' << command_display_ << "[/]";
+        message << "[/]";
         status_line::set_transient_status_message(message.str());
         (void)ic_current_loop_reset(nullptr, nullptr, nullptr);
         ic_term_flush();

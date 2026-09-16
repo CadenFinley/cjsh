@@ -90,12 +90,14 @@ def assert_waiting_shimmer(output: bytes, command: bytes) -> None:
     if len(profiles) < 4:
         raise AssertionError("waiting label did not animate between elapsed-second updates")
     for frame in frames:
-        label_colors = colors[frame.start() : frame.start() + 13]
-        if not all(color and color[:2] == (38, 2) for color in label_colors):
-            raise AssertionError("the shimmer did not cover exactly the running label")
-        command_colors = colors[frame.start() + 13 : frame.end()]
-        if not command_colors or set(command_colors) != {(90,)}:
-            raise AssertionError("the shimmer leaked into the space or executor command")
+        line_colors = colors[frame.start() : frame.end()]
+        if not all(color and color[:2] == (38, 2) for color in line_colors):
+            raise AssertionError("the shimmer did not cover the entire status line")
+    command_profiles = {
+        tuple(colors[frame.start() + 14 : frame.end()]) for frame in frames
+    }
+    if len(command_profiles) < 4:
+        raise AssertionError("the executor command did not animate with the running label")
 
 
 class Session:
@@ -266,7 +268,7 @@ def main() -> int:
         os.mkdir(context_directory)
         with open(context_file, "w", encoding="utf-8") as marker:
             marker.write("agent context\n")
-        executor = os.path.join(temp_dir, "agent-[executor]")
+        executor = os.path.join(temp_dir, "agent-[exécutor]")
         prompt_capture = os.path.join(temp_dir, "last-prompt")
         first_result = os.path.join(temp_dir, "first-result")
         selected_result = os.path.join(temp_dir, "selected-result")
