@@ -179,6 +179,96 @@ bool test_execution_variable_syntax() {
     return ok;
 }
 
+bool test_assignment_diagnostics() {
+    auto* interpreter = g_shell->get_shell_script_interpreter();
+    const std::vector<std::string> defined = {
+        "__audit_first=1; __audit_second=2; : $__audit_first $__audit_second",
+        "__audit_first=1 __audit_second=2; : $__audit_first $__audit_second",
+        "true && __audit_value=1; : $__audit_value",
+        "false || __audit_value=1; : $__audit_value",
+        "for __audit_item in one; do __audit_value=1; : $__audit_item $__audit_value; done",
+        "for __audit_item in one; do\n: $__audit_item\n__audit_value=1\n: $__audit_value\ndone",
+        "if __audit_condition=1; then __audit_value=2; : $__audit_condition $__audit_value; fi",
+        "if false; then :; elif __audit_value=1; then : $__audit_value; else "
+        "__audit_other=2; : $__audit_other; fi",
+        "while __audit_value=1; do : $__audit_value; break; done",
+        "until __audit_value=1; do : $__audit_value; done",
+        "{ __audit_value=1; : $__audit_value; }",
+        "(__audit_value=1; : $__audit_value)",
+        "__audit_value='two; words'; : $__audit_value",
+        "__audit_value==literal; : $__audit_value",
+        "__audit_value=~literal; : $__audit_value",
+    };
+    bool ok = true;
+    for (const auto& script : defined) {
+        const auto lines = interpreter->parse_into_lines(script);
+        ok = expect(interpreter->validate_variable_usage(lines).empty(),
+                    ("assignments are recognized throughout command lists: " + script).c_str()) &&
+             ok;
+    }
+
+    const std::vector<std::string> arguments = {
+        "echo __audit_argument=1",
+        "echo '__audit_argument=1'",
+        "echo \"text; __audit_argument=1\"",
+        "echo do __audit_argument=1",
+        "echo then __audit_argument=1",
+        "echo else __audit_argument=1",
+        "echo if __audit_argument=1",
+        "echo { __audit_argument=1 }",
+        "echo $((1 + 2)) __audit_argument=1",
+        "echo ${PATH:-fallback} __audit_argument=1",
+        "echo $(printf literal) __audit_argument=1",
+        "echo `printf literal` __audit_argument=1",
+        "[ __audit_argument=1 = text ]",
+        "[[ yes = yes && __audit_argument=1 = text ]]",
+        "test __audit_argument=1 = text",
+        "for __audit_item in do __audit_argument=1; do : $__audit_item; done",
+        ": # __audit_argument=1",
+    };
+    for (const auto& command : arguments) {
+        const auto errors = interpreter->validate_variable_usage(
+            interpreter->parse_into_lines(command + "\n: $__audit_argument"));
+        ok = expect(errors.size() == 1 && errors.front().error_code == "VAR002" &&
+                        errors.front().position.line_number == 2 &&
+                        errors.front().message.find("__audit_argument") != std::string::npos,
+                    ("assignment-like arguments do not define variables: " + command).c_str()) &&
+             ok;
+    }
+
+    const auto unused = interpreter->validate_variable_usage({"if __audit_unused=1; then :; fi"});
+    ok = expect(unused.size() == 1 && unused.front().error_code == "VAR003",
+                "a conditional assignment produces one unused-variable diagnostic") &&
+         ok;
+    const auto multiline_unused =
+        interpreter->validate_variable_usage({"printf '%s' 'first\nsecond';\n__audit_unused=1"});
+    ok = expect(multiline_unused.size() == 1 && multiline_unused.front().error_code == "VAR003" &&
+                    multiline_unused.front().position.line_number == 3,
+                "assignments after multiline quotes retain their source line") &&
+         ok;
+    return ok;
+}
+
+bool test_inline_prime_loop_diagnostics() {
+    auto* interpreter = g_shell->get_shell_script_interpreter();
+    bool ok = true;
+    for (const std::string suffix : {"", "\n     "}) {
+        const std::string script =
+            "for n in $(seq 2 100); do d=2; p=1; while [ $((d*d)) -le $n ]; do "
+            "if [ $((n%d)) -eq 0 ]; then p=0; break; fi; d=$((d+1)); done; "
+            "[ $p -eq 1 ] && printf '%s ' \"$n" +
+            suffix + "\"; done; echo";
+        const auto lines = interpreter->parse_into_lines(script);
+        ok = expect(!interpreter->needs_additional_input(lines),
+                    "the prime loop is complete with either single-line or multiline quotes") &&
+             ok;
+        ok = expect(interpreter->validate_comprehensive_syntax(lines, false, false).empty(),
+                    "the prime loop has no advisory or blocking diagnostics") &&
+             ok;
+    }
+    return ok;
+}
+
 bool test_control_validator_filter() {
     auto* interpreter = g_shell->get_shell_script_interpreter();
     bool ok = true;
@@ -250,15 +340,18 @@ int main() {
     const bool tokens_ok = test_whitespace_and_locale();
     const bool diagnostics_ok = test_variable_diagnostics();
     const bool execution_ok = test_execution_variable_syntax();
+    const bool assignments_ok = test_assignment_diagnostics();
+    const bool prime_loop_ok = test_inline_prime_loop_diagnostics();
     const bool control_ok = test_control_validator_filter();
     const bool literal_keywords_ok = test_literal_control_keywords();
     g_shell.reset();
-    if (tokens_ok && diagnostics_ok && execution_ok && control_ok && literal_keywords_ok) {
-        std::puts("All 5 validation token tests passed");
+    if (tokens_ok && diagnostics_ok && execution_ok && assignments_ok && prime_loop_ok &&
+        control_ok && literal_keywords_ok) {
+        std::puts("All 7 validation token tests passed");
         return 0;
     }
-    (void)std::fprintf(
-        stderr, "%d/5 validation token tests failed\n",
-        !tokens_ok + !diagnostics_ok + !execution_ok + !control_ok + !literal_keywords_ok);
+    (void)std::fprintf(stderr, "%d/7 validation token tests failed\n",
+                       !tokens_ok + !diagnostics_ok + !execution_ok + !assignments_ok +
+                           !prime_loop_ok + !control_ok + !literal_keywords_ok);
     return 1;
 }

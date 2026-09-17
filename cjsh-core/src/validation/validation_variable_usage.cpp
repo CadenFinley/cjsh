@@ -33,11 +33,11 @@
 
 #include "interpreter_utils.h"
 #include "parser_utils.h"
+#include "quote_state.h"
 #include "validation_common.h"
 
 #include <cctype>
 #include <cstdint>
-#include <cstring>
 #include <map>
 #include <string>
 #include <unordered_set>
@@ -51,6 +51,7 @@ using namespace shell_validation::internal;
 namespace {
 
 enum class SeparatorToken : std::uint8_t {
+    Newline,
     Semicolon,
     DoubleSemicolon,
     Pipe,
@@ -72,6 +73,8 @@ enum class SeparatorToken : std::uint8_t {
 
 const char* separator_token_text(SeparatorToken token) {
     switch (token) {
+        case SeparatorToken::Newline:
+            return "\n";
         case SeparatorToken::Semicolon:
             return ";";
         case SeparatorToken::DoubleSemicolon:
@@ -110,33 +113,6 @@ const char* separator_token_text(SeparatorToken token) {
     return "";
 }
 
-enum class KeywordToken : std::uint8_t {
-    If,
-    Elif,
-    While,
-    Until,
-    Then,
-    Do
-};
-
-const char* keyword_token_text(KeywordToken token) {
-    switch (token) {
-        case KeywordToken::If:
-            return "if";
-        case KeywordToken::Elif:
-            return "elif";
-        case KeywordToken::While:
-            return "while";
-        case KeywordToken::Until:
-            return "until";
-        case KeywordToken::Then:
-            return "then";
-        case KeywordToken::Do:
-            return "do";
-    }
-    return "";
-}
-
 struct TokenInfo {
     std::string text;
     size_t start;
@@ -151,7 +127,8 @@ std::vector<TokenInfo> tokenize_shell_segment(const std::string& text, size_t st
 
     size_t i = start;
     while (i < end) {
-        while (i < end && (std::isspace(static_cast<unsigned char>(text[i])) != 0)) {
+        while (i < end && text[i] != '\n' &&
+               (std::isspace(static_cast<unsigned char>(text[i])) != 0)) {
             ++i;
         }
         if (i >= end) {
@@ -176,15 +153,33 @@ std::vector<TokenInfo> tokenize_shell_segment(const std::string& text, size_t st
             }
         }
 
-        if (text[i] == ';' || text[i] == '|' || text[i] == '&' || text[i] == '(' ||
-            text[i] == ')' || text[i] == '{' || text[i] == '}') {
+        if (text[i] == '\n' || text[i] == ';' || text[i] == '|' || text[i] == '&' ||
+            text[i] == '(' || text[i] == ')' || text[i] == '{' || text[i] == '}') {
             tokens.push_back({std::string(1, text[i]), i, i + 1});
             ++i;
             continue;
         }
 
         size_t token_start = i;
-        i = find_token_end_with_quotes(text, token_start, end, ";|&(){}", true);
+        utils::ShellQuoteState state;
+        while (i < end) {
+            const char c = text[i];
+            // Expansions are part of a word; their operators cannot start a new command here.
+            if (!state.escaped && !state.in_single_quote && c == '$' && i + 1 < end &&
+                (text[i + 1] == '(' || text[i + 1] == '{')) {
+                const size_t close = text[i + 1] == '(' ? find_matching_paren(text, i + 1)
+                                                        : find_matching_brace(text, i + 1);
+                i = close == std::string::npos ? end : std::min(close + 1, end);
+                continue;
+            }
+            if (state.consume_forward(c) == utils::QuoteAdvanceResult::Process &&
+                !state.inside_quotes() &&
+                (std::isspace(static_cast<unsigned char>(c)) != 0 || c == ';' || c == '|' ||
+                 c == '&' || c == '(' || c == ')' || c == '{' || c == '}')) {
+                break;
+            }
+            ++i;
+        }
         tokens.push_back({text.substr(token_start, i - token_start), token_start, i});
     }
 
@@ -193,15 +188,12 @@ std::vector<TokenInfo> tokenize_shell_segment(const std::string& text, size_t st
 
 bool is_command_separator_token(const std::string& token) {
     static const SeparatorToken separators[] = {
-        SeparatorToken::Semicolon,    SeparatorToken::DoubleSemicolon,
-        SeparatorToken::Pipe,         SeparatorToken::Or,
-        SeparatorToken::Amp,          SeparatorToken::AmpCaret,
-        SeparatorToken::AmpCaretBang, SeparatorToken::And,
-        SeparatorToken::LParen,       SeparatorToken::RParen,
-        SeparatorToken::LBrace,       SeparatorToken::RBrace,
-        SeparatorToken::Do,           SeparatorToken::Then,
-        SeparatorToken::Elif,         SeparatorToken::Fi,
-        SeparatorToken::Done};
+        SeparatorToken::Newline,  SeparatorToken::Semicolon,    SeparatorToken::DoubleSemicolon,
+        SeparatorToken::Pipe,     SeparatorToken::Or,           SeparatorToken::Amp,
+        SeparatorToken::AmpCaret, SeparatorToken::AmpCaretBang, SeparatorToken::And,
+        SeparatorToken::LParen,   SeparatorToken::RParen,       SeparatorToken::LBrace,
+        SeparatorToken::RBrace,   SeparatorToken::Do,           SeparatorToken::Then,
+        SeparatorToken::Elif,     SeparatorToken::Fi,           SeparatorToken::Done};
     return std::any_of(std::begin(separators), std::end(separators),
                        [&](const auto sep) { return token == separator_token_text(sep); });
 }
@@ -216,27 +208,8 @@ bool is_special_shell_variable(const std::string& name) {
     return kSpecialVars.find(name) != kSpecialVars.end();
 }
 
-bool is_test_context_token(const std::string& token) {
-    return token == "[[" || token == "[" || token == "test";
-}
-
 bool is_assignment_token(const std::string& token) {
-    if (token.empty() || token[0] == '$') {
-        return false;
-    }
-
-    if (!looks_like_assignment(token)) {
-        return false;
-    }
-
-    size_t eq_pos = token.find('=');
-    if (eq_pos == std::string::npos) {
-        return false;
-    }
-    if (eq_pos + 1 < token.size() && (token[eq_pos + 1] == '=' || token[eq_pos + 1] == '~')) {
-        return false;
-    }
-    return true;
+    return !token.empty() && token[0] != '$' && looks_like_assignment(token);
 }
 
 std::string normalize_assignment_identifier(const std::string& token) {
@@ -264,103 +237,45 @@ void collect_leading_assignments_from_tokens(
     const std::vector<TokenInfo>& tokens, const std::string& original_line, size_t display_line,
     std::map<std::string, std::vector<size_t>>& defined_vars) {
     bool command_started = false;
-    std::string previous_token;
+    bool in_double_bracket_test = false;
 
     for (const auto& token : tokens) {
         if (token.text.empty()) {
             continue;
         }
 
-        if (is_command_separator_token(token.text)) {
+        if (in_double_bracket_test) {
+            if (token.text == "]]") {
+                in_double_bracket_test = false;
+            }
+            continue;
+        }
+
+        if (token.text == "\n" || token.text == ";" || token.text == ";;" || token.text == "|" ||
+            token.text == "||" || token.text == "&" || token.text == "&^" || token.text == "&^!" ||
+            token.text == "&&" || token.text == "(" || token.text == ")") {
             command_started = false;
-            previous_token.clear();
             continue;
         }
 
         if (!command_started) {
-            if (!is_test_context_token(previous_token) && is_assignment_token(token.text)) {
+            // Reserved words introduce commands only at command positions, never as arguments.
+            if (token.text == "if" || token.text == "elif" || token.text == "else" ||
+                token.text == "while" || token.text == "until" || token.text == "then" ||
+                token.text == "do" || token.text == "!" || token.text == "{") {
+                continue;
+            }
+            if (is_assignment_token(token.text)) {
                 std::string var_name = normalize_assignment_identifier(token.text);
                 if (!var_name.empty() && is_valid_identifier(var_name)) {
                     defined_vars[var_name].push_back(
                         adjust_display_line(original_line, display_line, token.start));
                 }
-                previous_token = token.text;
                 continue;
             }
+            in_double_bracket_test = token.text == "[[";
             command_started = true;
         }
-
-        previous_token = token.text;
-    }
-}
-
-size_t find_unquoted_keyword(const std::string& line, const std::string& keyword,
-                             size_t search_from) {
-    if (keyword.empty() || search_from >= line.size()) {
-        return std::string::npos;
-    }
-
-    QuoteState state;
-    for (size_t i = search_from; i + keyword.size() <= line.size(); ++i) {
-        char c = line[i];
-        if (!should_process_char(state, c, false)) {
-            continue;
-        }
-
-        if (line.compare(i, keyword.size(), keyword) == 0 &&
-            is_word_boundary(line, i, keyword.size())) {
-            return i;
-        }
-    }
-
-    return std::string::npos;
-}
-
-void detect_keyword_assignments(const std::string& line_without_comments,
-                                const std::string& trimmed_line, const std::string& original_line,
-                                size_t display_line,
-                                std::map<std::string, std::vector<size_t>>& defined_vars) {
-    struct KeywordInfo {
-        KeywordToken keyword;
-        KeywordToken terminator;
-    };
-
-    static const KeywordInfo kKeywordInfos[] = {{KeywordToken::If, KeywordToken::Then},
-                                                {KeywordToken::Elif, KeywordToken::Then},
-                                                {KeywordToken::While, KeywordToken::Do},
-                                                {KeywordToken::Until, KeywordToken::Do}};
-
-    for (const auto& info : kKeywordInfos) {
-        const char* keyword_text = keyword_token_text(info.keyword);
-        const char* terminator_text = keyword_token_text(info.terminator);
-        if (!starts_with_keyword_token(trimmed_line, keyword_text)) {
-            continue;
-        }
-
-        size_t keyword_pos = line_without_comments.find(keyword_text);
-        if (keyword_pos == std::string::npos) {
-            continue;
-        }
-
-        size_t command_start = keyword_pos + std::strlen(keyword_text);
-        while (
-            command_start < line_without_comments.size() &&
-            (std::isspace(static_cast<unsigned char>(line_without_comments[command_start])) != 0)) {
-            ++command_start;
-        }
-
-        size_t command_end =
-            find_unquoted_keyword(line_without_comments, terminator_text, command_start);
-        if (command_end == std::string::npos) {
-            command_end = line_without_comments.size();
-        }
-
-        if (command_end <= command_start) {
-            continue;
-        }
-
-        auto tokens = tokenize_shell_segment(line_without_comments, command_start, command_end);
-        collect_leading_assignments_from_tokens(tokens, original_line, display_line, defined_vars);
     }
 }
 
@@ -587,26 +502,10 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                 tokenize_shell_segment(line_without_comments, 0, line_without_comments.size());
             collect_declaration_definitions(tokens, original_line, display_line, defined_vars);
 
-            detect_keyword_assignments(line_without_comments, trimmed_line, original_line,
-                                       display_line, defined_vars);
+            collect_leading_assignments_from_tokens(tokens, original_line, display_line,
+                                                    defined_vars);
 
             collect_read_variable_definitions(tokens, original_line, display_line, defined_vars);
-
-            size_t eq_pos = line_without_comments.find('=');
-            if (eq_pos != std::string::npos) {
-                std::string before_eq = line_without_comments.substr(0, eq_pos);
-
-                size_t start = before_eq.find_first_not_of(" \t");
-                if (start != std::string::npos) {
-                    before_eq = before_eq.substr(start);
-                    before_eq = trim(before_eq);
-
-                    if (is_valid_identifier(before_eq)) {
-                        defined_vars[before_eq].push_back(
-                            adjust_display_line(original_line, display_line, eq_pos));
-                    }
-                }
-            }
         }
 
         QuoteState quote_state;

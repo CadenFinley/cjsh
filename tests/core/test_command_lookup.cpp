@@ -371,29 +371,31 @@ bool test_cursor_shell_command_hints() {
         const size_t last_line = text.rfind('\n');
         return last_line == std::string::npos ? text : text.substr(last_line + 1);
     };
-    const std::string cd_hint = "(builtin) - Change the current directory";
-    const std::string echo_hint = "(builtin) - Write arguments to standard output";
+    const std::string cd_hint = "(cd) - Change the current directory";
+    const std::string echo_hint = "(echo) - Write arguments to standard output";
     bool ok =
         expect(hint("cd /tmp", 0) == cd_hint && hint("cd /tmp", 1) == cd_hint &&
                    hint("cd /tmp", 2) == cd_hint,
-               "builtins show their source and description at either edge and inside the name");
+               "builtins show their name and description at either edge and inside the name");
     ok = expect(hint("cd /tmp", 3).empty() && hint("cd /tmp", 0) == cd_hint,
                 "builtin hints follow cursor-only movement") &&
          ok;
-    ok = expect(hint("echo", 2) == echo_hint && hint("lookupfunction", 3) == "(function)",
+    ok = expect(hint("echo", 2) == echo_hint &&
+                    hint("lookupfunction", 3) == "(function) - lookupfunction",
                 "builtins and defined functions take precedence over external counterparts") &&
          ok;
     ok = expect(hint("if true; then :; fi", 1) == "(keyword) - Evaluate a conditional block",
                 "shell keywords show their source and description") &&
          ok;
     ok = expect(hint("lookuptool | echo arg", 14) == echo_hint &&
-                    hint("echo arg; lookupfunction", 12) == "(function)",
+                    hint("echo arg; lookupfunction", 12) == "(function) - lookupfunction",
                 "shell command hints work after command separators") &&
          ok;
 
     ok = expect(g_shell->execute("pwd() { :; }") == 0, "create a function shadowing a builtin") &&
          ok;
-    ok = expect(hint("pwd", 2) == "(function)", "functions take precedence over builtins") && ok;
+    ok = expect(hint("pwd", 2) == "(function) - pwd", "functions take precedence over builtins") &&
+         ok;
     g_shell->set_aliases({{"pwd", "lookuptool --flag"}, {"lookupalias", "echo\n\tvalue\r\x1b"}});
     ok = expect(hint("pwd", 2) == "(alias) - lookuptool --flag",
                 "aliases show their definition and take precedence over functions") &&
@@ -417,8 +419,8 @@ bool test_cursor_shell_command_hints() {
     config::colors_enabled = true;
     config::syntax_highlighting_enabled = true;
     ok = expect(
-             hint("echo", 2) == "[ic-diminish](builtin)[/] - Write arguments to standard output" &&
-                 hint("lookupfunction", 3) == "[ic-diminish](function)[/]" &&
+             hint("echo", 2) == "[ic-diminish](echo)[/] - Write arguments to standard output" &&
+                 hint("lookupfunction", 3) == "[ic-diminish](function)[/] - lookupfunction" &&
                  hint("if true; then :; fi", 1) ==
                      "[ic-diminish](keyword)[/] - Evaluate a conditional block",
              "source tags use the completion menu style without coloring descriptions") &&

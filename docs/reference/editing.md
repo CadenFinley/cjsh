@@ -408,8 +408,8 @@ that name resolves:
 
 - External commands: `(/bin/ls) - list directory contents` using the current PATH lookup and
   available completion documentation.
-- Builtins: `(builtin) - Change the current directory` for `cd`.
-- Defined functions: `(function)`.
+- Builtins: `(cd) - Change the current directory` for `cd`.
+- Defined functions: `(function) - my_function` for `my_function`.
 - Aliases: `(alias) - ls -l` for `ll`.
 - Interactive abbreviations: `(abbreviation) - git status` for `gs`.
 - Shell keywords: `(keyword) - Evaluate a conditional block` for `if`.

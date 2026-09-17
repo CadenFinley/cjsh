@@ -862,8 +862,9 @@ std::string build_command_hint_message(Shell* shell, const std::string& input, s
             description = resolution.alias_value;
         } else if (resolution.has_function) {
             source = "function";
+            description = token;
         } else if (resolution.is_builtin) {
-            source = "builtin";
+            source = token;
             description = builtin_completions::get_builtin_summary(token);
         } else {
             source = cjsh_filesystem::find_executable_in_path(token);
