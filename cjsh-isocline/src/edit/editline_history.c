@@ -1105,7 +1105,7 @@ static void edit_yank_last_arg(ic_env_t* env, editor_t* eb) {
 
 static const char* const k_history_menu_footer =
     "[ic-diminish](↑↓/wheel:navigate shift+↑/↓:page enter:run tab:edit alt+c:case "
-    "alt+d:directory alt+n:nested alt+s:sort ctrl+j:resize esc:cancel)[/]";
+    "alt+d:directory alt+n:nested alt+p:parents alt+s:sort ctrl+j:resize esc:cancel)[/]";
 
 static void edit_history_fuzzy_search(ic_env_t* env, editor_t* eb, char* initial) {
     history_snapshot_t snap = {0};
@@ -1151,6 +1151,7 @@ static void edit_history_fuzzy_search(ic_env_t* env, editor_t* eb, char* initial
     bool session_case_sensitive = ic_history_fuzzy_search_is_case_sensitive();
     const bool original_directory = history_directory_is_enabled(env->history);
     const bool original_subdirs = history_directory_subdirs_is_enabled(env->history);
+    const bool original_parents = history_directory_parents_is_enabled(env->history);
     const char* configured_sort_key = NULL;
     ic_history_search_sort_t session_sort = ic_get_history_search_sort(&configured_sort_key);
     char* session_sort_key = NULL;
@@ -1187,6 +1188,7 @@ again:;
     }
     const char* scope_label = history_directory_is_enabled(env->history) ? "directory" : "all";
     const char* nested_label = history_directory_subdirs_is_enabled(env->history) ? "on" : "off";
+    const char* parents_label = history_directory_parents_is_enabled(env->history) ? "on" : "off";
     char metadata_preview_key[64];
     metadata_preview_key[0] = '\0';
     const char* metadata_suffix_key;
@@ -1281,30 +1283,33 @@ again:;
         if (showing_all_due_to_no_matches) {
             (void)sbuf_appendf(eb->extra,
                                "[ic-info]No matches - showing available history - "
-                               "case %s - scope %s - nested %s - sort %s%s[/]\n",
+                               "case %s - scope %s - nested %s - parents %s - sort %s%s[/]\n",
                                session_case_sensitive ? "sensitive" : "insensitive", scope_label,
-                               nested_label, sort_label, mouse_suffix);
+                               nested_label, parents_label, sort_label, mouse_suffix);
         } else if (is_filtered) {
             if (metadata_filter_applied) {
                 (void)sbuf_appendf(eb->extra,
                                    "[ic-info]%zd match%s found (metadata filter) - case %s - scope "
-                                   "%s - nested %s - sort %s%s[/]\n",
+                                   "%s - nested %s - parents %s - sort %s%s[/]\n",
                                    match_count, match_count == 1 ? "" : "es",
                                    session_case_sensitive ? "sensitive" : "insensitive",
-                                   scope_label, nested_label, sort_label, mouse_suffix);
+                                   scope_label, nested_label, parents_label, sort_label,
+                                   mouse_suffix);
             } else {
-                (void)sbuf_appendf(
-                    eb->extra,
-                    "[ic-info]%zd match%s found - case %s - scope %s - nested %s - sort %s%s[/]\n",
-                    match_count, match_count == 1 ? "" : "es",
-                    session_case_sensitive ? "sensitive" : "insensitive", scope_label, nested_label,
-                    sort_label, mouse_suffix);
+                (void)sbuf_appendf(eb->extra,
+                                   "[ic-info]%zd match%s found - case %s - scope %s - nested %s - "
+                                   "parents %s - sort %s%s[/]\n",
+                                   match_count, match_count == 1 ? "" : "es",
+                                   session_case_sensitive ? "sensitive" : "insensitive",
+                                   scope_label, nested_label, parents_label, sort_label,
+                                   mouse_suffix);
             }
         } else {
-            (void)sbuf_appendf(eb->extra,
-                               "[ic-info]History - case %s - scope %s - nested %s - sort %s%s[/]\n",
-                               session_case_sensitive ? "sensitive" : "insensitive", scope_label,
-                               nested_label, sort_label, mouse_suffix);
+            (void)sbuf_appendf(
+                eb->extra,
+                "[ic-info]History - case %s - scope %s - nested %s - parents %s - sort %s%s[/]\n",
+                session_case_sensitive ? "sensitive" : "insensitive", scope_label, nested_label,
+                parents_label, sort_label, mouse_suffix);
         }
 
         const bool show_empty_selection = (has_live_input && selected_idx < 0);
@@ -1460,15 +1465,15 @@ again:;
         if (metadata_filter_applied) {
             (void)sbuf_appendf(eb->extra,
                                "[ic-info]No history entries matched metadata filters - case %s - "
-                               "scope %s - nested %s - sort %s%s[/]\n",
+                               "scope %s - nested %s - parents %s - sort %s%s[/]\n",
                                session_case_sensitive ? "sensitive" : "insensitive", scope_label,
-                               nested_label, sort_label, mouse_suffix);
+                               nested_label, parents_label, sort_label, mouse_suffix);
         } else {
-            (void)sbuf_appendf(
-                eb->extra,
-                "[ic-info]No matches found - case %s - scope %s - nested %s - sort %s%s[/]\n",
-                session_case_sensitive ? "sensitive" : "insensitive", scope_label, nested_label,
-                sort_label, mouse_suffix);
+            (void)sbuf_appendf(eb->extra,
+                               "[ic-info]No matches found - case %s - scope %s - nested %s - "
+                               "parents %s - sort %s%s[/]\n",
+                               session_case_sensitive ? "sensitive" : "insensitive", scope_label,
+                               nested_label, parents_label, sort_label, mouse_suffix);
         }
         if (has_live_input && selected_idx < 0) {
             history_search_append_empty_selection(env, eb);
@@ -1511,6 +1516,7 @@ again:;
         mem_free(env->mem, session_sort_key);
         (void)history_enable_directory(env->history, original_directory);
         (void)history_enable_directory_subdirs(env->history, original_subdirs);
+        (void)history_enable_directory_parents(env->history, original_parents);
         edit_menu_finish(env, eb, &menu_session, true, true);
         eb->modified = original_modified;
         return;
@@ -1532,11 +1538,13 @@ again:;
         mem_free(env->mem, matches);
         mem_free(env->mem, session_sort_key);
         if (history_directory_is_enabled(env->history) != original_directory ||
-            history_directory_subdirs_is_enabled(env->history) != original_subdirs) {
+            history_directory_subdirs_is_enabled(env->history) != original_subdirs ||
+            history_directory_parents_is_enabled(env->history) != original_parents) {
             eb->history_idx = 0;
         }
         (void)history_enable_directory(env->history, original_directory);
         (void)history_enable_directory_subdirs(env->history, original_subdirs);
+        (void)history_enable_directory_parents(env->history, original_parents);
         edit_menu_finish(env, eb, &menu_session, restore_live_input, true);
         if (restore_live_input) {
             eb->modified = original_modified;
@@ -1548,13 +1556,17 @@ again:;
     }
 
     if ((KEY_MODS(c) & KEY_MOD_ALT) &&
-        (key_no_mods == 'd' || key_no_mods == 'D' || key_no_mods == 'n' || key_no_mods == 'N')) {
+        (key_no_mods == 'd' || key_no_mods == 'D' || key_no_mods == 'n' || key_no_mods == 'N' ||
+         key_no_mods == 'p' || key_no_mods == 'P')) {
         if (key_no_mods == 'd' || key_no_mods == 'D') {
             (void)history_enable_directory(env->history,
                                            !history_directory_is_enabled(env->history));
-        } else {
+        } else if (key_no_mods == 'n' || key_no_mods == 'N') {
             (void)history_enable_directory_subdirs(
                 env->history, !history_directory_subdirs_is_enabled(env->history));
+        } else {
+            (void)history_enable_directory_parents(
+                env->history, !history_directory_parents_is_enabled(env->history));
         }
         selected_idx = (has_live_input ? -1 : 0);
         scroll_offset = 0;

@@ -454,13 +454,34 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
                 raise AssertionError(f"Ctrl+J must not activate or edit the passive menu: {screen!r}")
         return check
 
+    def passive_height_ready(count: int):
+        check = check_passive_height(count)
+
+        def ready(output: str) -> bool:
+            try:
+                check(output)
+            except AssertionError:
+                return False
+            return True
+
+        return ready
+
+    # A quiet PTY is not necessarily a finished redraw: macOS CI can pause the
+    # driver for longer than the idle interval, even just after the first prompt.
+    # Wait for the full expected screen before settling and asserting it. The
+    # resize runner's deadline still fails missing or incorrect menu states.
     assert_resize_case(
         binary, "passive_height_toggle", "completion_auto_menu_limit",
-        [("send", b"s"), ("idle", 0.1), ("check", check_passive_height(3)),
-         ("send", b"\n"), ("idle", 0.1), ("check", check_passive_height(12)),
-         ("send", b"\n"), ("idle", 0.1), ("check", check_passive_height(3)),
-         ("send", b"\n"), ("idle", 0.1), ("send", b"\x1b"), ("idle", 0.3),
-         ("send", b"x\x7f"), ("idle", 0.1), ("check", check_passive_height(3)),
+        [("send", b"s"), ("wait_until", passive_height_ready(3)),
+         ("idle", 0.1), ("check", check_passive_height(3)),
+         ("send", b"\n"), ("wait_until", passive_height_ready(12)),
+         ("idle", 0.1), ("check", check_passive_height(12)),
+         ("send", b"\n"), ("wait_until", passive_height_ready(3)),
+         ("idle", 0.1), ("check", check_passive_height(3)),
+         ("send", b"\n"), ("wait_until", passive_height_ready(12)),
+         ("idle", 0.1), ("send", b"\x1b"), ("idle", 0.3),
+         ("send", b"x\x7f"), ("wait_until", passive_height_ready(3)),
+         ("idle", 0.1), ("check", check_passive_height(3)),
          ("send", b"\r")], "s", initial_cols=100,
     )
 
@@ -2916,6 +2937,7 @@ def main() -> int:
         "alt+s:sort" not in normalized_hist_footer_output
         or "alt+d:directory" not in normalized_hist_footer_output
         or "alt+n:nested" not in normalized_hist_footer_output
+        or "alt+p:parents" not in normalized_hist_footer_output
         or "esc:cancel)" not in normalized_hist_footer_output
     ):
         raise AssertionError(
@@ -3189,12 +3211,12 @@ def main() -> int:
             f"output={normalized_tall_history_output!r}"
         )
     tall_history_menu_render = normalized_tall_history_output[:tall_history_footer_end]
-    if "tallhist line 04" in tall_history_menu_render:
+    if "tallhist line 03" in tall_history_menu_render:
         raise AssertionError(
             "history search attempted to render a multiline preview taller than its terminal "
             f"row budget: output={tall_history_menu_render!r}"
         )
-    if "tallhist line 03..." not in tall_history_menu_render:
+    if "tallhist line 02..." not in tall_history_menu_render:
         raise AssertionError(
             "history search should mark a terminal-capped multiline preview as truncated, got "
             f"output={tall_history_menu_render!r}"

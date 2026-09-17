@@ -390,6 +390,23 @@ int history_directory_subdirs_command(const std::vector<std::string>& args) {
     return handle_toggle_command(config, args);
 }
 
+int history_directory_parents_command(const std::vector<std::string>& args) {
+    static const ToggleCommandConfig config{
+        "history-directory-parents",
+        {"Usage: history-directory-parents <on|off|status>",
+         "Include commands from all ancestor directories up to / when directory-aware history is "
+         "enabled.",
+         "Default: off. Add cjshopt history-directory-parents on to ~/.cjshrc to persist."},
+        [] { return ic_history_directory_parents_is_enabled(); },
+        [](bool enable) { (void)ic_enable_history_directory_parents(enable); },
+        "History parent directories",
+        false,
+        "Add `cjshopt {command} {state}` to your ~/.cjshrc to persist this change.\n",
+        {},
+        {}};
+    return handle_toggle_command(config, args);
+}
+
 int completion_spell_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
         "Usage: completion-spell <on|off|status>",

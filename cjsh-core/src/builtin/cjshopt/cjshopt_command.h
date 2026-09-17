@@ -48,6 +48,7 @@ int completion_case_command(const std::vector<std::string>& args);
 int history_search_case_command(const std::vector<std::string>& args);
 int history_directory_command(const std::vector<std::string>& args);
 int history_directory_subdirs_command(const std::vector<std::string>& args);
+int history_directory_parents_command(const std::vector<std::string>& args);
 int completion_spell_command(const std::vector<std::string>& args);
 int completion_spell_enter_command(const std::vector<std::string>& args);
 int completion_learning_command(const std::vector<std::string>& args);

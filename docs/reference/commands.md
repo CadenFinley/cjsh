@@ -770,6 +770,7 @@ Available subcommands:
 - `history-search-case` - Configure fuzzy history case sensitivity
 - `history-directory` - Scope interactive history to the current directory
 - `history-directory-subdirs` - Include nested directories in history scope
+- `history-directory-parents` - Include all ancestor directories in history scope
 - `completion-spell` - Toggle spell correction suggestions in completions
 - `completion-spell-enter` - Toggle Enter-triggered spell autocorrection when exactly one spell match exists
 - `completion-learning` - Toggle automatic completion learning from man pages
@@ -902,10 +903,10 @@ cjshopt history-search-case status  # Show the current setting
 
 Add the command to `~/.cjshrc` to persist the preference.
 
-#### history-directory / history-directory-subdirs
+#### history-directory / history-directory-subdirs / history-directory-parents
 
 Scope arrow-key recall, fuzzy history search, and history completions to the current working
-directory. Both settings default to `off` and accept `on`, `off`, `status`, and the same synonyms
+directory. All three settings default to `off` and accept `on`, `off`, `status`, and the same synonyms
 as `history-search-case`.
 
 ```bash
@@ -913,17 +914,31 @@ cjshopt history-directory on             # Use commands run in the current direc
 cjshopt history-directory off            # Use history from all directories (default)
 cjshopt history-directory status         # Show the current setting
 cjshopt history-directory-subdirs on     # Also include commands from nested directories
-cjshopt history-directory-subdirs off    # Match only the current directory (default)
+cjshopt history-directory-subdirs off    # Exclude nested directories (default)
 cjshopt history-directory-subdirs status # Show the nested-directory setting
+cjshopt history-directory-parents on     # Also include commands from all ancestors up to /
+cjshopt history-directory-parents off    # Exclude ancestor directories (default)
+cjshopt history-directory-parents status # Show the ancestor-directory setting
 ```
 
-With both options enabled in `/work/project`, commands from `/work/project/src` are included.
-Commands from `/work/project-other` are excluded. In `/work/project/src`, commands recorded in
-`/work/project` are excluded. The nested-directory setting takes effect when directory scope is on.
+The subdirs and parents settings take effect only when directory scope is on, and work independently:
 
-Inside the fuzzy history menu, `Alt+D` toggles directory scope and `Alt+N` toggles nested directories
-for that menu only. Its status line shows both settings. Add the `cjshopt` commands to `~/.cjshrc`
-to apply your preferences in future sessions.
+| Subdirs | Parents | Included directories |
+| --- | --- | --- |
+| Off | Off | Current directory |
+| On | Off | Current directory and descendants |
+| Off | On | Current directory and all ancestors up to `/` |
+| On | On | Current directory, descendants, and all ancestors up to `/` |
+
+For example, in `/work/project/src`, parents includes commands recorded in `/work/project`,
+`/work`, and `/`. Subdirs includes commands from `/work/project/src/deep`. Even with both enabled,
+commands from `/work/project/tests` and `/work/project-other` are excluded: including an ancestor's
+own history does not include its other descendants.
+
+Inside the fuzzy history menu, `Alt+D` toggles directory scope, `Alt+N` toggles nested directories,
+and `Alt+P` toggles ancestor directories for that menu only. Its status line shows all three
+settings, and accepting or canceling the menu restores your configured settings. Add the `cjshopt`
+commands to `~/.cjshrc` to apply your preferences in future sessions.
 
 New history records always capture the physical working directory before command execution,
 including when filtering is off. Symlink paths to the same directory share a scope. Older records

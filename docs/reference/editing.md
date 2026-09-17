@@ -612,12 +612,15 @@ Control whether the fuzzy history search menu matches case-sensitively with `cjs
 
 Use `cjshopt history-directory on|off|status` to scope interactive history recall and suggestions
 to the current directory. Use `cjshopt history-directory-subdirs on|off|status` to also include
-commands run in its nested directories. Both default to `off`. A parent includes descendants when
-nested scope is on; a child does not include its parent's commands. Older entries without `cwd`
-remain available with directory scope off. Add these commands to `~/.cjshrc` to persist preferences.
+commands run in its nested directories, and `cjshopt history-directory-parents on|off|status` to
+include commands run in all ancestor directories up to `/`. All three default to `off`. Subdirs
+and parents work independently while directory scope is on; enabling both still excludes sibling
+branches. Older entries without `cwd` remain available with directory scope off. Add these commands
+to `~/.cjshrc` to persist preferences.
 
-Inside the history menu, `Alt+D` toggles directory scope and `Alt+N` toggles nested directories for
-the open menu. Both settings appear in the status line, alongside case sensitivity.
+Inside the history menu, `Alt+D` toggles directory scope, `Alt+N` toggles nested directories, and
+`Alt+P` toggles ancestor directories for the open menu. All three settings appear in the status
+line, alongside case sensitivity, and are restored when you accept or cancel the menu.
 
 History search results are sorted newest-first by default. Press `Alt+S` inside the menu to cycle the current menu through available sort arrangements such as command text and metadata keys present in the matching history entries. This only changes the open menu; the default sort can be changed by callers through the isocline history search sort API.
 
@@ -777,6 +780,7 @@ action.
 - `Alt+C`: Toggle case sensitivity while the fuzzy history search menu is open
 - `Alt+D`: Toggle directory scope while the fuzzy history search menu is open
 - `Alt+N`: Toggle inclusion of nested directories while the fuzzy history search menu is open
+- `Alt+P`: Toggle inclusion of all ancestor directories while the fuzzy history search menu is open
 - `Alt+S`: Cycle sort arrangements while the fuzzy history search menu is open
 - `↑`: Previous history entry
 - `↓`: Next history entry

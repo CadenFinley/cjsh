@@ -13,6 +13,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Added
 
+- Added opt-in `cjshopt history-directory-parents on|off|status` and matching isocline APIs to include commands from all ancestor directories up to `/` while directory-aware history is enabled. It works independently of `history-directory-subdirs` and excludes sibling branches. `Alt+P` toggles it temporarily inside the history menu.
 - Added independent isocline menu-height setters/getters for completion, history, command palette, and custom menus, exposed through `cjshopt completion-menu-max-lines`, `history-menu-max-lines`, `command-palette-max-lines`, and `custom-menu-max-lines` (`<count|status>`). Ctrl+J inside any menu temporarily toggles between its configured limit and all available terminal space; closing the menu resets the toggle.
 - Added opt-in `cjshopt completion-auto-menu on|off|status` and matching isocline APIs. Typing shows an unselected, live completion list; Tab activates navigation, mouse interaction, preview, and acceptance without inserting a common prefix or accepting a lone match. With prompt mouse clicking enabled, clicking a passive entry activates and selects it; header/footer clicks select the first entry. The activating click never accepts. After acceptance, refreshed suggestions stay visible in passive mode until Tab or another menu click activates them.
 

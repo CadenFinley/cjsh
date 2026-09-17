@@ -291,6 +291,16 @@ ic_public bool ic_history_directory_subdirs_is_enabled(void) {
     return env != NULL && history_directory_subdirs_is_enabled(env->history);
 }
 
+ic_public bool ic_enable_history_directory_parents(bool enable) {
+    ic_env_t* env = ic_get_env();
+    return env != NULL && history_enable_directory_parents(env->history, enable);
+}
+
+ic_public bool ic_history_directory_parents_is_enabled(void) {
+    ic_env_t* env = ic_get_env();
+    return env != NULL && history_directory_parents_is_enabled(env->history);
+}
+
 ic_public bool ic_set_history_directory(const char* directory) {
     ic_env_t* env = ic_get_env();
     return env != NULL && history_set_directory(env->history, directory);

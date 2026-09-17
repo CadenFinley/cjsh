@@ -139,7 +139,9 @@ Consult the [Completion Authoring Guide](completions.md) for cache format and cu
   setting temporarily).
 - **Directory-aware history** – Records the working directory before execution. Enable scoped
   recall with `cjshopt history-directory on`, and include descendants with
-  `cjshopt history-directory-subdirs on`. Both default to off. `Alt+D` and `Alt+N` toggle them
+  `cjshopt history-directory-subdirs on` or all ancestors up to `/` with
+  `cjshopt history-directory-parents on`. All three default to off; subdirs and parents are
+  independent and exclude sibling branches. `Alt+D`, `Alt+N`, and `Alt+P` toggle them
   temporarily inside the history menu.
 - **Fuzzy history sorting** – History search is newest-first by default, and `Alt+S` cycles the open
   menu through command-text and metadata sort arrangements without changing the configured default.

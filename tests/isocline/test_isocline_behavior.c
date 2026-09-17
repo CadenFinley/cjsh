@@ -1142,6 +1142,7 @@ static bool test_history_directory_scope(void) {
     EXPECT_TRUE(history_push_with_metadata(history, "root", root, 1), "root should persist");
     EXPECT_FALSE(ic_history_directory_is_enabled(), "directory scope should default off");
     EXPECT_FALSE(ic_history_directory_subdirs_is_enabled(), "nested scope should default off");
+    EXPECT_FALSE(ic_history_directory_parents_is_enabled(), "parent scope should default off");
     EXPECT_TRUE(history_count(history) == 5, "same commands in distinct directories must survive");
 
     EXPECT_TRUE(ic_set_history_directory("/project space/%work"), "directory should be set");
@@ -1182,6 +1183,44 @@ static bool test_history_directory_scope(void) {
     entry = history_snapshot_get(&snap, 0);
     EXPECT_STREQ(history_entry_get_metadata(entry, "frequency"), "1",
                  "child frequency is separate");
+    EXPECT_FALSE(ic_enable_history_directory_parents(true),
+                 "enabling parents should return the previous state");
+    EXPECT_TRUE(ic_history_directory_parents_is_enabled(), "parent scope should be enabled");
+    EXPECT_FALSE(history_snapshot_is_current(history, &snap), "parent toggle invalidates snapshot");
+    EXPECT_TRUE(history_snapshot_refresh(history, &snap, true), "parent snapshot should refresh");
+    EXPECT_TRUE(history_snapshot_count(&snap) == 3,
+                "child scope includes its own entries and all ancestors up to root");
+    EXPECT_TRUE(ic_enable_history_directory_parents(true), "enabling again returns true");
+    EXPECT_TRUE(history_snapshot_is_current(history, &snap), "unchanged parents preserve snapshot");
+    EXPECT_TRUE(history_fuzzy_search(history, "shared", matches, 8, &count, NULL),
+                "fuzzy search should include ancestor commands");
+    EXPECT_TRUE(count == 2, "shared commands retain separate ancestor and current entries");
+    EXPECT_TRUE(history_search_prefix(history, 0, "root", true, &idx),
+                "prefix recall should include ancestors up to root");
+    EXPECT_FALSE(history_search_prefix(history, 0, "sibling", true, &idx),
+                 "including ancestors must not include their other descendants");
+    EXPECT_FALSE(history_fuzzy_search(history, "legacy", matches, 8, &count, NULL),
+                 "parent scope still excludes entries without cwd metadata");
+    EXPECT_TRUE(ic_history_matches_directory("/project space/%work/src"),
+                "immediate parent should match");
+    EXPECT_TRUE(ic_history_matches_directory("/project space/%work/"),
+                "ancestor metadata tolerates a trailing slash");
+    EXPECT_FALSE(ic_history_matches_directory("/project space/%work/src/de"),
+                 "ancestor matching requires a path component boundary");
+    EXPECT_FALSE(ic_history_matches_directory("/project space/%work/tests"),
+                 "both directions exclude sibling branches");
+    EXPECT_FALSE(ic_history_matches_directory("relative"), "relative metadata remains excluded");
+    EXPECT_FALSE(ic_history_matches_directory(NULL), "missing metadata remains excluded");
+    (void)ic_set_history_directory("/project space/%work/src/deep/");
+    EXPECT_TRUE(history_count(history) == 3, "parent scope tolerates a trailing current slash");
+    (void)ic_enable_history_directory_subdirs(false);
+    (void)ic_set_history_directory("/project space/%work");
+    EXPECT_TRUE(history_count(history) == 2,
+                "parents alone include current and root entries, excluding descendants");
+    (void)ic_enable_history_directory_subdirs(true);
+    EXPECT_TRUE(history_count(history) == 3,
+                "both directions include current, ancestors and descendants only");
+    EXPECT_TRUE(history_snapshot_refresh(history, &snap, true), "combined snapshot should refresh");
     (void)ic_set_history_directory("/");
     EXPECT_FALSE(history_snapshot_is_current(history, &snap),
                  "directory changes invalidate snapshot");
@@ -1190,6 +1229,7 @@ static bool test_history_directory_scope(void) {
                 "recursive root includes every known absolute directory");
     (void)ic_enable_history_directory_subdirs(false);
     EXPECT_TRUE(history_count(history) == 1, "exact root excludes descendants");
+    EXPECT_TRUE(ic_enable_history_directory_parents(false), "disabling parents returns true");
     (void)ic_set_history_directory("/project space/%work/");
     EXPECT_TRUE(history_count(history) == 1, "scope tolerates a trailing slash");
     (void)ic_set_history_directory(NULL);
@@ -1202,6 +1242,8 @@ static bool test_history_directory_scope(void) {
     history_end_edit(history, NULL);
     EXPECT_TRUE(history_count(history) == 0, "scratch input must not persist");
 
+    (void)ic_enable_history_directory_parents(true);
+    EXPECT_TRUE(history_count(history) == 0, "unknown directory cannot inherit ancestor history");
     EXPECT_TRUE(ic_enable_history_directory(false), "disabling returns previous state");
     EXPECT_TRUE(history_count(history) == 5, "disabling restores global and legacy history");
     history_free(history);
@@ -1212,6 +1254,9 @@ static bool test_history_directory_scope(void) {
     (void)ic_set_history_directory("/project space/%work");
     (void)ic_enable_history_directory(true);
     EXPECT_TRUE(history_count(history) == 1, "scope should also work after reloading");
+    EXPECT_FALSE(ic_history_directory_parents_is_enabled(), "new sessions default parents off");
+    (void)ic_enable_history_directory_parents(true);
+    EXPECT_TRUE(history_count(history) == 2, "ancestor records survive filtering and reloading");
     history_clear(history);
     env->history = original;
     history_free(history);

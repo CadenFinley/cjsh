@@ -613,6 +613,8 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_subcommand("history-search-case", "Configure fuzzy history case sensitivity"),
              make_subcommand("history-directory", "Scope history to the current directory"),
              make_subcommand("history-directory-subdirs", "Include nested directories in history"),
+             make_subcommand("history-directory-parents",
+                             "Include ancestor directories in history"),
              make_subcommand("completion-spell", "Configure completion spell correction"),
              make_subcommand("completion-spell-enter",
                              "Auto-apply a single spell correction when pressing Enter"),
@@ -796,7 +798,11 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                  make_subcommand("status", "Show current setting")});
         add_doc("cjshopt-history-directory-subdirs", "",
                 {make_subcommand("on", "Include commands from nested directories"),
-                 make_subcommand("off", "Match only the current directory"),
+                 make_subcommand("off", "Exclude commands from nested directories"),
+                 make_subcommand("status", "Show current setting")});
+        add_doc("cjshopt-history-directory-parents", "",
+                {make_subcommand("on", "Include commands from all ancestor directories up to /"),
+                 make_subcommand("off", "Exclude commands from ancestor directories"),
                  make_subcommand("status", "Show current setting")});
         add_doc("cjshopt-completion-spell", "",
                 {make_subcommand("on", "Enable spell correction"),

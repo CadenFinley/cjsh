@@ -51,6 +51,7 @@ enum class CjshoptSubcommand : std::uint8_t {
     HistorySearchCase,
     HistoryDirectory,
     HistoryDirectorySubdirs,
+    HistoryDirectoryParents,
     CompletionSpell,
     CompletionSpellEnter,
     CompletionLearning,
@@ -117,6 +118,8 @@ constexpr std::array<CjshoptSubcommandDescriptor, static_cast<size_t>(CjshoptSub
          {CjshoptSubcommand::HistoryDirectory, "history-directory", history_directory_command},
          {CjshoptSubcommand::HistoryDirectorySubdirs, "history-directory-subdirs",
           history_directory_subdirs_command},
+         {CjshoptSubcommand::HistoryDirectoryParents, "history-directory-parents",
+          history_directory_parents_command},
          {CjshoptSubcommand::CompletionSpell, "completion-spell", completion_spell_command},
          {CjshoptSubcommand::CompletionSpellEnter, "completion-spell-enter",
           completion_spell_enter_command},
@@ -205,6 +208,8 @@ const std::vector<std::string>& cjshopt_usage_lines() {
         "  history-directory <on|off|status>  Scope history to the current directory (default: "
         "disabled)",
         "  history-directory-subdirs <on|off|status>  Include nested directories (default: "
+        "disabled)",
+        "  history-directory-parents <on|off|status>  Include all ancestor directories (default: "
         "disabled)",
         std::string("  completion-spell <on|off|status> Configure completion spell correction ") +
             "(default: enabled)",

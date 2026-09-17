@@ -65,8 +65,9 @@ Powered by the embedded [isocline](https://github.com/cadenfinley/isocline) edit
     whether the fuzzy history menu matches case-sensitively with `cjshopt history-search-case` or
     flip it on the fly with `Alt+C` inside the menu. Press `Alt+S` to cycle sort modes for the open
     history search menu. Directory-aware recall is available with `cjshopt history-directory`,
-    with optional descendants via `cjshopt history-directory-subdirs`; `Alt+D` and `Alt+N` toggle
-    these for the open menu. At the end of the input buffer, `Up`/`Down` move between history entries;
+    with optional descendants via `cjshopt history-directory-subdirs` and all ancestors via
+    `cjshopt history-directory-parents`; `Alt+D`, `Alt+N`, and `Alt+P` toggle these for the open menu.
+    At the end of the input buffer, `Up`/`Down` move between history entries;
     recalled entries place the cursor at the end of the buffer, including multiline commands.
     `Shift+Up`/`Shift+Down` navigate history from any cursor position.
 - **Custom key bindings** – An Emacs-inspired default profile, an optional `vim` profile that adds

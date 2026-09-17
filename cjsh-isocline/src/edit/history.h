@@ -80,6 +80,8 @@ ic_private bool history_enable_directory(history_t* h, bool enable);
 ic_private bool history_directory_is_enabled(const history_t* h);
 ic_private bool history_enable_directory_subdirs(history_t* h, bool enable);
 ic_private bool history_directory_subdirs_is_enabled(const history_t* h);
+ic_private bool history_enable_directory_parents(history_t* h, bool enable);
+ic_private bool history_directory_parents_is_enabled(const history_t* h);
 ic_private bool history_set_directory(history_t* h, const char* directory);
 ic_private bool history_matches_directory(const history_t* h, const char* directory);
 ic_private ssize_t history_count(const history_t* h);

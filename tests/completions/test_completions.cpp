@@ -632,15 +632,19 @@ static bool test_history_completer_exit_code_ordering() {
 
 static bool test_history_directory_completions() {
     const char* test_name = "history_directory_completions";
-    EXPECT_TRUE(
-        write_completion_history("# cwd=%2Fproject%20space%2F%25work code=0\necho parent\n"
-                                 "# cwd=%2Fproject%20space%2F%25work%2Fsrc code=0\necho child\n"
-                                 "# cwd=%2Fproject%20space%2F%25work-other code=0\necho sibling\n"
-                                 "# code=0\necho legacy\n"),
-        test_name, "history fixture should be written");
+    EXPECT_TRUE(write_completion_history(
+                    "# cwd=%2Fproject%20space%2F%25work code=0\necho parent\n"
+                    "# cwd=%2Fproject%20space%2F%25work%2Fsrc code=0\necho child\n"
+                    "# cwd=%2Fproject%20space%2F%25work%2Fsrc%2Fdeep code=0\necho deep\n"
+                    "# cwd=%2Fproject%20space%2F%25work%2Ftests code=0\necho tests\n"
+                    "# cwd=%2Fproject%20space%2F%25work-other code=0\necho sibling\n"
+                    "# cwd=%2F code=0\necho root\n"
+                    "# code=0\necho legacy\n"),
+                test_name, "history fixture should be written");
     (void)ic_set_history_directory("/project space/%work");
     const bool previous_scope = ic_enable_history_directory(true);
     const bool previous_subdirs = ic_enable_history_directory_subdirs(false);
+    const bool previous_parents = ic_enable_history_directory_parents(false);
     (void)run_completion_generation("echo", &cjsh_history_completer, 256);
     const auto exact = generated_completion_replacements();
     clear_generated_completions();
@@ -648,18 +652,38 @@ static bool test_history_directory_completions() {
     (void)run_completion_generation("", &cjsh_default_completer, 256);
     const auto nested = generated_completion_replacements();
     clear_generated_completions();
+    (void)ic_set_history_directory("/project space/%work/src");
+    (void)ic_enable_history_directory_parents(true);
+    (void)ic_enable_history_directory_subdirs(false);
+    (void)run_completion_generation("echo", &cjsh_history_completer, 256);
+    const auto parents = generated_completion_replacements();
+    clear_generated_completions();
+    (void)ic_enable_history_directory_subdirs(true);
+    (void)run_completion_generation("", &cjsh_default_completer, 256);
+    const auto combined = generated_completion_replacements();
+    clear_generated_completions();
     (void)ic_enable_history_directory(false);
     const auto global_count = run_completion_generation("echo", &cjsh_history_completer, 256);
     clear_generated_completions();
     (void)ic_enable_history_directory(previous_scope);
     (void)ic_enable_history_directory_subdirs(previous_subdirs);
+    (void)ic_enable_history_directory_parents(previous_parents);
     (void)ic_set_history_directory(nullptr);
     EXPECT_TRUE(exact == std::vector<std::string>{"echo parent"}, test_name,
                 "prefix completions must decode directory metadata and scope before matching");
-    const std::vector<std::string> expected_nested = {"echo child", "echo parent"};
+    const std::vector<std::string> expected_nested = {"echo tests", "echo deep", "echo child",
+                                                      "echo parent"};
     EXPECT_TRUE(nested == expected_nested, test_name,
                 "empty-prompt suggestions include descendants but exclude siblings and legacy");
-    EXPECT_TRUE(global_count == 4, test_name,
+    const std::vector<std::string> expected_parents = {"echo parent", "echo child", "echo root"};
+    EXPECT_TRUE(parents == expected_parents, test_name,
+                "parent completions include all ancestors and exclude descendants and siblings");
+    const std::vector<std::string> expected_combined = {"echo root", "echo deep", "echo child",
+                                                        "echo parent"};
+    EXPECT_TRUE(
+        combined == expected_combined, test_name,
+        "both directions include ancestors and descendants while excluding sibling branches");
+    EXPECT_TRUE(global_count == 7, test_name,
                 "disabling scope restores every directory and legacy");
     return true;
 }

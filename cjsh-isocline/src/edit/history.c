@@ -68,6 +68,7 @@ struct history_s {
     bool fuzzy_case_sensitive;
     bool directory_aware;
     bool directory_subdirs;
+    bool directory_parents;
     char* directory;
     size_t directory_revision;
     ssize_t max_entries;
@@ -789,6 +790,22 @@ ic_private bool history_enable_directory_subdirs(history_t* h, bool enable) {
 
 ic_private bool history_directory_subdirs_is_enabled(const history_t* h) {
     return h != NULL && h->directory_subdirs;
+}
+
+ic_private bool history_enable_directory_parents(history_t* h, bool enable) {
+    if (h == NULL) {
+        return false;
+    }
+    bool previous = h->directory_parents;
+    if (previous != enable) {
+        h->directory_parents = enable;
+        h->directory_revision++;
+    }
+    return previous;
+}
+
+ic_private bool history_directory_parents_is_enabled(const history_t* h) {
+    return h != NULL && h->directory_parents;
 }
 
 ic_private bool history_set_directory(history_t* h, const char* directory) {
@@ -2045,10 +2062,19 @@ ic_private bool history_matches_directory(const history_t* h, const char* cwd) {
     while (len > 1 && h->directory[len - 1] == '/') {
         len--;
     }
-    if (strncmp(cwd, h->directory, len) != 0) {
-        return false;
+    size_t cwd_len = strlen(cwd);
+    while (cwd_len > 1 && cwd[cwd_len - 1] == '/') {
+        cwd_len--;
     }
-    return cwd[len] == '\0' || (h->directory_subdirs && (len == 1 || cwd[len] == '/'));
+    if (cwd_len == len) {
+        return strncmp(cwd, h->directory, len) == 0;
+    }
+    if (cwd_len > len) {
+        return h->directory_subdirs && strncmp(cwd, h->directory, len) == 0 &&
+               (len == 1 || cwd[len] == '/');
+    }
+    return h->directory_parents && strncmp(h->directory, cwd, cwd_len) == 0 &&
+           (cwd_len == 1 || h->directory[cwd_len] == '/');
 }
 
 static bool history_collect_entries(history_t* h, history_list_t* list, bool dedup) {

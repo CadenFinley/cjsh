@@ -825,6 +825,11 @@ bool ic_history_directory_is_enabled(void);
 bool ic_enable_history_directory_subdirs(bool enable);
 bool ic_history_directory_subdirs_is_enabled(void);
 
+/// Include all ancestors of the current directory, up to /, when scoped (default: false).
+/// Independent of descendant inclusion; siblings remain excluded. Returns the previous setting.
+bool ic_enable_history_directory_parents(bool enable);
+bool ic_history_directory_parents_is_enabled(void);
+
 /// Set the physical absolute directory used for history recall. The string is copied.
 /// NULL or empty means unknown; scoped recall then returns no stored entries.
 bool ic_set_history_directory(const char* directory);

@@ -132,6 +132,7 @@ static const help_line_t help_lines[] = {
     {HELP_LINE_STATIC, IC_KEY_ACTION__MAX, "alt-c", "toggle case-sensitive matching", NULL},
     {HELP_LINE_STATIC, IC_KEY_ACTION__MAX, "alt-d", "toggle current-directory scope", NULL},
     {HELP_LINE_STATIC, IC_KEY_ACTION__MAX, "alt-n", "toggle nested directories", NULL},
+    {HELP_LINE_STATIC, IC_KEY_ACTION__MAX, "alt-p", "toggle parent directories", NULL},
     {HELP_LINE_STATIC, IC_KEY_ACTION__MAX, "alt-s", "cycle history sorting", NULL},
     {HELP_LINE_STATIC, IC_KEY_ACTION__MAX, "esc", "exit search", NULL},
     {HELP_LINE_BLANK, IC_KEY_ACTION__MAX, NULL, NULL, NULL},
