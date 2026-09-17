@@ -1767,7 +1767,7 @@ Menus use the same <code>multiline-bottom-lines</code> scroll margin (3 by defau
 above or below the thumb to page, or drag the thumb to scroll. Releasing it keeps the menu open.
 These interactions use the existing menu mouse settings; <code>mouse-clicking all-off</code> leaves the
 scrollbar visible for keyboard navigation. Passive completion suggestions show the scrollbar;
-press <strong>Tab</strong> or click the menu to activate it before scrolling interactively.</p>
+Up/Down, scrolling, or clicking activates the menu. Mouse activation uses the prompt mouse settings.</p>
 <p><strong>Multiline Detection:</strong>
 CJ's Shell automatically enters multiline mode when:
 - A line ends with a backslash (<code>\</code>)
@@ -1887,35 +1887,36 @@ The syntax highlighter can be temporarily disabled with the <code>--no-syntax-hi
 - Automatic expansion with auto-tab</p>
 <p>Need to author new entries or override the defaults? Check the <a href="../completions/">Completion Authoring Guide</a> for cache formats, nested command support, and manual customization tips.</p>
 <p><strong>Configuration:</strong>
-</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Show passive completions while typing; Tab activates the menu (disabled by default)</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Enable/disable completion preview (enabled by default)</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Control whether mouse clicks immediately accept completion entries</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># (disabled by default)</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># Syntax-highlight completion and history menu entries</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># (disabled by default; reverse highlights every item except the selection)</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>none<span class="p">|</span>single<span class="p">|</span>all<span class="p">|</span>reverse<span class="p">|</span>status
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># Enable/disable auto-tab (disabled by default)</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="c1"># Auto-tab automatically completes unique prefixes</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="c1"># Configure case sensitivity (disabled by default; completions are case-insensitive)</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="c1"># Enable/disable spell correction (enabled by default)</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="c1"># Enable/disable Enter-triggered spell autocorrection (disabled by default)</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="c1"># Cap the number of suggestions shown per request (default: 1000, no upper limit)</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span>&lt;number<span class="p">|</span>default<span class="p">|</span>status&gt;
+</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Show passive completions while typing (disabled by default)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Tab completes a unique match or activates the menu</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Enable/disable completion preview (enabled by default)</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Control whether mouse clicks immediately accept completion entries</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># (disabled by default)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Syntax-highlight completion and history menu entries</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># (disabled by default; reverse highlights every item except the selection)</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>none<span class="p">|</span>single<span class="p">|</span>all<span class="p">|</span>reverse<span class="p">|</span>status
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="c1"># Enable/disable auto-tab (disabled by default)</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Auto-tab automatically completes unique prefixes</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="c1"># Configure case sensitivity (disabled by default; completions are case-insensitive)</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="c1"># Enable/disable spell correction (enabled by default)</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="c1"># Enable/disable Enter-triggered spell autocorrection (disabled by default)</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="c1"># Cap the number of suggestions shown per request (default: 1000, no upper limit)</span>
+</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span>&lt;number<span class="p">|</span>default<span class="p">|</span>status&gt;
 </span></code></pre></div><p></p>
 <p>Lower or raise the completion cap (any value &gt;= 1) to keep the menu focused when working inside
 directories that contain thousands of files or deeply nested command trees.</p>
@@ -1929,15 +1930,17 @@ usual context-aware completion sources.</p>
 list as you type. It updates on edits without extending your input or previewing a candidate.
 Passive updates reuse the prompt's PATH cache, cached documentation, and static value choices.
 Press <code>Tab</code> to refresh command lookups, fetch missing documentation, or run dynamic value providers.
-While passive, arrows edit/navigate the input, Enter submits it, and the mouse wheel does not
-scroll the menu. The first <code>Tab</code> activates the menu and selects the first candidate, even if
-there is only one match; it does not accept or insert a common prefix. When mouse clicking is
-enabled at the prompt, clicking an entry also activates the menu with that entry selected.
-Clicking its header or footer activates the first entry, like Tab. The activating click never
-accepts a completion, even with <code>completion-click-accept on</code>; later clicks follow that setting.
-After accepting a completion, suggestions refresh immediately in <strong>passive</strong> mode; press <code>Tab</code>
-or click the menu to activate them again. The menu stays hidden when the line is empty, there
-are no matches, or whitespace immediately precedes the cursor. Pressing Space or moving between
+While passive, Up/Down activate the menu and select the first candidate. Left edits the input,
+Right accepts the first suggestion, and Enter submits the input. With one available match,
+<code>Tab</code> completes it immediately. With multiple matches,
+the first <code>Tab</code> activates the menu and selects the first candidate without accepting or inserting
+a common prefix. When mouse clicking is enabled at the prompt, scrolling activates the first
+entry, and clicking an entry activates the menu with that entry selected. Clicking its header or
+footer activates the first entry. The activating navigation gesture or click never accepts a
+completion, even with <code>completion-click-accept on</code>; later clicks follow that setting.
+After accepting a completion, suggestions refresh immediately in <strong>passive</strong> mode and focus returns
+to the command line. The menu stays hidden when the line is empty, there are no matches, or
+whitespace immediately precedes the cursor. Pressing Space or moving between
 arguments hides it until you start typing the next argument. An explicit <code>Tab</code> still opens
 completions after whitespace. <code>Esc</code> hides the passive menu without deleting input; editing reopens it.
 This mode replaces inline hints (independently of <code>cjshopt hint</code>); <code>completion-preview</code> and

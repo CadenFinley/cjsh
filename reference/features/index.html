@@ -1219,9 +1219,11 @@ POSIX, Bash, or Zsh behavior is not identical.</p>
     and <code>cjshopt completion-click-accept</code> controls whether
     clicks accept completion entries.</li>
 <li><strong>Automatic completion menu</strong> – Opt in with <code>cjshopt completion-auto-menu on</code> to show passive
-    suggestions while typing. Tab activates selection, scrolling, and acceptance; with prompt mouse
-    clicking enabled, clicking the menu also activates it without accepting. After acceptance,
-    the updated menu stays visible in passive mode until Tab or a click activates it again.</li>
+    suggestions while typing. Tab completes a unique match immediately or activates selection,
+    scrolling, and acceptance for multiple matches. Up/Down also activate the menu; Left edits
+    the command and Right accepts a suggestion. With prompt mouse clicking enabled, scrolling
+    or clicking the menu activates it without accepting. After acceptance,
+    the updated menu stays visible in passive mode until the next interaction.</li>
 <li><strong>Typeahead capture</strong> – Keystrokes entered while a command runs are buffered and replayed when the prompt returns so you never lose input.</li>
 <li><strong>Abbreviations</strong> – <code>abbr</code>/<code>unabbr</code> provide fish-style expansions for frequently typed snippets.</li>
 </ul>
