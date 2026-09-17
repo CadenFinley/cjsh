@@ -400,6 +400,17 @@ def terminal_check_ready(check):
     return ready
 
 
+def completion_menu_closed_ready(expected_input: str):
+    def ready(output: str) -> bool:
+        screen = terminal_screen(output, 24, 100)
+        return (
+            screen[0].rstrip() == f"pty> {expected_input}".rstrip()
+            and not any(line.strip() for line in screen[1:])
+        )
+
+    return ready
+
+
 def assert_completion_auto_menu_cases(binary: str) -> None:
     wheel_down = b"\x1b[<65;1;1M"
     click_second = mouse_left_click(5, 4)
@@ -481,7 +492,8 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
          ("send", b"\n"), ("wait_until", passive_height_ready(3)),
          ("idle", 0.1), ("check", check_passive_height(3)),
          ("send", b"\n"), ("wait_until", passive_height_ready(12)),
-         ("idle", 0.1), ("send", b"\x1b"), ("idle", 0.3),
+         ("idle", 0.1), ("send", b"\x1b"),
+         ("wait_until", completion_menu_closed_ready("s")),
          ("send", b"x\x7f"), ("wait_until", passive_height_ready(3)),
          ("idle", 0.1), ("check", check_passive_height(3)),
          ("send", b"\r")], "s", initial_cols=100,
@@ -554,14 +566,21 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
     assert_completion_auto_menu_whitespace_cases(binary)
     assert_completion_auto_menu_mouse_cases(binary)
 
-    # Separate Escape from following bytes so it is not decoded as an Alt binding.
-    for scenario, chunks, expected in [
-        ("completion_auto_menu", [b"s", b"\x1b", b"\r"], "s"),
-        ("completion_auto_menu", [b"s", b"\x1b", b"0\t\r\r"], "s01"),
-        ("completion_auto_menu_single", [b"hel\t", b"\x1b", b"\r"], "hel"),
-        ("completion_auto_menu_dual", [b"pla\t", b"\x1b", b"\r"], "pla"),
+    # Observe cancellation before sending more bytes: elapsed time alone cannot
+    # keep Escape separate from an Alt sequence when the driver is descheduled.
+    for scenario, prefix, restored, next_keys, expected in [
+        ("completion_auto_menu", b"s", "s", b"\r", "s"),
+        ("completion_auto_menu", b"s", "s", b"0\t\r\r", "s01"),
+        ("completion_auto_menu_single", b"hel\t", "hel", b"\r", "hel"),
+        ("completion_auto_menu_dual", b"pla\t", "pla", b"\r", "pla"),
     ]:
-        assert_timed_case(binary, "auto_menu_cancel", scenario, chunks, expected, step_delay_s=0.5)
+        footer = "enter/right:accept" if prefix.endswith(b"\t") else "tab:activate completions"
+        assert_resize_case(
+            binary, "auto_menu_cancel", scenario,
+            [("send", prefix), ("wait", footer), ("send", b"\x1b"),
+             ("wait_until", completion_menu_closed_ready(restored)), ("send", next_keys)],
+            expected, initial_cols=100,
+        )
 
 
 def assert_completion_auto_menu_whitespace_cases(binary: str) -> None:
@@ -711,9 +730,12 @@ def assert_completion_auto_menu_mouse_cases(binary: str) -> None:
     ]:
         assert_case(binary, label, scenario, keys, expected)
 
-    assert_timed_case(
+    assert_resize_case(
         binary, "cancel_mouse_activated_menu", "completion_auto_menu_mouse",
-        [b"s" + mouse_left_click(5, 4), b"\x1b", b"\r"], "s", step_delay_s=0.5,
+        [("send", b"s"), ("wait", "tab:activate completions"),
+         ("send", mouse_left_click(5, 4)), ("wait", "enter/right:accept"),
+         ("send", b"\x1b"), ("wait_until", completion_menu_closed_ready("s")),
+         ("send", b"\r")], "s", initial_cols=100,
     )
 
 

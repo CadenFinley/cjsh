@@ -11,6 +11,10 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+### Fixed
+
+- Made automatic-completion PTY cancellation wait for Escape to close the menu before sending more keys, preventing slow runners from combining the input into an Alt sequence.
+
 ## [1.5.8] - 2026-09-16
 
 ### Added
