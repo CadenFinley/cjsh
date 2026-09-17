@@ -1266,7 +1266,9 @@ differences from Bash and Zsh.</p>
   setting temporarily).</li>
 <li><strong>Directory-aware history</strong> – Records the working directory before execution. Enable scoped
   recall with <code>cjshopt history-directory on</code>, and include descendants with
-  <code>cjshopt history-directory-subdirs on</code>. Both default to off. <code>Alt+D</code> and <code>Alt+N</code> toggle them
+  <code>cjshopt history-directory-subdirs on</code> or all ancestors up to <code>/</code> with
+  <code>cjshopt history-directory-parents on</code>. All three default to off; subdirs and parents are
+  independent and exclude sibling branches. <code>Alt+D</code>, <code>Alt+N</code>, and <code>Alt+P</code> toggle them
   temporarily inside the history menu.</li>
 <li><strong>Fuzzy history sorting</strong> – History search is newest-first by default, and <code>Alt+S</code> cycles the open
   menu through command-text and metadata sort arrangements without changing the configured default.</li>

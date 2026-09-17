@@ -2166,11 +2166,14 @@ want history expansion to happen as part of command submission.</p>
 <p>Control whether the fuzzy history search menu matches case-sensitively with <code>cjshopt history-search-case &lt;on|off|status&gt;</code> or press <code>Alt+C</code> inside the menu to flip modes on the fly. Turning case sensitivity off lets uppercase queries (for example, <code>LS</code>) match lowercase history entries (<code>ls</code>) when filtering.</p>
 <p>Use <code>cjshopt history-directory on|off|status</code> to scope interactive history recall and suggestions
 to the current directory. Use <code>cjshopt history-directory-subdirs on|off|status</code> to also include
-commands run in its nested directories. Both default to <code>off</code>. A parent includes descendants when
-nested scope is on; a child does not include its parent's commands. Older entries without <code>cwd</code>
-remain available with directory scope off. Add these commands to <code>~/.cjshrc</code> to persist preferences.</p>
-<p>Inside the history menu, <code>Alt+D</code> toggles directory scope and <code>Alt+N</code> toggles nested directories for
-the open menu. Both settings appear in the status line, alongside case sensitivity.</p>
+commands run in its nested directories, and <code>cjshopt history-directory-parents on|off|status</code> to
+include commands run in all ancestor directories up to <code>/</code>. All three default to <code>off</code>. Subdirs
+and parents work independently while directory scope is on; enabling both still excludes sibling
+branches. Older entries without <code>cwd</code> remain available with directory scope off. Add these commands
+to <code>~/.cjshrc</code> to persist preferences.</p>
+<p>Inside the history menu, <code>Alt+D</code> toggles directory scope, <code>Alt+N</code> toggles nested directories, and
+<code>Alt+P</code> toggles ancestor directories for the open menu. All three settings appear in the status
+line, alongside case sensitivity, and are restored when you accept or cancel the menu.</p>
 <p>History search results are sorted newest-first by default. Press <code>Alt+S</code> inside the menu to cycle the current menu through available sort arrangements such as command text and metadata keys present in the matching history entries. This only changes the open menu; the default sort can be changed by callers through the isocline history search sort API.</p>
 <h2 id="agent-assisted-command-writing">Agent-Assisted Command Writing</h2>
 <p>CJSH can pass the current editor buffer to any command-line AI executor and present the returned
@@ -2301,6 +2304,7 @@ action.</p>
 <li><code>Alt+C</code>: Toggle case sensitivity while the fuzzy history search menu is open</li>
 <li><code>Alt+D</code>: Toggle directory scope while the fuzzy history search menu is open</li>
 <li><code>Alt+N</code>: Toggle inclusion of nested directories while the fuzzy history search menu is open</li>
+<li><code>Alt+P</code>: Toggle inclusion of all ancestor directories while the fuzzy history search menu is open</li>
 <li><code>Alt+S</code>: Cycle sort arrangements while the fuzzy history search menu is open</li>
 <li><code>↑</code>: Previous history entry</li>
 <li><code>↓</code>: Next history entry</li>

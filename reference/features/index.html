@@ -1200,8 +1200,9 @@ POSIX, Bash, or Zsh behavior is not identical.</p>
     whether the fuzzy history menu matches case-sensitively with <code>cjshopt history-search-case</code> or
     flip it on the fly with <code>Alt+C</code> inside the menu. Press <code>Alt+S</code> to cycle sort modes for the open
     history search menu. Directory-aware recall is available with <code>cjshopt history-directory</code>,
-    with optional descendants via <code>cjshopt history-directory-subdirs</code>; <code>Alt+D</code> and <code>Alt+N</code> toggle
-    these for the open menu. At the end of the input buffer, <code>Up</code>/<code>Down</code> move between history entries;
+    with optional descendants via <code>cjshopt history-directory-subdirs</code> and all ancestors via
+    <code>cjshopt history-directory-parents</code>; <code>Alt+D</code>, <code>Alt+N</code>, and <code>Alt+P</code> toggle these for the open menu.
+    At the end of the input buffer, <code>Up</code>/<code>Down</code> move between history entries;
     recalled entries place the cursor at the end of the buffer, including multiline commands.
     <code>Shift+Up</code>/<code>Shift+Down</code> navigate history from any cursor position.</li>
 <li><strong>Custom key bindings</strong> – An Emacs-inspired default profile, an optional <code>vim</code> profile that adds

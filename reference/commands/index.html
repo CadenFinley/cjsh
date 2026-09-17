@@ -1879,10 +1879,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#history-directory-history-directory-subdirs" class="md-nav__link">
+  <a href="#history-directory-history-directory-subdirs-history-directory-parents" class="md-nav__link">
     <span class="md-ellipsis">
       
-        history-directory / history-directory-subdirs
+        history-directory / history-directory-subdirs / history-directory-parents
       
     </span>
   </a>
@@ -3030,6 +3030,7 @@ without printing a literal newline).</p>
 - <code>history-search-case</code> - Configure fuzzy history case sensitivity
 - <code>history-directory</code> - Scope interactive history to the current directory
 - <code>history-directory-subdirs</code> - Include nested directories in history scope
+- <code>history-directory-parents</code> - Include all ancestor directories in history scope
 - <code>completion-spell</code> - Toggle spell correction suggestions in completions
 - <code>completion-spell-enter</code> - Toggle Enter-triggered spell autocorrection when exactly one spell match exists
 - <code>completion-learning</code> - Toggle automatic completion learning from man pages
@@ -3131,23 +3132,60 @@ editing behaviors.</p>
 </span><span id="__span-72-3"><a id="__codelineno-72-3" name="__codelineno-72-3" href="#__codelineno-72-3"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the preference.</p>
-<h4 id="history-directory-history-directory-subdirs">history-directory / history-directory-subdirs</h4>
+<h4 id="history-directory-history-directory-subdirs-history-directory-parents">history-directory / history-directory-subdirs / history-directory-parents</h4>
 <p>Scope arrow-key recall, fuzzy history search, and history completions to the current working
-directory. Both settings default to <code>off</code> and accept <code>on</code>, <code>off</code>, <code>status</code>, and the same synonyms
+directory. All three settings default to <code>off</code> and accept <code>on</code>, <code>off</code>, <code>status</code>, and the same synonyms
 as <code>history-search-case</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-73-1"><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>on<span class="w">             </span><span class="c1"># Use commands run in the current directory</span>
 </span><span id="__span-73-2"><a id="__codelineno-73-2" name="__codelineno-73-2" href="#__codelineno-73-2"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>off<span class="w">            </span><span class="c1"># Use history from all directories (default)</span>
 </span><span id="__span-73-3"><a id="__codelineno-73-3" name="__codelineno-73-3" href="#__codelineno-73-3"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>status<span class="w">         </span><span class="c1"># Show the current setting</span>
 </span><span id="__span-73-4"><a id="__codelineno-73-4" name="__codelineno-73-4" href="#__codelineno-73-4"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>on<span class="w">     </span><span class="c1"># Also include commands from nested directories</span>
-</span><span id="__span-73-5"><a id="__codelineno-73-5" name="__codelineno-73-5" href="#__codelineno-73-5"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>off<span class="w">    </span><span class="c1"># Match only the current directory (default)</span>
+</span><span id="__span-73-5"><a id="__codelineno-73-5" name="__codelineno-73-5" href="#__codelineno-73-5"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>off<span class="w">    </span><span class="c1"># Exclude nested directories (default)</span>
 </span><span id="__span-73-6"><a id="__codelineno-73-6" name="__codelineno-73-6" href="#__codelineno-73-6"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the nested-directory setting</span>
+</span><span id="__span-73-7"><a id="__codelineno-73-7" name="__codelineno-73-7" href="#__codelineno-73-7"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>on<span class="w">     </span><span class="c1"># Also include commands from all ancestors up to /</span>
+</span><span id="__span-73-8"><a id="__codelineno-73-8" name="__codelineno-73-8" href="#__codelineno-73-8"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>off<span class="w">    </span><span class="c1"># Exclude ancestor directories (default)</span>
+</span><span id="__span-73-9"><a id="__codelineno-73-9" name="__codelineno-73-9" href="#__codelineno-73-9"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the ancestor-directory setting</span>
 </span></code></pre></div>
-<p>With both options enabled in <code>/work/project</code>, commands from <code>/work/project/src</code> are included.
-Commands from <code>/work/project-other</code> are excluded. In <code>/work/project/src</code>, commands recorded in
-<code>/work/project</code> are excluded. The nested-directory setting takes effect when directory scope is on.</p>
-<p>Inside the fuzzy history menu, <code>Alt+D</code> toggles directory scope and <code>Alt+N</code> toggles nested directories
-for that menu only. Its status line shows both settings. Add the <code>cjshopt</code> commands to <code>~/.cjshrc</code>
-to apply your preferences in future sessions.</p>
+<p>The subdirs and parents settings take effect only when directory scope is on, and work independently:</p>
+<table>
+<thead>
+<tr>
+<th>Subdirs</th>
+<th>Parents</th>
+<th>Included directories</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Off</td>
+<td>Off</td>
+<td>Current directory</td>
+</tr>
+<tr>
+<td>On</td>
+<td>Off</td>
+<td>Current directory and descendants</td>
+</tr>
+<tr>
+<td>Off</td>
+<td>On</td>
+<td>Current directory and all ancestors up to <code>/</code></td>
+</tr>
+<tr>
+<td>On</td>
+<td>On</td>
+<td>Current directory, descendants, and all ancestors up to <code>/</code></td>
+</tr>
+</tbody>
+</table>
+<p>For example, in <code>/work/project/src</code>, parents includes commands recorded in <code>/work/project</code>,
+<code>/work</code>, and <code>/</code>. Subdirs includes commands from <code>/work/project/src/deep</code>. Even with both enabled,
+commands from <code>/work/project/tests</code> and <code>/work/project-other</code> are excluded: including an ancestor's
+own history does not include its other descendants.</p>
+<p>Inside the fuzzy history menu, <code>Alt+D</code> toggles directory scope, <code>Alt+N</code> toggles nested directories,
+and <code>Alt+P</code> toggles ancestor directories for that menu only. Its status line shows all three
+settings, and accepting or canceling the menu restores your configured settings. Add the <code>cjshopt</code>
+commands to <code>~/.cjshrc</code> to apply your preferences in future sessions.</p>
 <p>New history records always capture the physical working directory before command execution,
 including when filtering is off. Symlink paths to the same directory share a scope. Older records
 without directory metadata remain available in global history and are excluded from directory
