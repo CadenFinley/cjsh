@@ -389,6 +389,17 @@ def assert_case(
         raise AssertionError(f"{label} expected {expected!r}, got {actual!r}")
 
 
+def terminal_check_ready(check):
+    def ready(output: str) -> bool:
+        try:
+            check(output)
+        except AssertionError:
+            return False
+        return True
+
+    return ready
+
+
 def assert_completion_auto_menu_cases(binary: str) -> None:
     wheel_down = b"\x1b[<65;1;1M"
     click_second = mouse_left_click(5, 4)
@@ -455,16 +466,7 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
         return check
 
     def passive_height_ready(count: int):
-        check = check_passive_height(count)
-
-        def ready(output: str) -> bool:
-            try:
-                check(output)
-            except AssertionError:
-                return False
-            return True
-
-        return ready
+        return terminal_check_ready(check_passive_height(count))
 
     # A quiet PTY is not necessarily a finished redraw: macOS CI can pause the
     # driver for longer than the idle interval, even just after the first prompt.
@@ -487,8 +489,9 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
 
     def check_passive(expected_input: str, count: int):
         def check(output: str) -> None:
-            screen = "\n".join(terminal_screen(output, 24, 100))
-            if f"pty> {expected_input}".rstrip() not in screen or "→" in screen:
+            rows = terminal_screen(output, 24, 100)
+            screen = "\n".join(rows)
+            if rows[0].rstrip() != f"pty> {expected_input}".rstrip() or "→" in screen:
                 raise AssertionError(f"passive menu must preserve input and clear selection: {screen!r}")
             if count > 0:
                 entries = re.findall(r"^  (?:s\d{2}|hello)\b", screen, re.M)
@@ -499,18 +502,28 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
                 raise AssertionError(f"empty/no-match input must remove the menu: {screen!r}")
         return check
 
+    def passive_ready(expected_input: str, count: int):
+        return terminal_check_ready(check_passive(expected_input, count))
+
     assert_resize_case(
         binary, "live_passive_filtering", "completion_auto_menu",
-        [("send", b"s"), ("idle", 0.1), ("check", check_passive("s", 12)),
-         ("send", b"02"), ("idle", 0.1), ("check", check_passive("s02", 1)),
-         ("send", b"x"), ("idle", 0.1), ("check", check_passive("s02x", 0)),
-         ("send", b"\x7f"), ("idle", 0.1), ("check", check_passive("s02", 1)),
-         ("send", b"\x15"), ("idle", 0.1), ("check", check_passive("", 0)),
+        [("send", b"s"), ("wait_until", passive_ready("s", 12)),
+         ("idle", 0.1), ("check", check_passive("s", 12)),
+         ("send", b"02"), ("wait_until", passive_ready("s02", 1)),
+         ("idle", 0.1), ("check", check_passive("s02", 1)),
+         ("send", b"x"), ("wait_until", passive_ready("s02x", 0)),
+         ("idle", 0.1), ("check", check_passive("s02x", 0)),
+         ("send", b"\x7f"), ("wait_until", passive_ready("s02", 1)),
+         ("idle", 0.1), ("check", check_passive("s02", 1)),
+         ("send", b"\x15"), ("wait_until", passive_ready("", 0)),
+         ("idle", 0.1), ("check", check_passive("", 0)),
          ("send", b"\r")], "", initial_cols=100,
     )
 
     # Accepting returns directly to a refreshed passive menu without another typed character.
     # The subsequent Enter submits the input rather than accepting a completion again.
+    # Mouse press can redraw the active selection before release is processed, so
+    # wait for the passive state instead of treating a quiet PTY as completion.
     for scenario, prefix, accept_key, expected in [
         ("completion_auto_menu", b"s", b"\r", "s01"),
         ("completion_auto_menu", b"s", RIGHT, "s01"),
@@ -522,8 +535,10 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
         assert_resize_case(
             binary, "accept_returns_to_passive", scenario,
             [("send", prefix + b"\t"), ("wait", "enter/right:accept"), ("idle", 0.1),
-             ("send", accept_key), ("idle", 0.5), ("check", check_passive(expected, 1)),
-             ("send", b"\t"), ("idle", 0.1), ("send", b"\r"), ("idle", 0.5),
+             ("send", accept_key), ("wait_until", passive_ready(expected, 1)),
+             ("idle", 0.1), ("check", check_passive(expected, 1)),
+             ("send", b"\t"), ("wait", "enter/right:accept"), ("idle", 0.1),
+             ("send", b"\r"), ("wait_until", passive_ready(expected, 1)), ("idle", 0.1),
              ("check", check_passive(expected, 1)), ("send", b"\r")],
             expected, initial_cols=100,
         )
@@ -613,9 +628,10 @@ def assert_completion_auto_menu_whitespace_cases(binary: str) -> None:
     ]:
         actions = []
         for keys, expected_input, mode in steps:
+            check = check_menu(expected_input, mode)
             actions.extend([
-                ("send", keys), ("idle", 0.1),
-                ("check", check_menu(expected_input, mode)),
+                ("send", keys), ("wait_until", terminal_check_ready(check)),
+                ("idle", 0.1), ("check", check),
             ])
         actions.append(("send", b"\r"))
         actual = run_resize_case(
@@ -667,8 +683,9 @@ def assert_completion_auto_menu_mouse_cases(binary: str) -> None:
 
         result = run_resize_case(
             binary, scenario,
-            [("send", prefix), ("wait", "Completions"), ("idle", 0.1),
-             ("send", click_fragment(target, rows, cols)), ("idle", 0.5),
+            [("send", prefix), ("wait", "tab:activate"), ("idle", 0.1),
+             ("send", click_fragment(target, rows, cols)),
+             ("wait_until", terminal_check_ready(check_active)), ("idle", 0.1),
              ("check", check_active), ("send", b"\r\r")],
             initial_rows=rows, initial_cols=cols, respond_to_cursor_queries=True,
         )

@@ -39,6 +39,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 - Quick history substitution now rejects empty search text such as `^^` instead of rerunning the previous command, and preserves text after the closing caret in expressions such as `^old^new^ extra`.
 - Made history-sort PTY assertions handle wrapped headers at a fixed terminal width, avoiding false failures after adding the ancestor-directory status field.
+- Made automatic-completion PTY checks wait for the expected screen state, avoiding false failures while mouse release or menu redraws are still being processed on slower runners.
 - Successful bare-command history entries now defer to available regular command completions, so commands such as `lazygit` keep their executable description and trailing space as well as their history priority.
 - Regular completions now retain priority from matching history when duplicate history suggestions are removed, preserving file and directory suffixes and command, option, subcommand, and value descriptions before applying result limits. Commands used with arguments also boost the bare command name, so `git clean -xdf` in history prioritizes `git`.
 - Ranked matching command names shortest first with alphabetical ties before applying completion limits, so commands such as `git` precede `gen_bridge_metadata` for `g` in Tab completion and automatic suggestions.
