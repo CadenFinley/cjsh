@@ -11,20 +11,32 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-09-16
+
 ### Added
 
 - Added opt-in `cjshopt history-directory-parents on|off|status` and matching isocline APIs to include commands from all ancestor directories up to `/` while directory-aware history is enabled. It works independently of `history-directory-subdirs` and excludes sibling branches. `Alt+P` toggles it temporarily inside the history menu.
 - Added independent isocline menu-height setters/getters for completion, history, command palette, and custom menus, exposed through `cjshopt completion-menu-max-lines`, `history-menu-max-lines`, `command-palette-max-lines`, and `custom-menu-max-lines` (`<count|status>`). Ctrl+J inside any menu temporarily toggles between its configured limit and all available terminal space; closing the menu resets the toggle.
 - Added opt-in `cjshopt completion-auto-menu on|off|status` and matching isocline APIs. Typing shows an unselected, live completion list; Tab activates navigation, mouse interaction, preview, and acceptance without inserting a common prefix or accepting a lone match. With prompt mouse clicking enabled, clicking a passive entry activates and selects it; header/footer clicks select the first entry. The activating click never accepts. After acceptance, refreshed suggestions stay visible in passive mode until Tab or another menu click activates them.
+- Added scrollbars to overflowing completion, history, command palette, and custom menus, with click-to-page and thumb-drag scrolling that respect the existing mouse settings.
+- Added regression coverage for automatic completion menus, history-based completion ranking, ancestor-directory history, menu sizing and scrollbars, quick history substitution, and isocline performance and allocation-failure handling.
 
 ### Changed
 
 - Menu content-row defaults are now 15 for completion, history, command palette, and custom menus. Per-menu `cjshopt` overrides and the temporary Ctrl+J height toggle remain available.
+- Completion menus now always use the full single-column list with scrolling, paging, and mouse support.
+- Refreshed menu headers, result counts, shortcut footers, and selected-entry styling, with terminal-space calculations that account for wrapped headers and help text.
+- Reduced isocline editing overhead with indexed completion deduplication, reusable history snapshots, compact undo/redo storage, geometric string-buffer growth, and faster printable-ASCII width checks.
+- Extended the agent waiting-status shimmer across the configured command while preserving literal markup and UTF-8 characters. Color-disabled terminals retain the once-per-second timer.
+
+### Removed
+
 - Removed the shared `ic_set_menu_max_line_count()` / `ic_get_menu_max_line_count()` API and `cjshopt menu-max-lines`. Use the per-menu isocline APIs or `cjshopt` settings instead, and replace the old option in startup files.
-- Completion menus now always use the full single-column list with scrolling, paging, and mouse support. Removed the collapsed menu, its expand/collapse controls, and `cjshopt completion-menu-expanded` (including the corresponding isocline API). Remove this setting from existing startup files.
+- Removed the collapsed completion menu, its expand/collapse controls, and `cjshopt completion-menu-expanded` (including the corresponding isocline API). Remove this setting from existing startup files.
 
 ### Fixed
 
+- Quick history substitution now rejects empty search text such as `^^` instead of rerunning the previous command, and preserves text after the closing caret in expressions such as `^old^new^ extra`.
 - Successful bare-command history entries now defer to available regular command completions, so commands such as `lazygit` keep their executable description and trailing space as well as their history priority.
 - Regular completions now retain priority from matching history when duplicate history suggestions are removed, preserving file and directory suffixes and command, option, subcommand, and value descriptions before applying result limits. Commands used with arguments also boost the bare command name, so `git clean -xdf` in history prioritizes `git`.
 - Ranked matching command names shortest first with alphabetical ties before applying completion limits, so commands such as `git` precede `gen_bridge_metadata` for `g` in Tab completion and automatic suggestions.
@@ -1011,7 +1023,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Included JSON prompt themes, a shared-library plugin engine, and an optional built-in AI assistant.
 - Included CMake builds, installation helpers, and shell compatibility tests.
 
-[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.7...HEAD
+[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.8...HEAD
+[1.5.8]: https://github.com/CadenFinley/cjsh/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/CadenFinley/cjsh/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/CadenFinley/cjsh/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/CadenFinley/cjsh/compare/v1.5.4...v1.5.5
