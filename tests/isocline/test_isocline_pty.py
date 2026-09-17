@@ -417,10 +417,14 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
     for label, scenario, keys, expected in [
         ("passive_enter", "completion_auto_menu", b"s\r", "s"),
         ("passive_digits", "completion_auto_menu", b"s02\r", "s02"),
-        ("passive_right", "completion_auto_menu", b"s" + RIGHT + b"\r", "s"),
+        ("passive_right_accepts", "completion_auto_menu", b"s" + RIGHT + b"\r", "s01"),
+        ("passive_left_edits", "completion_auto_menu", b"s" + LEFT + b"X\r", "Xs"),
         ("passive_end", "completion_auto_menu", b"s" + END + b"\r", "s"),
         ("passive_ctrl_f", "completion_auto_menu", b"s\x06\r", "s"),
-        ("passive_down", "completion_auto_menu", b"s" + DOWN + b"X\r", "sX"),
+        ("passive_down_activates", "completion_auto_menu", b"s" + DOWN + b"\r\r", "s01"),
+        ("passive_up_activates", "completion_auto_menu", b"s" + UP + b"\r\r", "s01"),
+        ("passive_down_then_navigate", "completion_auto_menu", b"s" + DOWN + DOWN + b"\r\r", "s02"),
+        ("active_left_edits", "completion_auto_menu", b"s" + DOWN + LEFT + b"X\r", "Xs"),
         ("passive_wheel", "completion_auto_menu", b"s" + wheel_down + b"\r", "s"),
         ("passive_click_disabled", "completion_auto_menu", b"s" + click_second + b"\r", "s"),
         ("passive_click_activates", "completion_auto_menu_mouse", b"s" + click_second + b"\r\r", "s02"),
@@ -430,9 +434,15 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
         ("active_navigation", "completion_auto_menu", b"s\t" + DOWN + b"\r\r", "s02"),
         ("active_wheel", "completion_auto_menu", b"s\t" + wheel_down + b"\r\r", "s02"),
         ("active_click", "completion_auto_menu", b"s\t" + click_second + b"\r", "s02"),
-        ("active_single", "completion_auto_menu_single", b"hel\t\r\r", "hello"),
+        ("first_tab_single", "completion_auto_menu_single", b"hel\t\r", "hello"),
+        ("first_tab_single_then_type", "completion_auto_menu_single", b"hel\t!\r", "hello!"),
+        ("first_tab_single_undo", "completion_auto_menu_single", b"hel\t\x1f\r", "hel"),
+        ("right_single", "completion_auto_menu_single", b"hel" + RIGHT + b"\r", "hello"),
+        ("right_single_undo", "completion_auto_menu_single", b"hel" + RIGHT + b"\x1f\r", "hel"),
+        ("first_tab_spell", "completion_auto_menu_spell", b"hlelo\t\r", "hello"),
         ("second_tab_single", "completion_auto_menu_single", b"hel\t\t\r", "hello"),
         ("active_filter", "completion_auto_menu", b"s\t02\r\r", "s02"),
+        ("active_single_tab", "completion_auto_menu", b"s\t02\t\r", "s02"),
         ("passive_backspace", "completion_auto_menu", b"s02\x7f\t\r\r", "s01"),
         ("passive_delete", "completion_auto_menu", b"s02" + LEFT + b"\x1b[3~\t\r\r", "s01"),
         ("no_match_recovery", "completion_auto_menu", b"sx\x7f\t\r\r", "s01"),
@@ -443,13 +453,13 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
     ]:
         assert_case(binary, label, scenario, keys, expected)
 
-    for scenario, prefix in [
-        ("completion_auto_menu", b"s"),
-        ("completion_auto_menu_single_hints", b"hel"),
-        ("completion_auto_menu_dual", b"pla"),
+    for scenario, prefix, footer in [
+        ("completion_auto_menu", b"s", "tab:activate completions"),
+        ("completion_auto_menu_single_hints", b"hel", "tab:complete"),
+        ("completion_auto_menu_dual", b"pla", "tab:activate completions"),
     ]:
         result, output = run_case(binary, scenario, prefix + b"\r", capture_output=True)
-        if result != prefix.decode() or "tab:activate completions" not in output:
+        if result != prefix.decode() or footer not in output:
             raise AssertionError(f"{scenario} should show passive suggestions without Tab: {output!r}")
         if "→" in output or "enter/right:accept" in output or "\x1b[?1000h" in output:
             raise AssertionError(f"{scenario} must not select, preview, or capture the mouse: {output!r}")
@@ -507,9 +517,10 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
                 raise AssertionError(f"passive menu must preserve input and clear selection: {screen!r}")
             if count > 0:
                 entries = re.findall(r"^  (?:s\d{2}|hello)\b", screen, re.M)
-                if "tab:activate completions" not in screen or len(entries) != count:
+                footer = "tab:complete" if count == 1 else "tab:activate completions"
+                if footer not in screen or len(entries) != count:
                     raise AssertionError(f"expected {count} live passive completions: {screen!r}")
-                assert_completion_footer_spacing(output, 24, 100, "tab:activate completions")
+                assert_completion_footer_spacing(output, 24, 100, footer)
             elif "Completions" in screen:
                 raise AssertionError(f"empty/no-match input must remove the menu: {screen!r}")
         return check
@@ -540,20 +551,65 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
         ("completion_auto_menu", b"s", b"\r", "s01"),
         ("completion_auto_menu", b"s", RIGHT, "s01"),
         ("completion_auto_menu", b"s", click_second, "s02"),
-        ("completion_auto_menu_single", b"hel", b"\t", "hello"),
-        ("completion_auto_menu_single", b"hello", b"\r", "hello"),
-        ("completion_auto_menu_single_autotab", b"hel", b"\r", "hello"),
     ]:
         assert_resize_case(
             binary, "accept_returns_to_passive", scenario,
             [("send", prefix + b"\t"), ("wait", "enter/right:accept"), ("idle", 0.1),
              ("send", accept_key), ("wait_until", passive_ready(expected, 1)),
              ("idle", 0.1), ("check", check_passive(expected, 1)),
-             ("send", b"\t"), ("wait", "enter/right:accept"), ("idle", 0.1),
-             ("send", b"\r"), ("wait_until", passive_ready(expected, 1)), ("idle", 0.1),
+             ("send", b"\t"), ("wait_until", passive_ready(expected, 1)), ("idle", 0.1),
              ("check", check_passive(expected, 1)), ("send", b"\r")],
             expected, initial_cols=100,
         )
+
+    # A unique match completes on the first Tab, including no-op and spell candidates.
+    # Observe the passive state before Enter so a preview cannot masquerade as acceptance.
+    for scenario, prefix, accept, remaining in [
+        ("completion_auto_menu_single", b"hel", b"\t", 1),
+        ("completion_auto_menu_single", b"hello", b"\t", 1),
+        ("completion_auto_menu_single_nopreview", b"hel", b"\t", 1),
+        ("completion_auto_menu_single_hints", b"hel", b"\t", 1),
+        ("completion_auto_menu_single_autotab", b"hel", b"\t", 1),
+        ("completion_auto_menu_spell", b"hlelo", b"\t", 0),
+        ("completion_auto_menu_single", b"hel", RIGHT, 1),
+        ("completion_auto_menu_single_autotab", b"hel", RIGHT, 1),
+    ]:
+        assert_resize_case(
+            binary, "complete_without_activation", scenario,
+            [("send", prefix), ("wait", "tab:complete"), ("send", accept),
+             ("wait_until", passive_ready("hello", remaining)), ("idle", 0.1),
+             ("check", check_passive("hello", remaining)), ("send", b"\r")],
+            "hello", initial_cols=100,
+        )
+
+    # Navigation activates even a unique candidate without accepting it. A later Right
+    # accepts the selection; mouse wheel activation also works in smart mouse mode.
+    wheel_up = b"\x1b[<64;5;3M"
+    for scenario, prefix, activate, expected in [
+        ("completion_auto_menu", b"s", DOWN, "s01"),
+        ("completion_auto_menu", b"s", UP, "s01"),
+        ("completion_auto_menu_single", b"hel", DOWN, "hello"),
+        ("completion_auto_menu_single", b"hel", UP, "hello"),
+        ("completion_auto_menu_mouse", b"s", wheel_down, "s01"),
+        ("completion_auto_menu_mouse", b"s", wheel_up, "s01"),
+        ("completion_auto_menu_mouse_smart", b"s", wheel_down, "s01"),
+        ("completion_auto_menu_mouse_smart", b"s", wheel_up, "s01"),
+        ("completion_auto_menu_mouse_single", b"hel", wheel_down, "hello"),
+    ]:
+        def check_active(output: str) -> None:
+            screen = "\n".join(terminal_screen(output, 24, 120))
+            if f"→ {expected}" not in screen or "enter/right:accept" not in screen:
+                raise AssertionError(f"navigation should activate the first completion: {screen!r}")
+
+        result = run_resize_case(
+            binary, scenario,
+            [("send", prefix), ("wait", "up/down:activate"), ("send", activate),
+             ("wait_until", terminal_check_ready(check_active)),
+             ("send", RIGHT + b"\r")],
+            initial_cols=120,
+        )
+        if result != expected:
+            raise AssertionError(f"{scenario}: accepting after activation got {result!r}")
 
     assert_resize_case(
         binary, "passive_menu_resize", "completion_auto_menu",
@@ -568,13 +624,12 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
 
     # Observe cancellation before sending more bytes: elapsed time alone cannot
     # keep Escape separate from an Alt sequence when the driver is descheduled.
-    for scenario, prefix, restored, next_keys, expected in [
-        ("completion_auto_menu", b"s", "s", b"\r", "s"),
-        ("completion_auto_menu", b"s", "s", b"0\t\r\r", "s01"),
-        ("completion_auto_menu_single", b"hel\t", "hel", b"\r", "hel"),
-        ("completion_auto_menu_dual", b"pla\t", "pla", b"\r", "pla"),
+    for scenario, prefix, footer, restored, next_keys, expected in [
+        ("completion_auto_menu", b"s", "tab:activate completions", "s", b"\r", "s"),
+        ("completion_auto_menu", b"s", "tab:activate completions", "s", b"0\t\r\r", "s01"),
+        ("completion_auto_menu_single", b"hel", "tab:complete", "hel", b"\r", "hel"),
+        ("completion_auto_menu_dual", b"pla\t", "enter/right:accept", "pla", b"\r", "pla"),
     ]:
-        footer = "enter/right:accept" if prefix.endswith(b"\t") else "tab:activate completions"
         assert_resize_case(
             binary, "auto_menu_cancel", scenario,
             [("send", prefix), ("wait", footer), ("send", b"\x1b"),
@@ -596,8 +651,11 @@ def assert_completion_auto_menu_whitespace_cases(binary: str) -> None:
                         f"{label}: whitespace before the cursor must hide the menu: {screen!r}"
                     )
             else:
-                footer = "tab:activate completions" if mode == "passive" else "enter/right:accept"
-                if "Completions" not in menu or footer not in menu:
+                footers = (
+                    ("tab:activate completions", "tab:complete")
+                    if mode == "passive" else ("enter/right:accept",)
+                )
+                if "Completions" not in menu or not any(footer in menu for footer in footers):
                     raise AssertionError(f"{label}: expected a {mode} completion menu: {screen!r}")
         return check
 
@@ -690,19 +748,20 @@ def assert_completion_auto_menu_mouse_cases(binary: str) -> None:
         ("completion_auto_menu_mouse", "  s02", "s02", "s02", 16, 20),
     ]:
         prefix = b"hel" if "_single" in scenario else b"s"
+        footer = "tab:complete" if "_single" in scenario else "tab:activate"
         if "_multiline" in scenario:
             prefix = b"\x7fs"  # replace the seeded final character without submitting a newline
 
         def check_active(output: str) -> None:
             screen = "\n".join(terminal_screen(output, rows, cols))
-            if f"→ {selected}" not in screen or "tab:activate" in screen:
+            if f"→ {selected}" not in screen or footer in screen:
                 raise AssertionError(f"activating click must only select {selected!r}: {screen!r}")
             if "_nopreview" in scenario and "pty> s02" in screen:
                 raise AssertionError(f"activating click must not modify input: {screen!r}")
 
         result = run_resize_case(
             binary, scenario,
-            [("send", prefix), ("wait", "tab:activate"), ("idle", 0.1),
+            [("send", prefix), ("wait", footer), ("idle", 0.1),
              ("send", click_fragment(target, rows, cols)),
              ("wait_until", terminal_check_ready(check_active)), ("idle", 0.1),
              ("check", check_active), ("send", b"\r\r")],

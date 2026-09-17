@@ -4308,6 +4308,12 @@ edit_loop_entry:
                 continue;
             }
 
+            // Activate before dismissing the passive list or yielding wheel input to the
+            // terminal in smart mouse mode. The displayed candidates remain the source.
+            if (edit_handle_completion_auto_menu_key(env, &eb, c)) {
+                continue;
+            }
+
             // clear hint only after a potential resize (so resize row calculations
             // are correct)
             const bool had_hint = (sbuf_len(eb.hint) > 0);

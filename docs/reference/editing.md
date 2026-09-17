@@ -109,7 +109,7 @@ When a menu has more items than fit on screen, a scrollbar appears beside its it
 above or below the thumb to page, or drag the thumb to scroll. Releasing it keeps the menu open.
 These interactions use the existing menu mouse settings; `mouse-clicking all-off` leaves the
 scrollbar visible for keyboard navigation. Passive completion suggestions show the scrollbar;
-press **Tab** or click the menu to activate it before scrolling interactively.
+Up/Down, scrolling, or clicking activates the menu. Mouse activation uses the prompt mouse settings.
 
 **Multiline Detection:**
 CJ's Shell automatically enters multiline mode when:
@@ -269,7 +269,8 @@ Need to author new entries or override the defaults? Check the [Completion Autho
 
 **Configuration:**
 ```bash
-# Show passive completions while typing; Tab activates the menu (disabled by default)
+# Show passive completions while typing (disabled by default)
+# Tab completes a unique match or activates the menu
 cjshopt completion-auto-menu on|off|status
 
 # Enable/disable completion preview (enabled by default)
@@ -314,15 +315,17 @@ usual context-aware completion sources.
 list as you type. It updates on edits without extending your input or previewing a candidate.
 Passive updates reuse the prompt's PATH cache, cached documentation, and static value choices.
 Press `Tab` to refresh command lookups, fetch missing documentation, or run dynamic value providers.
-While passive, arrows edit/navigate the input, Enter submits it, and the mouse wheel does not
-scroll the menu. The first `Tab` activates the menu and selects the first candidate, even if
-there is only one match; it does not accept or insert a common prefix. When mouse clicking is
-enabled at the prompt, clicking an entry also activates the menu with that entry selected.
-Clicking its header or footer activates the first entry, like Tab. The activating click never
-accepts a completion, even with `completion-click-accept on`; later clicks follow that setting.
-After accepting a completion, suggestions refresh immediately in **passive** mode; press `Tab`
-or click the menu to activate them again. The menu stays hidden when the line is empty, there
-are no matches, or whitespace immediately precedes the cursor. Pressing Space or moving between
+While passive, Up/Down activate the menu and select the first candidate. Left edits the input,
+Right accepts the first suggestion, and Enter submits the input. With one available match,
+`Tab` completes it immediately. With multiple matches,
+the first `Tab` activates the menu and selects the first candidate without accepting or inserting
+a common prefix. When mouse clicking is enabled at the prompt, scrolling activates the first
+entry, and clicking an entry activates the menu with that entry selected. Clicking its header or
+footer activates the first entry. The activating navigation gesture or click never accepts a
+completion, even with `completion-click-accept on`; later clicks follow that setting.
+After accepting a completion, suggestions refresh immediately in **passive** mode and focus returns
+to the command line. The menu stays hidden when the line is empty, there are no matches, or
+whitespace immediately precedes the cursor. Pressing Space or moving between
 arguments hides it until you start typing the next argument. An explicit `Tab` still opens
 completions after whitespace. `Esc` hides the passive menu without deleting input; editing reopens it.
 This mode replaces inline hints (independently of `cjshopt hint`); `completion-preview` and

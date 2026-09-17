@@ -134,7 +134,7 @@ def main(binary: str) -> None:
             cancel(session)
             start = type_text(session, "automenu-tool1 --s")
             session.wait_for(b"--sample", start)
-            session.wait_for(b"tab:activate", start)
+            session.wait_for(b"tab:complete", start)
             if calls.read_bytes() != fetched:
                 raise AssertionError("passive completion fetched cached documentation again")
             cancel(session)

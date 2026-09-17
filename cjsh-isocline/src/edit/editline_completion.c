@@ -296,11 +296,11 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     }
     completions_sort(env->completions);
 
-    const char* footer =
-        (eb->mouse_reporting_enabled
-             ? "[ic-diminish](tab:activate completions click:activate menu ctrl+j:resize "
-               "esc:hide)[/]"
-             : "[ic-diminish](tab:activate completions ctrl+j:resize esc:hide)[/]");
+    char footer[192];
+    (void)snprintf(footer, sizeof(footer),
+                   "[ic-diminish](tab:%s up/down:activate right:accept%s ctrl+j:resize esc:hide)[/]",
+                   (count == 1 ? "complete" : "activate completions"),
+                   (eb->mouse_reporting_enabled ? " wheel/click:activate" : ""));
     const char* more = (count >= IC_MAX_COMPLETIONS_TO_TRY ? " (more available)" : "");
     char header[192];
     (void)snprintf(header, sizeof(header), "[ic-info]Completions%s[/]\n", more);
@@ -1077,6 +1077,34 @@ cleanup:
     }
 }
 
+static bool edit_handle_completion_auto_menu_key(ic_env_t* env, editor_t* eb, code_t key) {
+    if (!eb->completion_auto_menu_visible) {
+        return false;
+    }
+
+    if (key == KEY_RIGHT) {
+        eb->completion_menu_maximized = false;
+        if (edit_complete(env, eb, 0) && env->complete_autotab) {
+            tty_code_pushback(env->tty, KEY_EVENT_AUTOTAB);
+        }
+        edit_refresh_hint(env, eb);
+        return true;
+    }
+
+    const code_t plain = KEY_NO_MODS(key);
+    const bool wheel = (eb->mouse_reporting_enabled &&
+                        (plain == KEY_EVENT_MOUSE_WHEEL_UP ||
+                         plain == KEY_EVENT_MOUSE_WHEEL_DOWN));
+    if (key != KEY_UP && key != KEY_DOWN && !wheel) {
+        return false;
+    }
+
+    // Consume the activating gesture without accepting or skipping the first candidate.
+    const bool more_available = (completions_count(env->completions) >= IC_MAX_COMPLETIONS_TO_TRY);
+    edit_completion_menu(env, eb, more_available, 0);
+    return true;
+}
+
 static bool edit_activate_completion_auto_menu_on_click(ic_env_t* env, editor_t* eb) {
     if (!eb->completion_auto_menu_visible || !eb->mouse_reporting_enabled) {
         return false;
@@ -1116,8 +1144,8 @@ static void edit_generate_completions(ic_env_t* env, editor_t* eb, bool autotab)
     ssize_t count = completions_generate(env, env->completions, sbuf_string(eb->input), eb->pos,
                                          IC_MAX_COMPLETIONS_TO_TRY);
     bool more_available = (count >= IC_MAX_COMPLETIONS_TO_TRY);
-    if (env->completion_auto_menu && !autotab && count > 0 && !edit_current_line_is_empty(eb)) {
-        // The first explicit completion request activates, even for a single candidate.
+    if (env->completion_auto_menu && !autotab && count > 1 && !edit_current_line_is_empty(eb)) {
+        // The first explicit completion request activates when there are multiple candidates.
         // Do not insert a common prefix or apply spell corrections before activation.
         completions_sort(env->completions);
         edit_completion_menu(env, eb, more_available, 0);
@@ -1140,7 +1168,7 @@ static void edit_generate_completions(ic_env_t* env, editor_t* eb, bool autotab)
             term_beep(env->term);
         }
         completions_clear(env->completions);
-        if (env->completion_auto_menu && autotab) {
+        if (env->completion_auto_menu) {
             edit_refresh_hint(env, eb);
         }
         return;
@@ -1164,7 +1192,7 @@ static void edit_generate_completions(ic_env_t* env, editor_t* eb, bool autotab)
         completions_sort(env->completions);
         edit_completion_menu(env, eb, more_available, 0);
     }
-    if (env->completion_auto_menu && autotab) {
+    if (env->completion_auto_menu) {
         edit_refresh_hint(env, eb);
     }
 }
