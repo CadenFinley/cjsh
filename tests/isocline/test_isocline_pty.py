@@ -3125,14 +3125,16 @@ def main() -> int:
         "history_search_sort_cycle_metadata_tag",
         b"\x12" + ALT_S + ALT_S + ALT_S + b"\r",
         capture_output=True,
+        initial_cols=80,
     )
     if hist_sort_cycle_metadata != "rank one":
         raise AssertionError(
             "history_search_sort_cycle_metadata_tag expected 'rank one', got "
             f"{hist_sort_cycle_metadata!r}"
         )
-    normalized_sort_cycle_metadata_output = normalize_terminal_output(
-        hist_sort_cycle_metadata_output
+    # The scope settings can wrap the sort label onto another screen row.
+    normalized_sort_cycle_metadata_output = re.sub(
+        r"[←↵]?\n", "", normalize_terminal_output(hist_sort_cycle_metadata_output)
     )
     if "sort rank asc" not in normalized_sort_cycle_metadata_output:
         raise AssertionError(

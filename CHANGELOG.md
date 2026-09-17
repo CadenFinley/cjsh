@@ -23,6 +23,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Changed
 
+- Organized `cjshopt --help` into nine sections by purpose, with consistent descriptions and defaults, lines that fit an 80-column terminal, and shared guidance for persistence and subcommand help.
 - Menu content-row defaults are now 15 for completion, history, command palette, and custom menus. Per-menu `cjshopt` overrides and the temporary Ctrl+J height toggle remain available.
 - Completion menus now always use the full single-column list with scrolling, paging, and mouse support.
 - Refreshed menu headers, result counts, shortcut footers, and selected-entry styling, with terminal-space calculations that account for wrapped headers and help text.
@@ -37,6 +38,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 ### Fixed
 
 - Quick history substitution now rejects empty search text such as `^^` instead of rerunning the previous command, and preserves text after the closing caret in expressions such as `^old^new^ extra`.
+- Made history-sort PTY assertions handle wrapped headers at a fixed terminal width, avoiding false failures after adding the ancestor-directory status field.
 - Successful bare-command history entries now defer to available regular command completions, so commands such as `lazygit` keep their executable description and trailing space as well as their history priority.
 - Regular completions now retain priority from matching history when duplicate history suggestions are removed, preserving file and directory suffixes and command, option, subcommand, and value descriptions before applying result limits. Commands used with arguments also boost the bare command name, so `git clean -xdf` in history prioritizes `git`.
 - Ranked matching command names shortest first with alphabetical ties before applying completion limits, so commands such as `git` precede `gen_bridge_metadata` for `g` in Tab completion and automatic suggestions.

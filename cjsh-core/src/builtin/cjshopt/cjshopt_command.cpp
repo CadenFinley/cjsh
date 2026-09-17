@@ -197,106 +197,139 @@ std::optional<CjshoptSubcommandDescriptor> parse_cjshopt_subcommand(const std::s
 const std::vector<std::string>& cjshopt_usage_lines() {
     static const std::vector<std::string> kUsage = {
         "Usage: cjshopt <subcommand> [options]",
-        "Available subcommands:",
-        "  style_def <token_type> <style>   Define or redefine a syntax highlighting style",
-        "  style_def preview|--reset        Preview current styles or reset defaults",
-        std::string("  completion-case <on|off|status>  Configure completion case sensitivity ") +
-            "(default: disabled)",
-        std::string(
-            "  history-search-case <on|off|status>  Configure fuzzy history case sensitivity ") +
-            "(default: enabled)",
-        "  history-directory <on|off|status>  Scope history to the current directory (default: "
-        "disabled)",
-        "  history-directory-subdirs <on|off|status>  Include nested directories (default: "
-        "disabled)",
-        "  history-directory-parents <on|off|status>  Include all ancestor directories (default: "
-        "disabled)",
-        std::string("  completion-spell <on|off|status> Configure completion spell correction ") +
-            "(default: enabled)",
-        std::string(
-            "  completion-spell-enter <on|off|status> Auto-apply single spell corrections on ") +
-            "Enter (default: disabled)",
-        std::string("  smart-cd <on|off|status>         Configure smart cd auto-jumps ") +
-            "(default: enabled)",
-        std::string("  extglob <on|off|status>          Configure extended glob patterns ") +
-            "(default: disabled)",
-        std::string("  script-extension-interpreter <on|off|status> Configure extension-based ") +
-            "script runners (default: enabled)",
-        std::string("  completion-learning <on|off|status> Toggle automatic completion learning ") +
-            "(default: enabled)",
-        std::string("  exit-confirmation <smart|always|never|status> Control when exit requires ") +
-            "confirmation (default: smart)",
-        std::string("  line-numbers <on|off|relative|absolute|status>    Configure line numbers ") +
-            "in multiline input (default: enabled)",
-        "  line-numbers-continuation <on|off|status> Control line numbers when a continuation "
-        "prompt is active",
-        std::string(
-            "  line-numbers-replace-prompt <on|off|status>       Replace the final prompt line ") +
-            "with line numbers (default: disabled)",
-        std::string(
-            "  current-line-number-highlight <on|off|status>    Configure current line number ") +
-            "highlighting (default: enabled)",
-        std::string("  multiline-start-lines <count|status> Configure default multiline prompt ") +
-            "height (default: 1)",
-        std::string("  multiline-max-lines <count|status> Limit visible multiline input rows ") +
-            "(default: 15)",
-        "  completion-menu-max-lines <count|status> Limit completion menu rows (default: 15)",
-        "  history-menu-max-lines <count|status> Limit history menu rows (default: 15)",
-        "  command-palette-max-lines <count|status> Limit command palette rows (default: 15)",
-        "  custom-menu-max-lines <count|status> Limit custom menu rows (default: 15)",
-        std::string(
-            "  multiline-bottom-lines <count|status> Set the input and menu scroll margin ") +
-            "(default: 3)",
-        "  hint-delay <milliseconds|status> Set or show the hint display delay",
-        "  idle-timeout <seconds|off|status> Configure inactivity hooks (default: off)",
-        std::string("  completion-preview <on|off|status> Configure completion preview ") +
-            "(default: enabled)",
-        "  completion-auto-menu <on|off|status> Show completions while typing; Tab activates (off)",
-        std::string("  completion-click-accept <on|off|status> Control click-to-accept behavior ") +
-            "for completion entries (default: disabled)",
-        std::string("  menu-highlighting <none|single|all|reverse|status> Syntax-highlight ") +
-            "completion and history menu items (default: none)",
-        std::string("  visible-whitespace <on|off|status> Configure visible whitespace ") +
-            "characters (default: disabled)",
-        "  line-wrap-marker <marker|status> Set a single wrap character ('' to disable)",
-        "  hint <on|off|status>            Configure inline hints (default: enabled)",
-        std::string("  multiline-indent <on|off|status> Configure auto-indent in multiline ") +
-            "(default: enabled)",
-        "  multiline <on|off|status>       Configure multiline input (default: enabled)",
-        std::string("  inline-help <on|off|status>     Configure inline help messages ") +
-            "(default: enabled)",
-        std::string(
-            "  status-hints <off|normal|transient|persistent|status>  Control the default ") +
-            "status hint banner (default: normal)",
-        std::string("  status-line <on|off|status>    Hide or show the status area below the ") +
-            "prompt (default: enabled)",
-        std::string("  status-reporting <on|off|status>  Disable cjsh validation output while ") +
-            "keeping status-hints (default: enabled)",
-        std::string("  status-line-callback <function_name|off|status>  Run a shell function ") +
-            "to publish custom status-line text",
-        std::string(
-            "  mouse-clicking <all-off|off|simple|smart|status>  Configure mouse capture ") +
-            "behavior for new prompts and menus (default: off)",
-        std::string(
-            "  mouse-clicking-status-line <on|off|status>  Show or hide the mouse clicking ") +
-            "status indicator (default: enabled)",
-        std::string("  auto-tab <on|off|status>        Configure automatic tab completion ") +
-            "(default: disabled)",
-        std::string("  prompt-newline <on|off|status>  Add a newline after command execution ") +
-            "(default: disabled)",
-        std::string("  right-prompt-follow-cursor <on|off|status>  Re-anchor the inline right ") +
-            "prompt to the cursor row (default: disabled)",
-        "  agent-mode <subcommand> [...]  Configure agent-assisted command writing",
-        "  keybind <subcommand> [...]       Inspect or modify key bindings",
-        "    - Changes apply immediately; add the same command to ~/.cjshrc to persist",
-        "    - Use 'cjshopt keybind ext' for custom command keybindings",
-        "  generate-profile [-f|--force] [--alt]    Create or overwrite ~/.cjprofile",
-        "  generate-env [-f|--force] [--alt]        Create or overwrite ~/.cjshenv",
-        "  generate-rc [-f|--force] [--alt]         Create or overwrite ~/.cjshrc",
-        "  generate-logout [-f|--force] [--alt]     Create or overwrite ~/.cjlogout",
-        "  set-history-max <number|default|status> Configure history persistence",
-        "  set-completion-max <number|default|status> Limit completion suggestions",
-        "Use 'cjshopt <subcommand> --help' to see usage for a specific subcommand.",
+        "",
+        "Configure shell behavior and interactive editing.",
+        "Use 'cjshopt <subcommand> --help' for details and examples.",
+        "",
+        "Completion and hints:",
+        "  completion-auto-menu <on|off|status>",
+        "    Show completions while typing; Tab activates the menu (default: off).",
+        "  auto-tab <on|off|status>",
+        "    Automatically start tab completion (default: off).",
+        "  completion-preview <on|off|status>",
+        "    Preview the selected completion (default: on).",
+        "  completion-case <on|off|status>",
+        "    Match completions case-sensitively (default: off).",
+        "  completion-spell <on|off|status>",
+        "    Suggest spelling corrections in completions (default: on).",
+        "  completion-spell-enter <on|off|status>",
+        "    Apply a single spelling correction on Enter (default: off).",
+        "  completion-learning <on|off|status>",
+        "    Learn completions automatically from man pages (default: on).",
+        "  set-completion-max <number|default|status>",
+        "    Limit the number of completion suggestions.",
+        "  hint <on|off|status>",
+        "    Show inline completion hints (default: on).",
+        "  hint-delay <milliseconds|status>",
+        "    Set or show the delay before inline hints appear.",
+        "",
+        "History:",
+        "  history-directory <on|off|status>",
+        "    Scope interactive history to the current directory (default: off).",
+        "  history-directory-subdirs <on|off|status>",
+        "    Include nested directories when directory scope is on (default: off).",
+        "  history-directory-parents <on|off|status>",
+        "    Include all ancestor directories when scope is on (default: off).",
+        "  history-search-case <on|off|status>",
+        "    Match fuzzy history searches case-sensitively (default: on).",
+        "  set-history-max <number|default|status>",
+        "    Configure history persistence limits.",
+        "",
+        "Menus:",
+        "  completion-menu-max-lines <count|status>",
+        "    Limit completion menu content rows (default: 15).",
+        "  history-menu-max-lines <count|status>",
+        "    Limit history menu content rows (default: 15).",
+        "  command-palette-max-lines <count|status>",
+        "    Limit command palette content rows (default: 15).",
+        "  custom-menu-max-lines <count|status>",
+        "    Limit custom menu content rows (default: 15).",
+        "  menu-highlighting <none|single|all|reverse|status>",
+        "    Syntax-highlight completion and history menu items (default: none).",
+        "",
+        "Prompt and multiline input:",
+        "  multiline <on|off|status>",
+        "    Enable multiline input (default: on).",
+        "  multiline-indent <on|off|status>",
+        "    Automatically indent multiline input (default: on).",
+        "  multiline-start-lines <count|status>",
+        "    Set the initial multiline prompt height (default: 1).",
+        "  multiline-max-lines <count|status>",
+        "    Limit visible multiline input rows (default: 15).",
+        "  multiline-bottom-lines <count|status>",
+        "    Set the input and menu scroll margin (default: 3).",
+        "  prompt-newline <on|off|status>",
+        "    Add a newline after command execution (default: off).",
+        "  right-prompt-follow-cursor <on|off|status>",
+        "    Keep the inline right prompt on the cursor row (default: off).",
+        "",
+        "Appearance:",
+        "  style_def <token_type> <style>",
+        "    Define or redefine a syntax highlighting style.",
+        "  style_def preview|--reset",
+        "    Preview current styles or reset defaults.",
+        "  line-numbers <on|off|relative|absolute|status>",
+        "    Show line numbers in multiline input (default: on, absolute).",
+        "  line-numbers-continuation <on|off|status>",
+        "    Keep line numbers when a continuation prompt is active.",
+        "  line-numbers-replace-prompt <on|off|status>",
+        "    Replace the final prompt line with line numbers (default: off).",
+        "  current-line-number-highlight <on|off|status>",
+        "    Highlight the current line number (default: on).",
+        "  visible-whitespace <on|off|status>",
+        "    Show whitespace characters in the editor (default: off).",
+        "  line-wrap-marker <marker|status>",
+        "    Set a single wrap character; use '' to disable it.",
+        "",
+        "Status and help:",
+        "  status-line <on|off|status>",
+        "    Show the status area below the prompt (default: on).",
+        "  status-hints <off|normal|transient|persistent|status>",
+        "    Control the default status hint banner (default: normal).",
+        "  status-reporting <on|off|status>",
+        "    Show command validation messages in the status area (default: on).",
+        "  status-line-callback <function_name|off|status>",
+        "    Run a shell function to supply custom status-line text.",
+        "  inline-help <on|off|status>",
+        "    Show inline help messages (default: on).",
+        "",
+        "Keyboard and mouse:",
+        "  keybind <subcommand> [...]",
+        "    Inspect or modify key bindings; changes apply immediately.",
+        "  mouse-clicking <all-off|off|simple|smart|status>",
+        "    Configure mouse capture for prompts and menus (default: off).",
+        "  mouse-clicking-status-line <on|off|status>",
+        "    Show the mouse-clicking status indicator (default: on).",
+        "  completion-click-accept <on|off|status>",
+        "    Accept completion entries when clicked (default: off).",
+        "",
+        "Shell behavior and agent mode:",
+        "  smart-cd <on|off|status>",
+        "    Enable smart cd auto-jumps (default: on).",
+        "  extglob <on|off|status>",
+        "    Enable extended glob patterns (default: off).",
+        "  script-extension-interpreter <on|off|status>",
+        "    Infer script runners from file extensions (default: on).",
+        "  exit-confirmation <smart|always|never|status>",
+        "    Control when exit requires confirmation (default: smart).",
+        "  idle-timeout <seconds|off|status>",
+        "    Run inactivity hooks after the specified delay (default: off).",
+        "  agent-mode <subcommand> [...]",
+        "    Configure agent-assisted command writing.",
+        "",
+        "Startup files:",
+        "  generate-env [-f|--force] [--alt]",
+        "    Generate ~/.cjshenv.",
+        "  generate-profile [-f|--force] [--alt]",
+        "    Generate ~/.cjprofile.",
+        "  generate-rc [-f|--force] [--alt]",
+        "    Generate ~/.cjshrc.",
+        "  generate-logout [-f|--force] [--alt]",
+        "    Generate ~/.cjlogout.",
+        "",
+        "Add settings to your startup files (usually ~/.cjshrc) to persist them.",
+        "Use 'cjshopt keybind ext --help' for custom command keybindings.",
+        "For startup file generators, --force overwrites and --alt uses ~/.config/cjsh.",
     };
     return kUsage;
 }
