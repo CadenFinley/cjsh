@@ -93,8 +93,8 @@ class InteractiveTests(unittest.TestCase):
         session.run_command(b"alias hintalias='echo [value]'")
         session.run_command(b"abbr hintabbr='echo [value]'")
         for command, expected in (
-            (b"echo", b"(builtin) - Write arguments to standard output"),
-            (b"hintfunction", b"(function)"),
+            (b"echo", b"(echo) - Write arguments to standard output"),
+            (b"hintfunction", b"(function) - hintfunction"),
             (b"hintalias", b"(alias) - echo [value]"),
             (b"hintabbr", b"(abbreviation) - echo [value]"),
         ):
@@ -110,8 +110,8 @@ class InteractiveTests(unittest.TestCase):
         session.run_command(b'cjshopt style_def builtin "ansi-blue"')
         start = len(session.output)
         session.write(b"echo")
-        session.wait_for_normalized(b"(builtin) - Write arguments to standard output", start)
-        self.assertIn(b"\x1b[37m(builtin)", bytes(session.output[start:]))
+        session.wait_for_normalized(b"(echo) - Write arguments to standard output", start)
+        self.assertIn(b"\x1b[37m(echo)", bytes(session.output[start:]))
 
     def test_palette_tracks_binding_changes_between_prompts(self):
         # Keep the custom entry below the initial viewport so the search must find it.
