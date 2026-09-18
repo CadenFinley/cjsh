@@ -11,9 +11,21 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+## [1.5.9] - 2026-09-18
+
+### Added
+
+- Added regression coverage for interactive history expansion, escaped history records, passive completion-menu activation, and variable-assignment diagnostics in command lists and inline loops.
+
+### Changed
+
+- Passive automatic completion menus now activate on Up/Down or mouse-wheel input with the first candidate selected. Right accepts the first suggestion, and Tab immediately completes a unique match while activating the menu for multiple matches. Accepted completions refresh suggestions in passive mode and return focus to the command line.
+- Status-line command hints now show builtin command names and include the names of defined functions.
+
 ### Fixed
 
 - History expansion now uses the newest completed command instead of skipping it, including after failed commands and multiline pastes. Persisted newlines, tabs, and backslashes are decoded before history expansion, `history`, and `fc` use the entries.
+- Variable validation now recognizes assignments throughout command lists, conditionals, and loops without treating assignment-like arguments, test expressions, or operators inside expansions as new variable definitions. Diagnostics retain the correct source line after multiline quotes.
 - Made automatic-completion PTY cancellation wait for Escape to close the menu before sending more keys, preventing slow runners from combining the input into an Alt sequence.
 
 ## [1.5.8] - 2026-09-16
@@ -1031,7 +1043,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Included JSON prompt themes, a shared-library plugin engine, and an optional built-in AI assistant.
 - Included CMake builds, installation helpers, and shell compatibility tests.
 
-[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.8...HEAD
+[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.9...HEAD
+[1.5.9]: https://github.com/CadenFinley/cjsh/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/CadenFinley/cjsh/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/CadenFinley/cjsh/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/CadenFinley/cjsh/compare/v1.5.5...v1.5.6
