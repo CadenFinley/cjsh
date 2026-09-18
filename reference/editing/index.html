@@ -2137,7 +2137,11 @@ Metadata values are percent-encoded. <code>cwd</code> records the physical worki
 Repeated commands in the same directory update their existing entry and frequency. The same
 command run in different directories keeps a separate entry for each directory.</p>
 <h3 id="history-expansion">History Expansion</h3>
-<p>History expansion runs in interactive sessions before the command line is parsed.</p>
+<p>History expansion runs in interactive sessions before the command line is parsed.
+It uses completed history entries, including commands that exited with an error. A submitted
+multiline block is one history event and is restored with its original newlines and backslashes.
+The current input is recorded after execution; canceled input and failed expansions do not
+replace the previous event.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>!!<span class="w">            </span><span class="c1"># rerun the previous command</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>!git<span class="w">          </span><span class="c1"># most recent command that starts with "git"</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>!?status?<span class="w">     </span><span class="c1"># most recent command that contains "status"</span>
