@@ -574,6 +574,10 @@ command run in different directories keeps a separate entry for each directory.
 ### History Expansion
 
 History expansion runs in interactive sessions before the command line is parsed.
+It uses completed history entries, including commands that exited with an error. A submitted
+multiline block is one history event and is restored with its original newlines and backslashes.
+The current input is recorded after execution; canceled input and failed expansions do not
+replace the previous event.
 
 ```bash
 !!            # rerun the previous command

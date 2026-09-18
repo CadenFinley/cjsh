@@ -28,11 +28,14 @@
 
 #include "history_file_utils.h"
 
+#include <cstddef>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cjsh_filesystem.h"
+#include "isocline.h"
 
 namespace history_file_utils {
 
@@ -46,7 +49,17 @@ std::vector<std::string> parse_history_entries(const std::string& history_conten
         if (line.empty() || line[0] == '#') {
             continue;
         }
-        entries.push_back(line);
+        // Use the same decoder as the editor so multiline entries remain one event and
+        // literal backslashes are restored exactly once before parsing or execution.
+        std::string decoded(line.size() + 1, '\0');
+        size_t decoded_length = 0;
+        if (!ic_history_decode_entry(line.data(), line.size(), decoded.data(), decoded.size(),
+                                     &decoded_length) ||
+            decoded_length == 0) {
+            continue;
+        }
+        decoded.resize(decoded_length);
+        entries.push_back(std::move(decoded));
     }
 
     return entries;

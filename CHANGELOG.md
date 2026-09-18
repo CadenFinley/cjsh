@@ -13,6 +13,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Fixed
 
+- History expansion now uses the newest completed command instead of skipping it, including after failed commands and multiline pastes. Persisted newlines, tabs, and backslashes are decoded before history expansion, `history`, and `fc` use the entries.
 - Made automatic-completion PTY cancellation wait for Escape to close the menu before sending more keys, preventing slow runners from combining the input into an Alt sequence.
 
 ## [1.5.8] - 2026-09-16

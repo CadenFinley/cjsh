@@ -469,7 +469,7 @@ HistoryExpansion::ExpansionResult HistoryExpansion::expand(
     const std::vector<std::string>* expansion_history = &history_entries;
     std::vector<std::string> committed_history;
     if (history_includes_current_command && !history_entries.empty()) {
-        // Interactive submit stages the current buffer as the newest history entry.
+        // Exclude the current buffer only when the caller has explicitly staged it.
         committed_history = history_entries;
         committed_history.pop_back();
         expansion_history = &committed_history;
