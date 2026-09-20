@@ -65,8 +65,9 @@ else
   echo "PASS: nested substitution with quoted positional args"
 fi
 
-TMP_SCRIPT=$(mktemp)
-trap 'rm -f "$TMP_SCRIPT"' EXIT HUP INT TERM
+TMP_DIR=$(mktemp -d)
+TMP_SCRIPT="$TMP_DIR/source.sh"
+trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
 printf '%s\n' 'z() { __CJSH_ZOXIDE_RESULT="$(command printf "%s|%s" "$(pwd)" "$@")"; printf "%s" "$__CJSH_ZOXIDE_RESULT"; }' 'z "ok arg"' >"$TMP_SCRIPT"
 SOURCE_OUTPUT=$("$CJSH_PATH" -c ". \"$TMP_SCRIPT\"" 2>&1)
 EXPECTED_SOURCE_OUTPUT=$(printf '%s|%s' "$PWD_VALUE" 'ok arg')
@@ -77,6 +78,63 @@ if [ "$SOURCE_OUTPUT" != "$EXPECTED_SOURCE_OUTPUT" ]; then
 else
   echo "PASS: sourced zoxide-style assignment"
 fi
+
+check_escaped_words() {
+  label=$1
+  script=$2
+  expected=$3
+  output=$("$CJSH_PATH" --no-config -c "$script" 2>&1)
+  status=$?
+  if [ "$status" -ne 0 ] || [ "$output" != "$expected" ]; then
+    echo "FAIL: $label (status $status)"
+    printf '      expected: %s\n      got: %s\n' "$expected" "$output"
+    exit 1
+  fi
+  echo "PASS: $label"
+}
+
+check_escaped_words "escaped spaces preserve argument boundaries" \
+  'printf "<%s>\n" one\ two three\ \ four \ five six\ seven' \
+  "$(printf '<one two>\n<three  four>\n< five>\n<six seven>')"
+check_escaped_words "escaped tabs preserve argument boundaries" \
+  "$(printf 'printf "<%%s>\\n" one\\\ttwo')" "$(printf '<one\ttwo>')"
+check_escaped_words "escaped spaces in pipelines" \
+  'printf "<%s>\n" one\ two | cat' '<one two>'
+check_escaped_words "unquoted expansions still split beside escaped spaces" \
+  'value="one two"; printf "<%s>\n" prefix\ $value\ suffix' \
+  "$(printf '<prefix one>\n<two suffix>')"
+check_escaped_words "command substitution still splits beside escaped spaces" \
+  'printf "<%s>\n" prefix\ $(printf "one two")\ suffix' \
+  "$(printf '<prefix one>\n<two suffix>')"
+check_escaped_words "escaped spaces beside quoted text" \
+  'printf "<%s>\n" one\ "two" one\ '\''two'\''' \
+  "$(printf '<one two>\n<one two>')"
+check_escaped_words "escaped spaces in assignments" \
+  'value=one\ two; export other=three\ four; printf "<%s>\n" "$value" "$other"' \
+  "$(printf '<one two>\n<three four>')"
+check_escaped_words "quoted substitution preserves literal control bytes" \
+  'printf "%s" "$(printf '\''\037x'\'')"' "$(printf '\037x')"
+
+cat >"$TMP_DIR/Start VM.command" <<'EOF'
+#!/bin/sh
+printf '<%s>\n' "$@"
+EOF
+chmod +x "$TMP_DIR/Start VM.command"
+check_escaped_words "escaped command path followed by exit" \
+  "$TMP_DIR/Start\\ VM.command one\\ two ; exit;" '<one two>'
+check_escaped_words "escaped command path in a pipeline" \
+  "$TMP_DIR/Start\\ VM.command one\\ two | cat" '<one two>'
+check_escaped_words "escaped command path with redirections" \
+  "$TMP_DIR/Start\\ VM.command one\\ two > $TMP_DIR/output\\ file; cat < $TMP_DIR/output\\ file" \
+  '<one two>'
+check_escaped_words "escaped spaces in descriptor redirections" \
+  "printf '<%s>\\n' one\\ two 3> $TMP_DIR/fd\\ file >&3; cat < $TMP_DIR/fd\\ file" \
+  '<one two>'
+
+touch "$TMP_DIR/match one.txt" "$TMP_DIR/match two.txt"
+check_escaped_words "wildcards still expand beside escaped spaces" \
+  "printf '<%s>\\n' $TMP_DIR/match\\ *.txt" \
+  "$(printf '<%s>\n' "$TMP_DIR/match one.txt" "$TMP_DIR/match two.txt")"
 
 echo "PASS"
 exit 0

@@ -47,6 +47,7 @@
 #include <vector>
 
 #include "pattern_matcher.h"
+#include "quote_info.h"
 #include "shell.h"
 #include "shell_env.h"
 
@@ -525,19 +526,7 @@ std::vector<std::string> ExpansionEngine::expand_wildcards(const std::string& pa
         }
     }
 
-    std::string unescaped;
-    unescaped.reserve(pattern.length());
-
-    for (size_t i = 0; i < pattern.length(); ++i) {
-        if (pattern[i] == '\x1F') {
-            if (i + 1 < pattern.length()) {
-                i++;
-                unescaped += pattern[i];
-            }
-        } else {
-            unescaped += pattern[i];
-        }
-    }
+    std::string unescaped = remove_escape_markers(pattern);
 
     if (!has_wildcards) {
         result.push_back(unescaped);

@@ -38,6 +38,7 @@
 #include <string>
 #include <system_error>
 #include <unordered_set>
+#include <vector>
 
 extern "C" {
 #include "attr.h"
@@ -760,6 +761,68 @@ static bool test_split_command_path_changes_between_highlights() {
     }
     (void)cjsh_env::set_shell_variable_value("PATH", original_path);
     cjsh_filesystem::reset_path_hash();
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    return ok;
+}
+
+static bool test_quoted_command_paths() {
+    const char* test_name = "quoted_command_paths";
+    namespace fs = std::filesystem;
+    const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root =
+        fs::temp_directory_path() / ("cjsh_quoted_command_" + std::to_string(suffix));
+    fs::create_directories(root);
+    const fs::path original_cwd = fs::current_path();
+    fs::current_path(root);
+    fs::create_directory(root / "~");
+    const std::vector<fs::path> executables = {
+        root / "Start VM.command", root / "~" / "Start VM.command", root / "Back\\ slash.command"};
+    for (const auto& executable : executables) {
+        std::ofstream(executable) << "#!/bin/sh\n";
+        fs::permissions(executable, fs::perms::owner_read | fs::perms::owner_exec);
+    }
+
+    ic_env_t* env = ensure_env(test_name);
+    bool ok = env != nullptr;
+    const std::vector<std::string> commands = {
+        R"(./"Start VM.command")",
+        R"(./'Start VM.command')",
+        R"(./Start\ VM.command)",
+        R"("./Start VM.command")",
+        root.string() + R"(/Start\ VM.command)",
+        R"("~/Start VM.command")",
+        R"(./"Back\ slash.command")",
+    };
+    for (bool exists : {true, false}) {
+        if (!exists) {
+            for (const auto& executable : executables) {
+                fs::remove(executable);
+            }
+        }
+        for (const auto& command : commands) {
+            attrbuf_t* attrs = highlight_input(command + " ; exit;", test_name);
+            if (attrs == nullptr || env == nullptr) {
+                ok = false;
+            } else {
+                // String colors overlay quoted portions, but the unknown-command
+                // underline must depend on whether the decoded path exists.
+                for (size_t i = 0; i < command.size(); ++i) {
+                    const attr_t actual = attrbuf_attr_at(attrs, static_cast<ssize_t>(i));
+                    if ((actual.x.underline == IC_ON) == exists) {
+                        log_failure(test_name,
+                                    "quoted and escaped paths have incorrect underlines");
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if (attrs != nullptr) {
+                attrbuf_free(attrs);
+            }
+        }
+    }
+    fs::current_path(original_cwd);
     std::error_code ec;
     fs::remove_all(root, ec);
     return ok;
@@ -1950,6 +2013,7 @@ static const test_case_t kTests[] = {
      test_split_unknown_command_fragment_highlighting_with_gap},
     {"split_command_path_changes_between_highlights",
      test_split_command_path_changes_between_highlights},
+    {"quoted_command_paths", test_quoted_command_paths},
     {"redraw_lookup_cache_refresh", test_redraw_lookup_cache_refresh},
     {"split_unknown_command_fragment_highlighting_with_known_second_token",
      test_split_unknown_command_fragment_highlighting_with_known_second_token},

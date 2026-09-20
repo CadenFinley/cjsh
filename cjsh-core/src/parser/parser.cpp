@@ -508,7 +508,7 @@ bool Parser::handle_fd_redirection(const std::string& value, size_t& i,
 
     try {
         int fd = std::stoi(value.substr(0, value.length() - 1));
-        std::string file = QuoteInfo(tokens[++i]).value;
+        std::string file = QuoteInfo(tokens[++i]).unescaped_value();
         std::string direction = (op == '<') ? "input:" : "output:";
         cmd.set_fd_redirection(fd, direction + file);
         cmd.add_redirection(
@@ -1302,7 +1302,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
             auto gw = expansionEngine->expand_wildcards(qi.value);
             (void)final_args.insert(final_args.end(), gw.begin(), gw.end());
         } else {
-            final_args.push_back(qi.value);
+            final_args.push_back(qi.unescaped_value());
         }
     }
     return final_args;
@@ -1503,7 +1503,8 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                                     case RedirectionToken::StderrOutput:
                                     case RedirectionToken::StderrAppend:
                                         if (i + 1 < merged_redir.size()) {
-                                            cmd.stderr_file = QuoteInfo(merged_redir[++i]).value;
+                                            cmd.stderr_file =
+                                                QuoteInfo(merged_redir[++i]).unescaped_value();
                                             cmd.stderr_append =
                                                 (*redir == RedirectionToken::StderrAppend);
                                         }
@@ -1589,7 +1590,9 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             }
         }
 
-        auto get_next_token_value = [&tokens](size_t& i) { return QuoteInfo(tokens[++i]).value; };
+        auto get_next_token_value = [&tokens](size_t& i) {
+            return QuoteInfo(tokens[++i]).unescaped_value();
+        };
 
         for (size_t i = 0; i < tokens.size(); ++i) {
             QuoteInfo qi(tokens[i]);
@@ -1768,7 +1771,8 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                     (void)final_args_local.insert(final_args_local.end(), expanded.begin(),
                                                   expanded.end());
                 } else {
-                    final_args_local.push_back(field);
+                    final_args_local.push_back(qi.is_unquoted() ? remove_escape_markers(field)
+                                                                : field);
                 }
             }
         }

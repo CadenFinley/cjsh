@@ -79,6 +79,11 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                 io_number_tokens.push_back(tokens.size());
             }
             if (token_saw_single || token_saw_double) {
+                // Quoted words skip field splitting and globbing. Remove source
+                // escapes now, before expansions can insert literal control bytes.
+                if (token_saw_escape) {
+                    current_token = remove_escape_markers(current_token);
+                }
                 char quote_type = token_saw_double ? QUOTE_DOUBLE : QUOTE_SINGLE;
                 tokens.push_back(create_quote_tag(quote_type, current_token));
             } else {
@@ -126,7 +131,8 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                     current_token += c;
                 }
             } else {
-                if (c == '*' || c == '?' || c == '[' || c == ']') {
+                // Keep escaped whitespace protected until field splitting has finished.
+                if (is_whitespace(c) || c == '*' || c == '?' || c == '[' || c == ']') {
                     current_token += '\x1F';
                 }
                 current_token += c;
@@ -514,6 +520,14 @@ std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input) {
         char c = input[idx];
 
         if (process_depth == 0) {
+            if (c == QUOTE_PREFIX && idx + 1 < input.size()) {
+                current_word += c;
+                current_word += input[idx + 1];
+                in_word = true;
+                idx += 2;
+                continue;
+            }
+
             if ((c == '<' || c == '>') && idx + 1 < input.size() && input[idx + 1] == '(') {
                 if (!in_word) {
                     current_word.clear();

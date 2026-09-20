@@ -11,6 +11,11 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve backslash-escaped spaces and tabs in command paths and arguments through field splitting, including pipelines and commands such as `Start\ VM.command`.
+- Recognize quoted and escaped command paths during syntax highlighting, so existing files such as `./"Start VM.command"` are no longer marked as unknown commands.
+
 ## [1.5.9] - 2026-09-18
 
 ### Added

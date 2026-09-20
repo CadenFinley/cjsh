@@ -38,6 +38,9 @@ extern const char QUOTE_DOUBLE;
 
 std::string create_quote_tag(char quote_type, const std::string& content);
 
+// Remove per-character escape markers once their protection is no longer needed.
+std::string remove_escape_markers(const std::string& value);
+
 bool is_inside_quotes(const std::string& text, size_t pos);
 
 struct QuoteInfo {
@@ -48,6 +51,7 @@ struct QuoteInfo {
     QuoteInfo(const std::string& token);
 
     bool is_unquoted() const;
+    std::string unescaped_value() const;
 
    private:
     static bool is_single_quoted_token(const std::string& s);

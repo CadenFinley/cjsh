@@ -50,6 +50,24 @@ std::string create_quote_tag(char quote_type, const std::string& content) {
     return result;
 }
 
+std::string remove_escape_markers(const std::string& value) {
+    if (value.find(QUOTE_PREFIX) == std::string::npos) {
+        return value;
+    }
+
+    std::string result;
+    result.reserve(value.size());
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (value[i] == QUOTE_PREFIX) {
+            if (++i == value.size()) {
+                break;
+            }
+        }
+        result += value[i];
+    }
+    return result;
+}
+
 bool is_inside_quotes(const std::string& text, size_t pos) {
     return utils::is_inside_quotes_at(text, pos);
 }
@@ -62,6 +80,10 @@ QuoteInfo::QuoteInfo(const std::string& token)
 
 bool QuoteInfo::is_unquoted() const {
     return !is_single && !is_double;
+}
+
+std::string QuoteInfo::unescaped_value() const {
+    return is_unquoted() ? remove_escape_markers(value) : value;
 }
 
 bool QuoteInfo::is_single_quoted_token(const std::string& s) {

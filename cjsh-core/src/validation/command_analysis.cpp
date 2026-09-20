@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <functional>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <unordered_set>
@@ -42,10 +43,12 @@
 #include "command_lookup.h"
 #include "interpreter_utils.h"
 #include "parser_utils.h"
+#include "quote_info.h"
 #include "quote_state.h"
 #include "shell.h"
 #include "shell_env.h"
 #include "token_classifier.h"
+#include "tokenizer.h"
 
 namespace command_analysis {
 
@@ -74,10 +77,26 @@ bool token_has_explicit_path_hint(const std::string& token) {
 }
 
 std::string resolve_token_path(const std::string& token, const Shell* shell) {
+    std::string path_token = token;
+    if (token.find_first_of("\\\"'") != std::string::npos) {
+        // Decode only shell quoting here; highlighting must not execute expansions.
+        try {
+            const auto words = Tokenizer::tokenize_command(token);
+            if (words.size() == 1) {
+                path_token = QuoteInfo(words.front()).unescaped_value();
+                // A quoted or escaped leading tilde names a literal relative path.
+                if (!path_token.empty() && path_token.front() == '~' && token.front() != '~') {
+                    path_token.insert(0, "./");
+                }
+            }
+        } catch (const std::runtime_error&) {
+            // Incomplete quotes are common while editing; retain the original token.
+        }
+    }
     const std::string previous_directory =
         (shell != nullptr) ? shell->get_previous_directory() : "";
     return cjsh_filesystem::resolve_shell_token_path(
-        token, cjsh_filesystem::safe_current_directory(), previous_directory);
+        path_token, cjsh_filesystem::safe_current_directory(), previous_directory);
 }
 
 bool token_is_history_expansion(const std::string& token, size_t absolute_cmd_start) {

@@ -220,6 +220,25 @@ void test_execution() {
            "keyword dispatch preserves token boundaries, whitespace, and ordinary operands");
 }
 
+void test_escaped_whitespace(Parser& parser) {
+    const std::vector<std::pair<std::string, std::vector<std::string>>> cases = {
+        {R"(/tmp/Start\ VM.command one\ two)", {"/tmp/Start VM.command", "one two"}},
+        {R"(: one\ \ two \ three)", {":", "one  two", " three"}},
+        {": one\\\ttwo", {":", "one\ttwo"}},
+        {R"(: one\ "two" one\ 'two')", {":", "one two", "one two"}},
+        {R"(: one\\ two)", {":", "one\\", "two"}},
+        {R"(export value=one\ two)", {"export", "value=one two"}},
+    };
+    for (const auto& [input, expected] : cases) {
+        expect(parser.parse_command(input) == expected,
+               "command parsing preserves escaped whitespace through expansion");
+        const auto pipeline = parser.parse_pipeline(input + " | cat");
+        expect(pipeline.size() == 2 && pipeline[0].args == expected &&
+                   pipeline[1].args == std::vector<std::string>({"cat"}),
+               "pipeline parsing preserves escaped whitespace through expansion");
+    }
+}
+
 void test_redirection_argument_boundaries(Parser& parser) {
     for (const std::string argument : {"5 ", "5\t", "'5'", "\"5\"", "\\5", "5''"}) {
         const auto pipeline = parser.parse_pipeline("echo " + argument + ">output");
@@ -307,6 +326,7 @@ int main() {
     test_ampersand_commands();
     test_help();
     test_execution();
+    test_escaped_whitespace(*g_shell->get_parser());
     test_redirection_argument_boundaries(*g_shell->get_parser());
     test_redirection_path_expansion();
     g_shell.reset();
