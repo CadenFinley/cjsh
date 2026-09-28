@@ -1388,8 +1388,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                     trimmed = trim_trailing_whitespace(cmd_part);
 
                     if (cmd_part.empty()) {
-                        throw std::runtime_error(
-                            "cjsh: syntax error near unexpected token `newline'");
+                        throw std::runtime_error("cjsh: expected a command after '!'");
                     }
                 }
             }

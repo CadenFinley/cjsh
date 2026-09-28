@@ -431,6 +431,15 @@ int handle_runtime_exception(const std::string& text, const std::runtime_error& 
                                       ShellScriptInterpreter::exit_command_not_found);
     }
 
+    if (message == "expected a command after '!'") {
+        if (config::error_suggestions_enabled) {
+            suggestions.push_back("'!' inverts a command's exit status. Try '! false'.");
+        }
+        add_context();
+        return report_error_with_code(ErrorType::SYNTAX_ERROR, ErrorSeverity::ERROR, "", message,
+                                      suggestions, 2);
+    }
+
     if (message.find("Unclosed quote") != std::string::npos ||
         message.find("missing closing") != std::string::npos ||
         message.find("syntax error near unexpected token") != std::string::npos) {
