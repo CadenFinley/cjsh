@@ -85,8 +85,9 @@ Powered by the embedded [isocline](https://github.com/cadenfinley/isocline) edit
     clicks accept completion entries.
 - **Automatic completion menu** – Opt in with `cjshopt completion-auto-menu on` to show passive
     suggestions while typing. Tab completes a unique match immediately or activates selection,
-    scrolling, and acceptance for multiple matches. Up/Down also activate the menu; Left edits
-    the command and Right accepts a suggestion. With prompt mouse clicking enabled, scrolling
+    scrolling, and acceptance for multiple matches. Down also activates the menu when the cursor
+    is at the end of the input buffer; other arrow-key input retains normal editing and history
+    navigation. With prompt mouse clicking enabled, scrolling
     or clicking the menu activates it without accepting. After acceptance,
     the updated menu stays visible in passive mode until the next interaction.
 - **Typeahead capture** – Keystrokes entered while a command runs are buffered and replayed when the prompt returns so you never lose input.

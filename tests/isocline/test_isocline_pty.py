@@ -417,13 +417,23 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
     for label, scenario, keys, expected in [
         ("passive_enter", "completion_auto_menu", b"s\r", "s"),
         ("passive_digits", "completion_auto_menu", b"s02\r", "s02"),
-        ("passive_right_accepts", "completion_auto_menu", b"s" + RIGHT + b"\r", "s01"),
+        ("passive_right_at_end", "completion_auto_menu", b"s" + RIGHT + b"\r", "s"),
+        ("passive_right_edits", "completion_auto_menu", b"s02" + LEFT + LEFT + RIGHT + b"X\r", "s0X2"),
         ("passive_left_edits", "completion_auto_menu", b"s" + LEFT + b"X\r", "Xs"),
         ("passive_end", "completion_auto_menu", b"s" + END + b"\r", "s"),
         ("passive_ctrl_f", "completion_auto_menu", b"s\x06\r", "s"),
         ("passive_down_activates", "completion_auto_menu", b"s" + DOWN + b"\r\r", "s01"),
-        ("passive_up_activates", "completion_auto_menu", b"s" + UP + b"\r\r", "s01"),
+        ("passive_up_without_history", "completion_auto_menu", b"s" + UP + b"\r", "s"),
+        ("passive_up_recalls_history", "completion_auto_menu_history", b"s" + UP + b"\r", "s03"),
+        ("passive_down_in_buffer", "completion_auto_menu", b"s02" + LEFT + DOWN + b"\r", "s02"),
+        ("passive_down_at_word_end", "completion_auto_menu", b"s tail" + HOME + RIGHT + DOWN + b"\r", "s tail"),
+        ("passive_down_after_cursor_move", "completion_auto_menu", b"s0" + LEFT + RIGHT + DOWN + b"\r\r", "s01"),
+        ("passive_up_in_multiline", "completion_auto_menu_multiline_arrows", LEFT + UP + b"X\r", "sX0\ns0"),
+        ("passive_down_in_multiline", "completion_auto_menu_multiline_arrows", CTRL_HOME + RIGHT + DOWN + b"X\r", "s0\nsX0"),
+        ("passive_down_at_line_end", "completion_auto_menu_multiline_arrows", CTRL_HOME + END + DOWN + b"X\r", "s0\ns0X"),
+        ("passive_down_at_multiline_end", "completion_auto_menu_multiline_arrows", LEFT + RIGHT + DOWN + b"\r\r", "s0\ns01"),
         ("passive_down_then_navigate", "completion_auto_menu", b"s" + DOWN + DOWN + b"\r\r", "s02"),
+        ("active_up_navigates", "completion_auto_menu", b"s" + DOWN + DOWN + UP + b"\r\r", "s01"),
         ("active_left_edits", "completion_auto_menu", b"s" + DOWN + LEFT + b"X\r", "Xs"),
         ("passive_wheel", "completion_auto_menu", b"s" + wheel_down + b"\r", "s"),
         ("passive_click_disabled", "completion_auto_menu", b"s" + click_second + b"\r", "s"),
@@ -437,8 +447,9 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
         ("first_tab_single", "completion_auto_menu_single", b"hel\t\r", "hello"),
         ("first_tab_single_then_type", "completion_auto_menu_single", b"hel\t!\r", "hello!"),
         ("first_tab_single_undo", "completion_auto_menu_single", b"hel\t\x1f\r", "hel"),
-        ("right_single", "completion_auto_menu_single", b"hel" + RIGHT + b"\r", "hello"),
-        ("right_single_undo", "completion_auto_menu_single", b"hel" + RIGHT + b"\x1f\r", "hel"),
+        ("right_single", "completion_auto_menu_single", b"hel" + RIGHT + b"\r", "hel"),
+        ("right_single_autotab", "completion_auto_menu_single_autotab", b"hel" + RIGHT + b"\r", "hel"),
+        ("right_single_edits", "completion_auto_menu_single", b"hel" + LEFT + RIGHT + b"X\r", "helX"),
         ("first_tab_spell", "completion_auto_menu_spell", b"hlelo\t\r", "hello"),
         ("second_tab_single", "completion_auto_menu_single", b"hel\t\t\r", "hello"),
         ("active_filter", "completion_auto_menu", b"s\t02\r\r", "s02"),
@@ -571,8 +582,6 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
         ("completion_auto_menu_single_hints", b"hel", b"\t", 1),
         ("completion_auto_menu_single_autotab", b"hel", b"\t", 1),
         ("completion_auto_menu_spell", b"hlelo", b"\t", 0),
-        ("completion_auto_menu_single", b"hel", RIGHT, 1),
-        ("completion_auto_menu_single_autotab", b"hel", RIGHT, 1),
     ]:
         assert_resize_case(
             binary, "complete_without_activation", scenario,
@@ -582,14 +591,12 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
             "hello", initial_cols=100,
         )
 
-    # Navigation activates even a unique candidate without accepting it. A later Right
-    # accepts the selection; mouse wheel activation also works in smart mouse mode.
+    # Down at the buffer end activates even a unique candidate without accepting it.
+    # A later Right accepts; mouse wheel activation also works in smart mouse mode.
     wheel_up = b"\x1b[<64;5;3M"
     for scenario, prefix, activate, expected in [
         ("completion_auto_menu", b"s", DOWN, "s01"),
-        ("completion_auto_menu", b"s", UP, "s01"),
         ("completion_auto_menu_single", b"hel", DOWN, "hello"),
-        ("completion_auto_menu_single", b"hel", UP, "hello"),
         ("completion_auto_menu_mouse", b"s", wheel_down, "s01"),
         ("completion_auto_menu_mouse", b"s", wheel_up, "s01"),
         ("completion_auto_menu_mouse_smart", b"s", wheel_down, "s01"),
@@ -603,7 +610,7 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
 
         result = run_resize_case(
             binary, scenario,
-            [("send", prefix), ("wait", "up/down:activate"), ("send", activate),
+            [("send", prefix), ("wait", "down:activate"), ("send", activate),
              ("wait_until", terminal_check_ready(check_active)),
              ("send", RIGHT + b"\r")],
             initial_cols=120,

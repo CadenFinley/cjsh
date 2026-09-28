@@ -297,9 +297,9 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     completions_sort(env->completions);
 
     char footer[192];
-    (void)snprintf(footer, sizeof(footer),
-                   "[ic-diminish](tab:%s up/down:activate right:accept%s ctrl+j:resize esc:hide)[/]",
+    (void)snprintf(footer, sizeof(footer), "[ic-diminish](tab:%s%s%s ctrl+j:resize esc:hide)[/]",
                    (count == 1 ? "complete" : "activate completions"),
+                   (editor_pos_is_at_end(eb) ? " down:activate" : ""),
                    (eb->mouse_reporting_enabled ? " wheel/click:activate" : ""));
     const char* more = (count >= IC_MAX_COMPLETIONS_TO_TRY ? " (more available)" : "");
     char header[192];
@@ -1082,20 +1082,11 @@ static bool edit_handle_completion_auto_menu_key(ic_env_t* env, editor_t* eb, co
         return false;
     }
 
-    if (key == KEY_RIGHT) {
-        eb->completion_menu_maximized = false;
-        if (edit_complete(env, eb, 0) && env->complete_autotab) {
-            tty_code_pushback(env->tty, KEY_EVENT_AUTOTAB);
-        }
-        edit_refresh_hint(env, eb);
-        return true;
-    }
-
     const code_t plain = KEY_NO_MODS(key);
     const bool wheel = (eb->mouse_reporting_enabled &&
-                        (plain == KEY_EVENT_MOUSE_WHEEL_UP ||
-                         plain == KEY_EVENT_MOUSE_WHEEL_DOWN));
-    if (key != KEY_UP && key != KEY_DOWN && !wheel) {
+                        (plain == KEY_EVENT_MOUSE_WHEEL_UP || plain == KEY_EVENT_MOUSE_WHEEL_DOWN));
+    // Keep arrow keys in the editor except Down at the end of the entire buffer.
+    if (!wheel && (key != KEY_DOWN || !editor_pos_is_at_end(eb))) {
         return false;
     }
 

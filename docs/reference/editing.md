@@ -109,7 +109,8 @@ When a menu has more items than fit on screen, a scrollbar appears beside its it
 above or below the thumb to page, or drag the thumb to scroll. Releasing it keeps the menu open.
 These interactions use the existing menu mouse settings; `mouse-clicking all-off` leaves the
 scrollbar visible for keyboard navigation. Passive completion suggestions show the scrollbar;
-Up/Down, scrolling, or clicking activates the menu. Mouse activation uses the prompt mouse settings.
+Down at the end of the input buffer, scrolling, or clicking activates the menu. Mouse activation
+uses the prompt mouse settings.
 
 **Multiline Detection:**
 CJ's Shell automatically enters multiline mode when:
@@ -315,8 +316,9 @@ usual context-aware completion sources.
 list as you type. It updates on edits without extending your input or previewing a candidate.
 Passive updates reuse the prompt's PATH cache, cached documentation, and static value choices.
 Press `Tab` to refresh command lookups, fetch missing documentation, or run dynamic value providers.
-While passive, Up/Down activate the menu and select the first candidate. Left edits the input,
-Right accepts the first suggestion, and Enter submits the input. With one available match,
+While passive, Down activates the menu and selects the first candidate only when the cursor is
+at the end of the entire input buffer. Otherwise, arrow keys retain their normal cursor movement
+and history navigation, and Enter submits the input. With one available match,
 `Tab` completes it immediately. With multiple matches,
 the first `Tab` activates the menu and selects the first candidate without accepting or inserting
 a common prefix. When mouse clicking is enabled at the prompt, scrolling activates the first

@@ -1272,8 +1272,9 @@ cjshopt completion-auto-menu status  # Show the current setting
 
 The menu stays passive while typing. With one available candidate, `Tab` completes it immediately.
 With multiple candidates, the first Tab activates the menu and selects the first candidate without
-accepting it or inserting a common prefix. Up/Down also activate the first candidate; Left edits
-the input and Right accepts the first suggestion. With mouse clicking enabled at the prompt,
+accepting it or inserting a common prefix. Down also activates the first candidate when the cursor
+is at the end of the entire input buffer. Otherwise, arrow keys retain their normal cursor movement
+and history navigation. With mouse clicking enabled at the prompt,
 scrolling activates the first entry, and clicking an entry activates and selects it; clicking the
 header or footer selects the first entry. The activating navigation gesture or click never accepts,
 regardless of `completion-click-accept`. Mouse-disabled/menu-only capture modes use keyboard activation.

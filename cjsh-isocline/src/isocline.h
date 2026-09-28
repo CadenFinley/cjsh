@@ -880,8 +880,9 @@ bool ic_completion_preview_is_enabled(void);
 /// Show an unselected completion menu while editing (disabled by default).
 /// Tab completes a single match immediately; with multiple matches it activates the menu
 /// without accepting or extending the input.
-/// Up/Down activate and select the first entry. Left edits the input; Right accepts the first
-/// suggestion. With prompt mouse capture enabled, scrolling also activates the first entry,
+/// Down activates and selects the first entry only at the end of the entire input buffer.
+/// Other arrow-key input retains normal editing and history navigation.
+/// With prompt mouse capture enabled, scrolling also activates the first entry,
 /// and a click activates the clicked entry (or the first entry for a header/footer click).
 /// The activating navigation gesture or click never accepts a completion.
 /// After acceptance, suggestions refresh and remain passive until the next interaction.

@@ -955,7 +955,10 @@ static int run_case(const char* scenario) {
         }
         if (strstr(scenario, "_multiline") != NULL) {
             (void)ic_enable_multiline(true);
-            initial_input = "echo\nx";
+            initial_input = (strstr(scenario, "_arrows") != NULL ? "s0\ns0" : "echo\nx");
+        }
+        if (strstr(scenario, "_history") != NULL) {
+            ic_history_add("s03");
         }
         if (strstr(scenario, "_prefix") != NULL) {
             prompt_text = "AUTO-MENU-PREFIX\npty";
