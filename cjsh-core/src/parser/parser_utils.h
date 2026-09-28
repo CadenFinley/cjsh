@@ -84,7 +84,8 @@ struct NamedLoopHeader {
 };
 
 // Parse an unexpanded for/select header, excluding the do keyword and body.
-NamedLoopHeader parse_named_loop_header(std::string header, std::string_view keyword);
+NamedLoopHeader parse_named_loop_header(std::string header, std::string_view keyword,
+                                        bool posix_mode);
 
 bool parse_assignment(const std::string& arg, std::string& name, std::string& value,
                       bool strip_surrounding_quotes = false);

@@ -56,6 +56,8 @@ void expect(bool condition, const std::string& message) {
 void test_validation_and_continuation() {
     auto* interpreter = g_shell->get_shell_script_interpreter();
     const std::vector<std::vector<std::string>> invalid = {
+        {"for in in {1..10};", "do", "echo $i", "done"},
+        {"select in in one; do :; done"},
         {"for i n {1..1000}; do", "echo $i", "done"},
         {"for i n one; do :; done"},
         {"for bad-name in one", "do", ":", "done"},
@@ -105,6 +107,14 @@ void test_validation_and_continuation() {
         expect(interpreter->needs_additional_input({header}),
                "unfinished loop still requests input: " + header);
     }
+
+    config::posix_mode = true;
+    const std::vector<std::string> posix_loop = {"for in in one two; do :; done"};
+    expect(!interpreter->has_syntax_errors(posix_loop, false),
+           "POSIX mode accepts in as a loop variable");
+    config::posix_mode = false;
+    expect(interpreter->has_syntax_errors(posix_loop, false),
+           "normal mode rejects in as a loop variable after switching from POSIX mode");
 }
 
 void test_prepared_input_execution() {
@@ -157,6 +167,7 @@ void test_runtime_guards_without_validation() {
     // Exercise the evaluators directly: nested/prevalidated execution must also
     // diagnose malformed headers without running either body or trailing commands.
     const std::vector<std::string> headers = {
+        "for in in one",    "select in in one",
         "for i n one",      "for i n $(echo one)",
         "for 1i in one",    "for \"i\" in one",
         "for i \"in\" one", "for",

@@ -599,7 +599,8 @@ bool is_valid_identifier(const std::string& name) {
     return true;
 }
 
-NamedLoopHeader parse_named_loop_header(std::string header, std::string_view keyword) {
+NamedLoopHeader parse_named_loop_header(std::string header, std::string_view keyword,
+                                        bool posix_mode) {
     NamedLoopHeader result;
     header = trim_whitespace(header);
     if (!header.empty() && header.back() == ';' && !is_char_escaped(header, header.size() - 1)) {
@@ -627,6 +628,11 @@ NamedLoopHeader parse_named_loop_header(std::string header, std::string_view key
     }
     if (!is_valid_identifier(result.variable)) {
         result.error = "invalid loop variable '" + result.variable + "'";
+        return result;
+    }
+    if (!posix_mode && result.variable == "in") {
+        result.error = "unexpected 'in' where a loop variable was expected after '" +
+                       std::string(keyword) + "'; use a variable name such as 'i'";
         return result;
     }
 

@@ -82,6 +82,30 @@ expect_error 'original multiline typo reports the unexpected token' \
     'for i n {1..1000}; do
 echo "$i"
 done' "unexpected token 'n'"
+expect_error 'in is rejected as a likely mistyped loop variable' \
+    'for in in {1..10};
+do
+echo $i
+done' "unexpected 'in' where a loop variable was expected"
+expect_error 'select rejects in as its variable too' \
+    'select in in one; do echo BODY; break; done' "unexpected 'in'"
+expect_error 'nested loop rejects in before expanding its list' \
+    'for outer in one; do for in in $(echo SIDE_EFFECT >&2); do echo BODY; done; done' \
+    "unexpected 'in'"
+expect_error 'noexec rejects in as a loop variable' \
+    'for in in one; do echo BODY; done' "unexpected 'in'" --no-exec
+expect_error 'malformed conditional reports the header typo' \
+    'while false; do
+    f [ 1 -eq 1 ]; then
+        echo BODY
+    fi
+done' "possible typo 'f' instead of 'if'"
+expect_error 'inline malformed conditional aborts before executing commands' \
+    'echo BEFORE; f [ 1 -eq 1 ]; then echo BODY; fi' "'then' without matching"
+expect_error 'POSIX mode reports an unexpected then' \
+    'f [ 1 -eq 1 ]; then echo BODY; fi' "'then' without matching" --posix
+expect_error 'noexec reports an unexpected then' \
+    'f [ 1 -eq 1 ]; then echo BODY; fi' "'then' without matching" --no-exec
 expect_error 'inline typo reports expected in' \
     'for i n {1..1000}; do echo BODY; done' "expected 'in'"
 expect_error 'typo cannot fall back to positional parameters' \
@@ -161,6 +185,10 @@ check_error 'stdin script reports the malformed header' "unexpected token 'n'"
 
 expect_output 'for without in uses positional parameters' \
     'set -- "one two" "" three; for i; do printf "<%s>" "$i"; done' '<one two><><three>'
+expect_output 'POSIX mode preserves in as a loop variable' \
+    'for in in one two; do printf "<%s>" "$in"; done' '<one><two>' --posix
+expect_output 'f remains a valid function and command name' \
+    'f() { printf "<%s>" "$1"; }; f literal' '<literal>'
 expect_output 'for without positional parameters does nothing successfully' \
     'for i; do echo BODY; done' ''
 expect_output 'multiline positional loop is preserved' \

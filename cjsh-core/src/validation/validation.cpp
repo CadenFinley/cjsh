@@ -310,6 +310,168 @@ bool has_inline_terminator(const std::string& text, const std::string& terminato
     return validation_internal::find_control_keyword(text, terminator) != std::string::npos;
 }
 
+std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& lines) {
+    // The structural validator below works on whole logical lines. Track conditional
+    // headers inside those lines too, so a misspelled opener is diagnosed at `then`
+    // before its later `fi` produces a misleading unmatched-closer error.
+    if (std::none_of(lines.begin(), lines.end(), [](const std::string& line) {
+            return line.find("then") != std::string::npos;
+        })) {
+        return std::nullopt;
+    }
+    std::vector<bool> awaiting_then;
+    struct CaseState {
+        bool pattern = true;
+        int group_depth = 0;
+    };
+    std::vector<CaseState> cases;
+    for (size_t line_index = 0; line_index < lines.size(); ++line_index) {
+        const auto& line = lines[line_index];
+        std::string source = sanitize_command_substitutions_for_validation(line);
+        const bool exact_columns = source == line;
+        size_t test_start = std::string::npos;
+        for_each_effective_char(
+            source, false, false, [&](size_t index, char, const QuoteState& state, size_t& next) {
+                if (state.in_quotes) {
+                    return IterationAction::Continue;
+                }
+                if (test_start != std::string::npos) {
+                    if (source.compare(index, 2, "]]") == 0) {
+                        std::fill(source.begin() + test_start, source.begin() + index + 2, ' ');
+                        test_start = std::string::npos;
+                        next = index + 1;
+                    }
+                    return IterationAction::Continue;
+                }
+                if (source.compare(index, 2, "[[") == 0 &&
+                    parser_find_keyword_token(source, "[[", index) == index) {
+                    test_start = index;
+                    next = index + 1;
+                    return IterationAction::Continue;
+                }
+                if (source.compare(index, 2, "((") == 0) {
+                    size_t start = 0;
+                    size_t end = 0;
+                    size_t after = 0;
+                    if (parser_find_balanced_double_parens(source, index, start, end, after)) {
+                        std::fill(source.begin() + index, source.begin() + after, ' ');
+                        next = after - 1;
+                    }
+                }
+                return IterationAction::Continue;
+            });
+        if (test_start != std::string::npos) {
+            std::fill(source.begin() + test_start, source.end(), ' ');
+        }
+
+        auto advance_case_pattern = [&](size_t from, size_t to) {
+            if (cases.empty()) {
+                return;
+            }
+            const auto segment = source.substr(from, to - from);
+            for_each_effective_char(
+                segment, false, false,
+                [&](size_t index, char c, const QuoteState& state, size_t& next) {
+                    if (state.in_quotes) {
+                        return IterationAction::Continue;
+                    }
+                    if (c == '$' && index + 1 < segment.size() && segment[index + 1] == '(') {
+                        const size_t end = find_matching_paren(segment, index + 1);
+                        if (end != std::string::npos) {
+                            next = end;
+                        }
+                        return IterationAction::Continue;
+                    }
+                    auto& current = cases.back();
+                    if (current.pattern) {
+                        if (c == '(' &&
+                            (current.group_depth > 0 ||
+                             (index > 0 && std::string_view("?*+@!").find(segment[index - 1]) !=
+                                               std::string_view::npos))) {
+                            ++current.group_depth;
+                        } else if (c == ')') {
+                            if (current.group_depth > 0) {
+                                --current.group_depth;
+                            } else {
+                                current.pattern = false;
+                            }
+                        }
+                    } else if (segment.compare(index, 2, ";;") == 0 ||
+                               segment.compare(index, 2, ";&") == 0) {
+                        current.pattern = true;
+                        next = index + 1;
+                    }
+                    return IterationAction::Continue;
+                });
+        };
+
+        size_t cursor = 0;
+        while (cursor < source.size()) {
+            size_t position = std::string::npos;
+            std::string keyword;
+            for (const auto* candidate : {"if", "elif", "then", "fi", "case", "esac"}) {
+                const size_t found = parser_find_keyword_token(source, candidate, cursor);
+                if (found < position) {
+                    position = found;
+                    keyword = candidate;
+                }
+            }
+            advance_case_pattern(cursor, position == std::string::npos ? source.size() : position);
+            if (position == std::string::npos) {
+                break;
+            }
+            cursor = position + keyword.size();
+            const size_t after = source.find_first_not_of(" \t", cursor);
+            // Keywords used as case patterns or brace-expansion words are literals.
+            if ((!cases.empty() && cases.back().pattern &&
+                 (keyword != "esac" || (after != std::string::npos &&
+                                        (source[after] == ')' || source[after] == '|')))) ||
+                (position > 0 && source[position - 1] == '{' &&
+                 !parser_is_command_group_brace(source, position - 1))) {
+                continue;
+            }
+            if (keyword == "case") {
+                cases.push_back({});
+            } else if (keyword == "esac") {
+                if (!cases.empty()) {
+                    cases.pop_back();
+                }
+            } else if (keyword == "if") {
+                awaiting_then.push_back(true);
+            } else if (keyword == "elif") {
+                if (!awaiting_then.empty()) {
+                    awaiting_then.back() = true;
+                }
+            } else if (keyword == "fi") {
+                if (!awaiting_then.empty()) {
+                    awaiting_then.pop_back();
+                }
+            } else if (!awaiting_then.empty() && awaiting_then.back()) {
+                awaiting_then.back() = false;
+            } else {
+                size_t start = position;
+                size_t end = cursor;
+                std::string message = "'then' without matching 'if' or 'elif'";
+                std::string suggestion = "Start the conditional with 'if condition; then'";
+                const size_t first = source.find_first_not_of(" \t");
+                if (first != std::string::npos && source.compare(first, 1, "f") == 0 &&
+                    first + 1 < source.size() &&
+                    std::isspace(static_cast<unsigned char>(source[first + 1])) != 0) {
+                    start = first;
+                    end = first + 1;
+                    message += "; possible typo 'f' instead of 'if'";
+                    suggestion = "Replace 'f' with 'if'";
+                }
+                return SyntaxError(
+                    {line_index + 1, exact_columns ? start : 0, exact_columns ? end : 0, 0},
+                    ErrorSeverity::CRITICAL, ErrorCategory::SYNTAX, "SYN004", message, line,
+                    suggestion);
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 bool handle_inline_loop_header(
     const std::string& line, ControlToken keyword, size_t display_line,
     std::vector<std::tuple<ControlToken, ControlToken, size_t>>& control_stack) {
@@ -490,6 +652,11 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
     std::vector<SyntaxError> errors;
     std::vector<std::string> sanitized_lines =
         sanitize_lines_for_validation(merge_command_group_lines(lines));
+
+    if (auto error = find_unexpected_then(sanitized_lines)) {
+        errors.push_back(std::move(*error));
+        return errors;
+    }
 
     std::vector<std::tuple<ControlToken, ControlToken, size_t>> control_stack;
     bool encountered_unclosed_quote = false;

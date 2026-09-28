@@ -33,6 +33,7 @@
 #include "interpreter_utils.h"
 #include "parser_utils.h"
 #include "quote_state.h"
+#include "shell_env.h"
 #include "string_utils.h"
 
 #include <algorithm>
@@ -666,8 +667,8 @@ ForLoopCheckResult analyze_for_loop_syntax(const std::vector<std::string>& token
     }
 
     const size_t do_pos = find_inline_do_position(trimmed_line);
-    const auto header =
-        parse_named_loop_header(strip_inline_comment(trimmed_line.substr(0, do_pos)), "for");
+    const auto header = parse_named_loop_header(
+        strip_inline_comment(trimmed_line.substr(0, do_pos)), "for", config::posix_mode);
     result.header_error = header.error;
 
     apply_do_checks();

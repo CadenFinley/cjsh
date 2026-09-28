@@ -729,7 +729,7 @@ int handle_for_block(
             return false;
         }
 
-        const auto parsed = parse_named_loop_header(header, "for");
+        const auto parsed = parse_named_loop_header(header, "for", config::posix_mode);
         if (!parsed.error.empty()) {
             report_loop_header_error("for", parsed.error);
             return false;
@@ -950,7 +950,7 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
     };
 
     auto parse_header = [&](const std::string& header) -> bool {
-        const auto parsed = parse_named_loop_header(header, "select");
+        const auto parsed = parse_named_loop_header(header, "select", config::posix_mode);
         if (!parsed.error.empty()) {
             report_loop_header_error("select", parsed.error);
             return false;

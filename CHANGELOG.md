@@ -13,6 +13,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Fixed
 
+- Reject `in` as a likely mistyped `for` or `select` loop variable in normal mode while preserving POSIX-mode compatibility. Diagnose unexpected `then` keywords at the malformed conditional header, including an `f`-instead-of-`if` hint, before reporting a later unmatched `fi`.
 - Keep arrow keys in the editor while automatic completion suggestions are passive, except for Down at the end of the input buffer, which activates the menu.
 - Preserve backslash-escaped spaces and tabs in command paths and arguments through field splitting, including pipelines and commands such as `Start\ VM.command`.
 - Recognize quoted and escaped command paths during syntax highlighting, so existing files such as `./"Start VM.command"` are no longer marked as unknown commands.

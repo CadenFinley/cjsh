@@ -328,6 +328,61 @@ bool test_literal_control_keywords() {
     return ok;
 }
 
+bool test_unexpected_then() {
+    auto* interpreter = g_shell->get_shell_script_interpreter();
+    bool ok = true;
+    const std::vector<std::string> typo = {"while false; do", "    f [ 1 -eq 1 ]; then",
+                                           "        echo BODY", "    fi", "done"};
+    const auto errors = interpreter->validate_script_syntax(typo);
+    ok = expect(errors.size() == 1 && errors.front().position.line_number == 2 &&
+                    errors.front().position.column_start == 4 &&
+                    errors.front().position.column_end == 5 &&
+                    errors.front().message.find("'f' instead of 'if'") != std::string::npos,
+                "the malformed header points at f without a cascading fi diagnostic") &&
+         ok;
+
+    for (const auto& script : {
+             "f [ 1 -eq 1 ]; then :; fi",
+             "while false; do f [ 1 -eq 1 ]; then :; fi; done",
+             "if true; then f [ 1 -eq 1 ]; then :; fi; fi",
+             "f() { f [ 1 -eq 1 ]; then :; fi; }; f",
+             "[ 1 -eq 1 ]; then :; fi",
+             "if true; then :; fi; true; then :; fi",
+         }) {
+        const auto lines = interpreter->parse_into_lines(script);
+        ok = expect(interpreter->has_syntax_errors(lines, false),
+                    "unexpected then blocks execution in every layout") &&
+             ok;
+        ok = expect(!interpreter->needs_additional_input(lines),
+                    "a malformed completed conditional does not request more input") &&
+             ok;
+    }
+    for (const auto& script : {
+             "f() { :; }; f [ 1 -eq 1 ]",
+             "if true; then if false; then :; elif true; then :; else :; fi; fi",
+             "if f [ 1 -eq 1 ]; then\n:\nfi",
+             "if true\nthen\n:\nfi",
+             "printf '%s' 'f [ 1 -eq 1 ]; then'; echo then",
+             "echo \\then; echo th'en'; echo {then}",
+             "echo ok # f [ 1 -eq 1 ]; then",
+             "case x in then | if) :;; x) if true; then :; fi;; esac",
+             "if (if true; then :; fi); then :; fi",
+             "if if true; then :; fi | cat; then :; fi",
+             "if case x in fi) :;; x) :;; esac; then :; fi",
+             "(( then = 1 )); for ((if=0; if<1; if++)); do :; done",
+             "[[ yes = yes && then = then ]]",
+             "[[ x = \" ]] \" && then = then ]]",
+             "cat <<EOF\nf [ 1 -eq 1 ]; then\nEOF",
+         }) {
+        ok = expect(
+                 !interpreter->has_syntax_errors(interpreter->parse_into_lines(script), false),
+                 ("valid conditional and literal keywords remain accepted: " + std::string(script))
+                     .c_str()) &&
+             ok;
+    }
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -344,14 +399,16 @@ int main() {
     const bool prime_loop_ok = test_inline_prime_loop_diagnostics();
     const bool control_ok = test_control_validator_filter();
     const bool literal_keywords_ok = test_literal_control_keywords();
+    const bool unexpected_then_ok = test_unexpected_then();
     g_shell.reset();
     if (tokens_ok && diagnostics_ok && execution_ok && assignments_ok && prime_loop_ok &&
-        control_ok && literal_keywords_ok) {
-        std::puts("All 7 validation token tests passed");
+        control_ok && literal_keywords_ok && unexpected_then_ok) {
+        std::puts("All 8 validation token tests passed");
         return 0;
     }
-    (void)std::fprintf(stderr, "%d/7 validation token tests failed\n",
+    (void)std::fprintf(stderr, "%d/8 validation token tests failed\n",
                        !tokens_ok + !diagnostics_ok + !execution_ok + !assignments_ok +
-                           !prime_loop_ok + !control_ok + !literal_keywords_ok);
+                           !prime_loop_ok + !control_ok + !literal_keywords_ok +
+                           !unexpected_then_ok);
     return 1;
 }
