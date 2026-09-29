@@ -3409,8 +3409,10 @@ completions after whitespace. Escape dismisses either the passive or active menu
 input and suppresses automatic reopening until you press Tab again. Tab completes or opens the
 menu manually and re-enables automatic suggestions for that prompt. A new prompt also restores
 automatic suggestions if this option is enabled.</p>
-<p>This replaces inline hints while enabled and works even with <code>hint off</code>. Completion preview is
-only shown after activation. Add <code>cjshopt completion-auto-menu on</code> to <code>~/.cjshrc</code> to persist it.
+<p>Inline ghost-text hints appear alongside the menu when <code>hint on</code> is set and respect <code>hint-delay</code>.
+Right/End accepts the hint; Enter submits only the text you typed while the menu is passive.
+The menu also works with <code>hint off</code>. <code>completion-preview</code> controls the selected candidate's
+preview after activation. Add <code>cjshopt completion-auto-menu on</code> to <code>~/.cjshrc</code> to persist it.
 The isocline API exposes <code>ic_enable_completion_auto_menu()</code> and
 <code>ic_completion_auto_menu_is_enabled()</code> for the same setting.</p>
 <h4 id="completion-preview">completion-preview</h4>

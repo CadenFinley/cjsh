@@ -1948,8 +1948,10 @@ completions after whitespace. <code>Esc</code> dismisses either the passive or a
 input and suppresses automatic reopening until you press <code>Tab</code> again. <code>Tab</code> completes or opens
 the menu manually and re-enables automatic suggestions for that prompt. A new prompt also
 restores automatic suggestions if this option is enabled.
-This mode replaces inline hints (independently of <code>cjshopt hint</code>); <code>completion-preview</code> and
-<code>completion-click-accept</code> apply once the menu is active. Add the setting to <code>~/.cjshrc</code> to persist it.</p>
+Inline ghost-text hints can appear alongside the menu, controlled by <code>cjshopt hint</code> and
+<code>cjshopt hint-delay</code>. Right/End accepts the hint; Enter submits only the typed input while the menu
+is passive. <code>completion-preview</code> and <code>completion-click-accept</code> apply once the menu is active.
+Add the setting to <code>~/.cjshrc</code> to persist it.</p>
 <p><strong>Using Completions (once the menu is active):</strong>
 - Press <code>Tab</code> to show/activate completions
 - Press <code>Tab</code> again to cycle through options
