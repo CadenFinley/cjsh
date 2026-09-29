@@ -513,9 +513,9 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
          ("send", b"\n"), ("wait_until", passive_height_ready(3)),
          ("idle", 0.1), ("check", check_passive_height(3)),
          ("send", b"\n"), ("wait_until", passive_height_ready(12)),
-         ("idle", 0.1), ("send", b"\x1b"),
-         ("wait_until", completion_menu_closed_ready("s")),
-         ("send", b"x\x7f"), ("wait_until", passive_height_ready(3)),
+         ("idle", 0.1), ("send", b"\x15"),
+         ("wait_until", completion_menu_closed_ready("")),
+         ("send", b"s"), ("wait_until", passive_height_ready(3)),
          ("idle", 0.1), ("check", check_passive_height(3)),
          ("send", b"\r")], "s", initial_cols=100,
     )
@@ -628,6 +628,7 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
 
     assert_completion_auto_menu_whitespace_cases(binary)
     assert_completion_auto_menu_mouse_cases(binary)
+    assert_completion_auto_menu_dismissal_cases(binary)
 
     # Observe cancellation before sending more bytes: elapsed time alone cannot
     # keep Escape separate from an Alt sequence when the driver is descheduled.
@@ -643,6 +644,57 @@ def assert_completion_auto_menu_cases(binary: str) -> None:
              ("wait_until", completion_menu_closed_ready(restored)), ("send", next_keys)],
             expected, initial_cols=100,
         )
+
+
+def assert_completion_auto_menu_dismissal_cases(binary: str) -> None:
+    def passive_ready(expected_input: str, footer: str):
+        def ready(output: str) -> bool:
+            screen = terminal_screen(output, 24, 100)
+            return (
+                screen[0].rstrip() == f"pty> {expected_input}"
+                and any(footer in line for line in screen[1:])
+            )
+        return ready
+
+    # Escape survives edits, clearing and pasting. Explicit Tab restores the
+    # automatic menu, including passive updates after accepting a completion.
+    for prefix, footer in [
+        (b"s", "tab:activate completions"),
+        (b"s\t", "enter/right:accept"),
+    ]:
+        assert_resize_case(
+            binary, "auto_menu_stays_dismissed", "completion_auto_menu",
+            [("send", prefix), ("wait", footer), ("send", b"\x1b"),
+             ("wait_until", completion_menu_closed_ready("s")),
+             ("send", b"0"), ("wait_until", completion_menu_closed_ready("s0")),
+             ("send", b"\x7f"), ("wait_until", completion_menu_closed_ready("s")),
+             ("send", b"\x15"), ("wait_until", completion_menu_closed_ready("")),
+             ("send", b"\x1b[200~s0\x1b[201~"),
+             ("wait_until", completion_menu_closed_ready("s0")),
+             ("send", b"\t"), ("wait", "enter/right:accept"), ("send", b"\r"),
+             ("wait_until", passive_ready("s01", "tab:complete")),
+             ("send", b"\x7f"), ("wait_until", passive_ready("s0", "tab:activate completions")),
+             ("send", b"\r")], "s0", initial_cols=100,
+        )
+
+    assert_resize_case(
+        binary, "dismissed_single_tab", "completion_auto_menu_single_autotab",
+        [("send", b"hel"), ("wait", "tab:complete"), ("send", b"\x1b"),
+         ("wait_until", completion_menu_closed_ready("hel")),
+         ("send", b"l"), ("wait_until", completion_menu_closed_ready("hell")),
+         ("send", b"\t"), ("wait_until", passive_ready("hello", "tab:complete")),
+         ("idle", 0.1), ("send", b"\r")], "hello", initial_cols=100,
+    )
+
+    # Tab also clears dismissal when there are no candidates at that moment.
+    assert_resize_case(
+        binary, "dismissed_no_match_tab", "completion_auto_menu",
+        [("send", b"s"), ("wait", "tab:activate completions"), ("send", b"\x1b"),
+         ("wait_until", completion_menu_closed_ready("s")),
+         ("send", b"x"), ("wait_until", completion_menu_closed_ready("sx")),
+         ("send", b"\t\x7f"), ("wait_until", passive_ready("s", "tab:activate completions")),
+         ("send", b"\r")], "s", initial_cols=100,
+    )
 
 
 def assert_completion_auto_menu_whitespace_cases(binary: str) -> None:

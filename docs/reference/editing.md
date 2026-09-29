@@ -329,7 +329,10 @@ After accepting a completion, suggestions refresh immediately in **passive** mod
 to the command line. The menu stays hidden when the line is empty, there are no matches, or
 whitespace immediately precedes the cursor. Pressing Space or moving between
 arguments hides it until you start typing the next argument. An explicit `Tab` still opens
-completions after whitespace. `Esc` hides the passive menu without deleting input; editing reopens it.
+completions after whitespace. `Esc` dismisses either the passive or active menu without deleting
+input and suppresses automatic reopening until you press `Tab` again. `Tab` completes or opens
+the menu manually and re-enables automatic suggestions for that prompt. A new prompt also
+restores automatic suggestions if this option is enabled.
 This mode replaces inline hints (independently of `cjshopt hint`); `completion-preview` and
 `completion-click-accept` apply once the menu is active. Add the setting to `~/.cjshrc` to persist it.
 

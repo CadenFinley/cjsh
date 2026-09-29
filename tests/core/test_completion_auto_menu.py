@@ -26,7 +26,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Ensure passive completion menus do not run expensive explicit completion work."""
+"""Check automatic menu behavior and keep passive completion work inexpensive."""
 
 from __future__ import annotations
 
@@ -110,6 +110,30 @@ def main(binary: str) -> None:
                 raise AssertionError("typing a command launched the manual-page reader")
             cancel(session)
 
+            # Escape dismissal lasts for one prompt. Submitting or interrupting
+            # starts a fresh prompt with the configured automatic menu restored.
+            for finish in (b"\r", b"\x03"):
+                start = type_text(session, "automenu-tool1")
+                session.wait_for(b"tab:complete", start)
+                start = len(session.output)
+                session.write(b"\x1b")
+                session.wait_for_normalized(b"cjsh> automenu-tool1", start)
+                for key, expected in ((b"\x7f", b"automenu-tool"), (b"1", b"automenu-tool1")):
+                    start = len(session.output)
+                    session.write(key)
+                    session.wait_for_normalized(b"cjsh> " + expected, start)
+                    session.pump()
+                    if b"Completions" in session.output[start:]:
+                        raise AssertionError("editing reopened an Escape-dismissed menu")
+                start = len(session.output)
+                session.write(finish)
+                session.wait_for_prompt(start, command_completed=(finish == b"\r"))
+                session.pump()
+
+            start = type_text(session, "automenu-")
+            session.wait_for(b"tab:activate", start)
+            cancel(session)
+
             # With no cached option documentation, typing a new argument leaves
             # the menu hidden and must still avoid launching the manual reader.
             type_text(session, "automenu-tool1 ")
@@ -178,7 +202,7 @@ def main(binary: str) -> None:
                 session.wait_for_prompt(start, command_completed=True)
         finally:
             session.close()
-    print("All 6 automatic completion menu integration tests passed")
+    print("All 8 automatic completion menu integration tests passed")
 
 
 if __name__ == "__main__":

@@ -96,6 +96,7 @@ typedef struct editor_s {
     bool refresh_suppressed;            // batch screen updates during high-volume input
     bool refresh_pending;               // remember to refresh when suppression lifts
     bool completion_auto_menu_visible;  // passive list owned by the main editor
+    bool completion_auto_menu_dismissed;  // Escape suppresses passive menus until explicit completion
     bool completion_menu_maximized;     // reset when the active/passive menu closes
     bool completion_menu_active;        // an interactive completion menu owns input
     ssize_t completion_auto_menu_header_rows;  // passive layout used for click activation
@@ -4336,8 +4337,9 @@ edit_loop_entry:
                     edit_refresh(env, &eb);
                 }
                 if (c == KEY_ESC) {
+                    eb.completion_auto_menu_dismissed = true;
                     mem_free(eb.mem, pending_hint);
-                    continue;  // hide suggestions, not the input; the next edit reopens them
+                    continue;  // preserve input and wait for explicit completion to resume suggestions
                 }
             }
 

@@ -887,7 +887,9 @@ bool ic_completion_preview_is_enabled(void);
 /// The activating navigation gesture or click never accepts a completion.
 /// After acceptance, suggestions refresh and remain passive until the next interaction.
 /// Empty lines, no matches, or whitespace immediately before the cursor hide the passive menu.
-/// Tab still opens completions after whitespace. Escape hides the menu until the next edit.
+/// Tab still opens completions after whitespace. Escape dismisses either passive or active menus
+/// and suppresses automatic reopening without clearing input. Pressing Tab completes or opens
+/// the menu manually and re-enables automatic suggestions. A new prompt also resets suppression.
 /// The passive menu replaces inline hints, independently of the hint and preview settings.
 /// Passive completion callbacks report ic_completion_is_hint() so they can defer expensive work.
 /// Returns the previous setting.

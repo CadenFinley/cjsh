@@ -279,7 +279,7 @@ static bool edit_completion_auto_menu_has_prefix(editor_t* eb) {
 static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     sbuf_clear(eb->extra);
     eb->completion_auto_menu_visible = false;
-    if (!edit_completion_auto_menu_has_prefix(eb)) {
+    if (eb->completion_auto_menu_dismissed || !edit_completion_auto_menu_has_prefix(eb)) {
         eb->completion_menu_maximized = false;
         edit_refresh(env, eb);
         return;
@@ -935,6 +935,7 @@ read_key:
         edit_show_help(env, eb);
         goto again;
     } else if (c == KEY_ESC) {
+        eb->completion_auto_menu_dismissed = true;
         completions_clear(env->completions);
         edit_refresh(env, eb);
         c = 0;
@@ -1131,6 +1132,9 @@ static void edit_generate_completions(ic_env_t* env, editor_t* eb, bool autotab)
     debug_msg("edit: complete: %zd: %s\n", eb->pos, sbuf_string(eb->input));
     if (eb->pos < 0) {
         return;
+    }
+    if (!autotab) {
+        eb->completion_auto_menu_dismissed = false;
     }
     ssize_t count = completions_generate(env, env->completions, sbuf_string(eb->input), eb->pos,
                                          IC_MAX_COMPLETIONS_TO_TRY);

@@ -1283,7 +1283,10 @@ normal completion-menu settings. After acceptance, suggestions refresh in passiv
 returns to the command line, so Enter submits your input. No matches, an empty current line, or
 whitespace immediately before the cursor hide the menu. Pressing Space or moving
 between arguments waits for you to start typing the next argument; an explicit Tab still opens
-completions after whitespace. Escape hides the menu until the next edit without clearing input.
+completions after whitespace. Escape dismisses either the passive or active menu without clearing
+input and suppresses automatic reopening until you press Tab again. Tab completes or opens the
+menu manually and re-enables automatic suggestions for that prompt. A new prompt also restores
+automatic suggestions if this option is enabled.
 
 This replaces inline hints while enabled and works even with `hint off`. Completion preview is
 only shown after activation. Add `cjshopt completion-auto-menu on` to `~/.cjshrc` to persist it.
