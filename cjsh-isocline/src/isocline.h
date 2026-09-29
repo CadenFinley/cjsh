@@ -890,7 +890,9 @@ bool ic_completion_preview_is_enabled(void);
 /// Tab still opens completions after whitespace. Escape dismisses either passive or active menus
 /// and suppresses automatic reopening without clearing input. Pressing Tab completes or opens
 /// the menu manually and re-enables automatic suggestions. A new prompt also resets suppression.
-/// The passive menu replaces inline hints, independently of the hint and preview settings.
+/// Inline hints can appear alongside the passive menu, honoring the hint and hint-delay settings.
+/// Right/End accepts an inline hint; Enter submits only the typed input while the menu is passive.
+/// The completion-preview setting controls the selected candidate after menu activation.
 /// Passive completion callbacks report ic_completion_is_hint() so they can defer expensive work.
 /// Returns the previous setting.
 bool ic_enable_completion_auto_menu(bool enable);

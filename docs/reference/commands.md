@@ -1288,8 +1288,10 @@ input and suppresses automatic reopening until you press Tab again. Tab complete
 menu manually and re-enables automatic suggestions for that prompt. A new prompt also restores
 automatic suggestions if this option is enabled.
 
-This replaces inline hints while enabled and works even with `hint off`. Completion preview is
-only shown after activation. Add `cjshopt completion-auto-menu on` to `~/.cjshrc` to persist it.
+Inline ghost-text hints appear alongside the menu when `hint on` is set and respect `hint-delay`.
+Right/End accepts the hint; Enter submits only the text you typed while the menu is passive.
+The menu also works with `hint off`. `completion-preview` controls the selected candidate's
+preview after activation. Add `cjshopt completion-auto-menu on` to `~/.cjshrc` to persist it.
 The isocline API exposes `ic_enable_completion_auto_menu()` and
 `ic_completion_auto_menu_is_enabled()` for the same setting.
 

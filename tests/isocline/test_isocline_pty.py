@@ -411,7 +411,81 @@ def completion_menu_closed_ready(expected_input: str):
     return ready
 
 
+def assert_completion_auto_menu_hint_cases(binary: str) -> None:
+    def passive_ready(text: str, menu: bool = True):
+        def check(output: str) -> None:
+            rows = terminal_screen(output, 24, 100)
+            screen = "\n".join(rows)
+            if rows[0].rstrip() != f"pty> {text}":
+                raise AssertionError(f"unexpected inline hint: {screen!r}")
+            if ("Completions" in screen) != menu or "→" in screen:
+                raise AssertionError(f"hint changed the passive menu: {screen!r}")
+        return terminal_check_ready(check)
+
+    # Hints and selected-entry previews are independent. Enter must submit only
+    # the typed prefix even while a full suggestion is visible at the prompt.
+    for scenario, displayed in [
+        ("completion_auto_menu_single_hints", "hello"),
+        ("completion_auto_menu_single_hints_nopreview", "hello"),
+        ("completion_auto_menu_single", "hel"),
+    ]:
+        assert_resize_case(
+            binary, "passive_inline_hint", scenario,
+            [("send", b"hel"), ("wait_until", passive_ready(displayed)),
+             ("send", b"\r")], "hel", initial_cols=100,
+        )
+
+    for key in (RIGHT, END):
+        assert_resize_case(
+            binary, "accept_passive_hint", "completion_auto_menu_single_hints",
+            [("send", b"hel"), ("wait_until", passive_ready("hello")),
+             ("send", key + b"!\r")], "hello!", initial_cols=100,
+        )
+
+    assert_resize_case(
+        binary, "refresh_passive_hint", "completion_auto_menu_single_hints",
+        [("send", b"hel"), ("wait_until", passive_ready("hello")),
+         ("send", b"x"), ("wait_until", passive_ready("helx", False)),
+         ("send", b"\x7f"), ("wait_until", passive_ready("hello")),
+         ("send", RIGHT + b"\x1f\r")], "hel", initial_cols=100,
+    )
+
+    assert_resize_case(
+        binary, "cancel_passive_hint", "completion_auto_menu_single_hints",
+        [("send", b"hel"), ("wait_until", passive_ready("hello")),
+         ("send", b"\x1b"), ("wait_until", passive_ready("hel", False)),
+         ("send", b"\r")], "hel", initial_cols=100,
+    )
+
+    # Rendering a hint must leave the complete candidate list available for
+    # activation; navigating it replaces the hint with the selected preview.
+    assert_resize_case(
+        binary, "activate_with_inline_hint", "completion_auto_menu_hints",
+        [("send", b"s"), ("wait_until", passive_ready("s01")),
+         ("wait", "  s12"), ("send", b"\t" + DOWN),
+         ("wait", "pty> s02"), ("send", b"\r\r")], "s02", initial_cols=100,
+    )
+
+    assert_resize_case(
+        binary, "delayed_passive_hint", "completion_auto_menu_single_hints_delay",
+        [("send", b"hel"), ("wait_until", passive_ready("hel")),
+         ("wait_until", passive_ready("hello")), ("send", b"\r")], "hel",
+        initial_cols=100,
+    )
+
+    assert_resize_case(
+        binary, "resize_passive_hint", "completion_auto_menu_single_hints",
+        [("send", b"echo argument hel"),
+         ("wait_until", passive_ready("echo argument hello")),
+         ("resize", (24, 20)), ("send", FOCUS_IN), ("idle", 0.1),
+         ("resize", (24, 100)), ("send", FOCUS_IN),
+         ("wait_until", passive_ready("echo argument hello")),
+         ("send", b"\r")], "echo argument hel", initial_cols=100,
+    )
+
+
 def assert_completion_auto_menu_cases(binary: str) -> None:
+    assert_completion_auto_menu_hint_cases(binary)
     wheel_down = b"\x1b[<65;1;1M"
     click_second = mouse_left_click(5, 4)
     for label, scenario, keys, expected in [

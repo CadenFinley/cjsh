@@ -276,8 +276,10 @@ static bool edit_completion_auto_menu_has_prefix(editor_t* eb) {
 
 // A passive menu is only rendered here: it never reads keys, captures the mouse, applies a
 // common prefix, or previews a replacement. The main editor continues to own all input.
-static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
+static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb, bool delay_hint) {
     sbuf_clear(eb->extra);
+    sbuf_clear(eb->hint);
+    sbuf_clear(eb->hint_help);
     eb->completion_auto_menu_visible = false;
     if (eb->completion_auto_menu_dismissed || !edit_completion_auto_menu_has_prefix(eb)) {
         eb->completion_menu_maximized = false;
@@ -296,6 +298,17 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     }
     completions_sort(env->completions);
 
+    // Reuse the passive candidates for ghost text without issuing a second
+    // completion request or changing the unselected menu's input buffer.
+    const char* hint = (env->no_hint ? NULL : completions_get_hint(env->completions, 0, NULL));
+    const ssize_t hint_len = ic_strlen(hint);
+    const bool hint_inserted =
+        (hint_len > 0 && sbuf_insert_at(eb->input, hint, eb->pos) >= 0);
+    const ssize_t input_rows = edit_menu_input_rows(env, eb);
+    if (hint_inserted) {
+        sbuf_delete_at(eb->input, eb->pos, hint_len);
+    }
+
     char footer[192];
     (void)snprintf(footer, sizeof(footer), "[ic-diminish](tab:%s%s%s ctrl+j:resize esc:hide)[/]",
                    (count == 1 ? "complete" : "activate completions"),
@@ -304,7 +317,7 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     const char* more = (count >= IC_MAX_COMPLETIONS_TO_TRY ? " (more available)" : "");
     char header[192];
     (void)snprintf(header, sizeof(header), "[ic-info]Completions%s[/]\n", more);
-    const ssize_t reserved_rows = edit_menu_input_rows(env, eb) +
+    const ssize_t reserved_rows = input_rows +
                                   edit_menu_rendered_rows(env, eb, header) +
                                   edit_menu_rendered_rows(env, eb, footer) + 1;
     const ssize_t available =
@@ -332,7 +345,17 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb) {
     (void)sbuf_append(eb->extra, footer);
     eb->completion_auto_menu_rows = edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra));
     eb->completion_auto_menu_visible = true;
-    edit_refresh(env, eb);
+    const bool delayed = delay_hint && env->hint_delay > 0 &&
+                         !edit_completion_is_current_word_spell(env, eb, 0, NULL, NULL);
+    if (delayed) {
+        edit_refresh(env, eb);
+    }
+    if (hint != NULL) {
+        sbuf_replace(eb->hint, hint);
+    }
+    if (!delayed) {
+        edit_refresh(env, eb);
+    }
 }
 
 static void edit_completion_menu_update_hint(ic_env_t* env, editor_t* eb, bool allow_inline_hint) {

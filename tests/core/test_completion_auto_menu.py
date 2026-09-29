@@ -200,9 +200,29 @@ def main(binary: str) -> None:
                 session.write(b"\r\r")
                 session.wait_for(b"RANKING_SELECTED_git", start)
                 session.wait_for_prompt(start, command_completed=True)
+
+            # Inline hints coexist with the passive list and are controlled by
+            # hint, independently of selected-entry completion previews.
+            for hints, preview in (("on", "on"), ("on", "off"), ("off", "on")):
+                session.run_command(
+                    f"cjshopt completion-auto-menu on; cjshopt set-completion-max 10; "
+                    f"cjshopt hint {hints}; cjshopt completion-preview {preview}".encode()
+                )
+                start = type_text(session, "automenu-tool")
+                session.wait_for(b"tab:activate", start)
+                session.pump()
+                output = normalize_terminal_output(bytes(session.output[start:]))
+                has_hint = b"cjsh> automenu-tool1" in output
+                if has_hint != (hints == "on"):
+                    raise AssertionError(
+                        f"automatic menu did not honor hint {hints} with preview {preview}: "
+                        f"{output!r}"
+                    )
+                session.wait_for(b"automenu-tool4", start)
+                cancel(session)
         finally:
             session.close()
-    print("All 8 automatic completion menu integration tests passed")
+    print("All 11 automatic completion menu integration tests passed")
 
 
 if __name__ == "__main__":

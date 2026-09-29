@@ -943,6 +943,9 @@ static int run_case(const char* scenario) {
         (void)ic_enable_completion_preview(strstr(scenario, "_nopreview") == NULL);
         (void)ic_enable_completion_click_accept(strstr(scenario, "_selectonly") == NULL);
         (void)ic_enable_hint(strstr(scenario, "_hints") != NULL);
+        if (strstr(scenario, "_delay") != NULL) {
+            (void)ic_set_hint_delay(250);
+        }
         (void)ic_enable_auto_tab(strstr(scenario, "_autotab") != NULL);
         (void)ic_set_status_hint_mode(IC_STATUS_HINT_OFF);
         (void)ic_enable_mouse_reporting_status_line(false);

@@ -186,7 +186,7 @@ static bool edit_completion_click_accept_enabled(const ic_env_t* env) {
 }
 
 static void edit_generate_completions(ic_env_t* env, editor_t* eb, bool autotab);
-static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb);
+static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb, bool delay_hint);
 static void edit_history_search_with_current_line(ic_env_t* env, editor_t* eb);
 static void edit_command_palette(ic_env_t* env, editor_t* eb);
 static void edit_history_prev(ic_env_t* env, editor_t* eb);
@@ -2163,7 +2163,7 @@ static bool edit_resize(ic_env_t* env, editor_t* eb) {
     eb->termh = newtermh;
     if (!width_changed) {
         if (eb->completion_auto_menu_visible) {
-            edit_refresh_completion_auto_menu(env, eb);
+            edit_refresh_completion_auto_menu(env, eb, false);
         } else {
             edit_refresh(env, eb);
         }
@@ -2237,14 +2237,15 @@ static bool edit_resize(ic_env_t* env, editor_t* eb) {
         eb->cur_rows++;
     }
     eb->termw = newtermw;
+    // Layout included the displayed hint; refresh and completion generation need
+    // the actual input so the hint is neither duplicated nor treated as typed text.
+    sbuf_delete_at(eb->input, eb->pos, sbuf_len(eb->hint));
     if (eb->completion_auto_menu_visible) {
-        edit_refresh_completion_auto_menu(env, eb);
+        edit_refresh_completion_auto_menu(env, eb, false);
     } else {
         edit_refresh(env, eb);
     }
 
-    // remove hint again
-    sbuf_delete_at(eb->input, eb->pos, sbuf_len(eb->hint));
     sbuf_free(extra);
     return true;
 }
@@ -2281,7 +2282,7 @@ static void edit_refresh_hint(ic_env_t* env, editor_t* eb) {
         // Shared search/palette menus temporarily disable undo while editing their query.
         // Neither they nor an active completion menu should spawn a passive menu.
         if (!eb->completion_menu_active && !eb->disable_undo) {
-            edit_refresh_completion_auto_menu(env, eb);
+            edit_refresh_completion_auto_menu(env, eb, true);
         } else {
             edit_refresh(env, eb);
         }
@@ -4305,7 +4306,7 @@ edit_loop_entry:
 
             if (eb.completion_auto_menu_visible && c == KEY_LINEFEED) {
                 eb.completion_menu_maximized = !eb.completion_menu_maximized;
-                edit_refresh_completion_auto_menu(env, &eb);
+                edit_refresh_completion_auto_menu(env, &eb, false);
                 continue;
             }
 
@@ -4319,6 +4320,9 @@ edit_loop_entry:
             // are correct)
             const bool had_hint = (sbuf_len(eb.hint) > 0);
             char* pending_hint = (had_hint ? sbuf_strdup(eb.hint) : NULL);
+            const char* hint_source =
+                (had_hint ? completions_get_source(env->completions, 0) : NULL);
+            const bool spell_hint = (hint_source != NULL && strcmp(hint_source, "spell") == 0);
             sbuf_clear(eb.hint);
             sbuf_clear(eb.hint_help);
 
@@ -4358,11 +4362,6 @@ edit_loop_entry:
             if ((c == KEY_RIGHT || c == KEY_END) && had_hint) {
                 bool allow_force_completion = (c == KEY_END) || edit_pos_is_at_row_end(env, &eb);
                 if (allow_force_completion) {
-                    bool spell_hint = false;
-                    if (pending_hint != NULL && completions_count(env->completions) > 0) {
-                        const char* source = completions_get_source(env->completions, 0);
-                        spell_hint = (source != NULL && strcmp(source, "spell") == 0);
-                    }
                     if (pending_hint != NULL && editor_pos_is_at_end(&eb) && !spell_hint) {
                         // Apply the inline hint directly when already at the end of the input
                         editor_start_modify(&eb);
