@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "agent_mode.h"
@@ -62,6 +63,24 @@ constexpr int kOptConfigDir = 266;
 constexpr int kOptNoSystemPaths = 267;
 std::vector<std::string> positional_parameters;
 bool login_shell_invocation = false;
+bool sh_invocation = false;
+
+bool invoked_via_sh(const char* arg0) {
+    if (arg0 == nullptr) {
+        return false;
+    }
+
+    std::string_view shell_name(arg0);
+    const std::size_t slash_pos = shell_name.find_last_of('/');
+    if (slash_pos != std::string_view::npos) {
+        shell_name.remove_prefix(slash_pos + 1);
+    }
+    if (!shell_name.empty() && shell_name.front() == '-') {
+        shell_name.remove_prefix(1);
+    }
+
+    return shell_name == "sh";
+}
 
 void detect_login_mode(char* argv[]) {
     // detect argv[0] being -cjsh
@@ -89,12 +108,6 @@ void apply_minimal_mode() {
     config::prompt_vars_enabled = false;
 }
 
-}  // namespace
-
-bool is_login_shell_invocation() {
-    return login_shell_invocation;
-}
-
 void apply_posix_mode_settings() {
     config::posix_mode = true;
     config::extglob_enabled = false;
@@ -105,6 +118,22 @@ void apply_posix_mode_settings() {
     config::error_suggestions_enabled = false;
     config::history_expansion_enabled = false;
     (void)setenv("POSIXLY_CORRECT", "1", 1);
+}
+
+}  // namespace
+
+bool is_login_shell_invocation() {
+    return login_shell_invocation;
+}
+
+void warn_if_invoked_via_sh() {
+    if (sh_invocation && !config::suppress_sh_warning) {
+        print_error({ErrorType::INVALID_ARGUMENT,
+                     ErrorSeverity::WARNING,
+                     "sh",
+                     "cjsh was invoked as sh, but it is not 100% POSIX compliant",
+                     {"Pass --no-sh-warning to hide this warning"}});
+    }
 }
 
 void save_startup_arguments(int argc, char* argv[]) {
@@ -306,6 +335,12 @@ ParseResult parse_arguments(int argc, char* argv[]) {
 
     if (config::force_interactive) {
         config::interactive_mode = true;
+    }
+
+    // Invoking cjsh as sh is equivalent to --posix.
+    sh_invocation = invoked_via_sh((argc > 0) ? argv[0] : nullptr);
+    if (sh_invocation) {
+        apply_posix_mode_settings();
     }
 
     return result;

@@ -43,7 +43,7 @@ struct ParseResult {
 
 ParseResult parse_arguments(int argc, char* argv[]);
 bool is_login_shell_invocation();
-void apply_posix_mode_settings();
+void warn_if_invoked_via_sh();
 void save_startup_arguments(int argc, char* argv[]);
 std::vector<std::string>& startup_args();
 

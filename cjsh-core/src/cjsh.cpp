@@ -34,7 +34,6 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
-#include <string_view>
 
 #include "cjsh_filesystem.h"
 #include "completion_history.h"
@@ -54,24 +53,6 @@
 std::unique_ptr<Shell> g_shell = nullptr;
 
 namespace {
-
-bool invoked_via_sh(const char* arg0) {
-    // check is cjsh is symlinked to sh and return true or false
-    if (arg0 == nullptr) {
-        return false;
-    }
-
-    std::string_view shell_name(arg0);
-    const std::size_t slash_pos = shell_name.find_last_of('/');
-    if (slash_pos != std::string_view::npos) {
-        shell_name.remove_prefix(slash_pos + 1);
-    }
-    if (!shell_name.empty() && shell_name.front() == '-') {
-        shell_name.remove_prefix(1);
-    }
-
-    return shell_name == "sh";
-}
 
 void cleanup_resources() {
     // Both main and atexit use this dispatcher; shutdown must only run once.
@@ -188,14 +169,8 @@ int run_command_or_script(const std::string& script_file, bool startup_interrupt
     return handle_non_interactive_mode(script_file);
 }
 
-int run_interactive_session(const std::string& script_file, bool launched_as_sh) {
-    if (launched_as_sh && !config::suppress_sh_warning) {
-        print_error({ErrorType::INVALID_ARGUMENT,
-                     ErrorSeverity::WARNING,
-                     "sh",
-                     "cjsh was invoked as sh, but it is not 100% POSIX compliant",
-                     {"Pass --no-sh-warning to hide this warning"}});
-    }
+int run_interactive_session(const std::string& script_file) {
+    flags::warn_if_invoked_via_sh();
 
     g_shell->set_interactive_mode(true);
     (void)cjsh_filesystem::initialize_cjsh_directories();
@@ -235,12 +210,6 @@ int run_cjsh(int argc, char* argv[]) {
         return parse_result.exit_code;
     }
 
-    // Invoking cjsh as sh is equivalent to --posix.
-    const bool launched_as_sh = invoked_via_sh((argc > 0) ? argv[0] : nullptr);
-    if (launched_as_sh) {
-        flags::apply_posix_mode_settings();
-    }
-
     if (config::show_version) {
         return version_command({});
     }
@@ -267,7 +236,7 @@ int run_cjsh(int argc, char* argv[]) {
     }
 
     if (config::interactive_mode) {
-        return run_interactive_session(parse_result.script_file, launched_as_sh);
+        return run_interactive_session(parse_result.script_file);
     }
 
     cjsh_filesystem::finalize_history_path();
