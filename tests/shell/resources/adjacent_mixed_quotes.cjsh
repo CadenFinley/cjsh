@@ -24,4 +24,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# this is my favorite file in the entire cjsh repo
+
+# because it is hilarious
+
 printf '%s\n' 'ok "'"'
