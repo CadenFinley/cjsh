@@ -30,6 +30,7 @@
 #define CJSH_CORE_SRC_CORE_FLAGS_H
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace flags {
@@ -37,6 +38,7 @@ namespace flags {
 struct ParseResult {
     std::string script_file;
     std::vector<std::string> script_args;
+    std::vector<std::pair<std::string, bool>> shell_options;
     int exit_code = 0;
     bool should_exit = false;
 };

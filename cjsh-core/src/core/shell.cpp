@@ -67,6 +67,7 @@
 #include "parser.h"
 #include "pipeline_status_utils.h"
 #include "prompt.h"
+#include "readonly_command.h"
 #include "shell_env.h"
 #include "signal_handler.h"
 #include "string_utils.h"
@@ -90,7 +91,11 @@ constexpr std::array<ShellOptionDescriptor, static_cast<size_t>(ShellOption::Cou
                                 {ShellOption::Allexport, 'a', "allexport"},
                                 {ShellOption::Huponexit, 0, "huponexit"},
                                 {ShellOption::Pipefail, 0, "pipefail"},
-                                {ShellOption::Monitor, 'm', "monitor"}}};
+                                {ShellOption::Monitor, 'm', "monitor"},
+                                {ShellOption::Hashall, 'h', "hashall"},
+                                {ShellOption::Notify, 'b', "notify"},
+                                {ShellOption::Ignoreeof, 0, "ignoreeof"},
+                                {ShellOption::Nolog, 0, "nolog"}}};
 
 struct ErrexitSeverityDescriptor {
     ErrorSeverity severity;
@@ -281,6 +286,13 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
                                     bool auto_background_on_stop,
                                     bool auto_background_on_stop_silent) {
     const auto& args = command.original_args;
+    if (config::posix_mode) {
+        for (const auto& [name, value] : command.assignments) {
+            if (!readonly_manager_can_assign(name, "assignment")) {
+                return cjsh_env::posix_error_exit(1);
+            }
+        }
+    }
     // fast path back out, this condition should never hit as many other things would have failed
     // beforehand
     if (!shell_exec || !built_ins) {
@@ -812,8 +824,12 @@ void Shell::apply_abbreviations_to_line_editor() {
     }
 }
 
-void Shell::apply_no_exec(bool enabled) {
-    set_shell_option(ShellOption::Noexec, enabled);
+void Shell::apply_startup_options(const std::vector<std::pair<std::string, bool>>& options) {
+    for (const auto& [name, enabled] : options) {
+        if (auto option = parse_shell_option(name)) {
+            set_shell_option(*option, enabled);
+        }
+    }
 }
 
 void Shell::set_shell_option(ShellOption option, bool value) {

@@ -36,6 +36,8 @@
 #include <system_error>
 #include <vector>
 
+#include <unistd.h>
+#include "builtin.h"
 #include "error_out.h"
 #include "shell.h"
 #include "shell_env.h"
@@ -58,7 +60,7 @@ int source_command(const std::vector<std::string>& args) {
     }
     if (args.size() < 2) {
         print_error({ErrorType::INVALID_ARGUMENT, command_name, "missing file operand", {}});
-        return 1;
+        return posix_special_builtin_error(1);
     }
 
     if (!g_shell) {
@@ -67,12 +69,36 @@ int source_command(const std::vector<std::string>& args) {
     }
 
     std::error_code status_ec;
-    const std::filesystem::path target_path(args[1]);
+    std::filesystem::path target_path(args[1]);
+    if (config::posix_mode && args[1].find('/') == std::string::npos) {
+        const std::string path = cjsh_env::get_shell_variable_value("PATH");
+        size_t start = 0;
+        target_path.clear();
+        while (start <= path.size()) {
+            const auto end = path.find(':', start);
+            auto candidate = std::filesystem::path(
+                                 path.substr(start, end == std::string::npos ? end : end - start)) /
+                             args[1];
+            if (access(candidate.c_str(), R_OK) == 0 &&
+                !std::filesystem::is_directory(candidate, status_ec)) {
+                target_path = candidate;
+                break;
+            }
+            if (end == std::string::npos) {
+                break;
+            }
+            start = end + 1;
+        }
+    }
+    if (config::posix_mode && (target_path.empty() || access(target_path.c_str(), R_OK) != 0)) {
+        print_error({ErrorType::FILE_NOT_FOUND, command_name, "cannot read file: " + args[1], {}});
+        return posix_special_builtin_error(1);
+    }
     if (std::filesystem::exists(target_path, status_ec) &&
         std::filesystem::is_directory(target_path, status_ec)) {
         print_error({ErrorType::RUNTIME_ERROR, command_name, "is a directory: " + args[1], {}});
-        return 1;
+        return posix_special_builtin_error(1);
     }
 
-    return g_shell->execute_script_file(std::filesystem::path(args[1]));
+    return g_shell->execute_script_file(target_path);
 }

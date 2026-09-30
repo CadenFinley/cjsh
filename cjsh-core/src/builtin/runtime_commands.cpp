@@ -32,7 +32,9 @@
 #include <vector>
 
 #include "double_bracket_command.h"
+#include "error_out.h"
 #include "internal_subshell_command.h"
+#include "shell_env.h"
 
 namespace runtime_commands {
 
@@ -48,6 +50,10 @@ int execute_runtime_command(const std::vector<std::string>& command_args, Shell*
 
     const std::string& command_name = command_args[0];
     if (command_name == "[[") {
+        if (config::posix_mode) {
+            print_error({ErrorType::INVALID_ARGUMENT, "[[", "'[[' is disabled in POSIX mode", {}});
+            return 2;
+        }
         return double_bracket_command(command_args);
     }
 

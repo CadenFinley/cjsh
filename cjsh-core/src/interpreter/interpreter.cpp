@@ -466,6 +466,10 @@ int handle_runtime_exception(const std::string& text, const std::runtime_error& 
         g_parameter_expansion_fatal_error = true;
     }
 
+    if (config::posix_mode) {
+        (void)cjsh_env::posix_error_exit(2);
+    }
+
     if (config::error_suggestions_enabled) {
         suggestions.push_back("Check command syntax and system resources.");
     }
@@ -694,10 +698,19 @@ int ShellScriptInterpreter::handle_env_assignment(const std::vector<std::string>
         return -1;
     }
 
+    if (config::posix_mode && (parsed.append || parsed.lhs.find('[') != std::string::npos)) {
+        print_error({ErrorType::SYNTAX_ERROR,
+                     "assignment",
+                     parsed.append ? "[POSIX006] += assignments are disabled in POSIX mode"
+                                   : "[POSIX005] Arrays are disabled in POSIX mode",
+                     {}});
+        return cjsh_env::posix_error_exit(2);
+    }
+
     std::string base_name = assignment_base_name(parsed.lhs);
     if (!readonly_manager_can_assign(base_name, "assignment")) {
         clear_assignment_status();
-        return 1;
+        return cjsh_env::posix_error_exit(1);
     }
 
     if (!variable_manager.assign_variable(parsed.lhs, parsed.rhs, parsed.append)) {
@@ -755,10 +768,13 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         "Critical syntax errors detected in script block, process aborted",
                         empty_suggestions);
         print_error(error);
-        return 2;
+        return cjsh_env::posix_error_exit(2);
     }
 
     std::function<int(const std::string&, bool, bool*)> execute_simple_or_pipeline_impl;
+    if (config::posix_mode && g_shell->get_shell_option(ShellOption::Noexec)) {
+        return 0;
+    }
     std::function<int(const std::string&)> execute_simple_or_pipeline;
     bool last_result_errexit_exempt = false;
 
@@ -776,6 +792,10 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
     execute_simple_or_pipeline_impl = [&](const std::string& cmd_text, bool allow_semicolon_split,
                                           bool* function_call) -> int {
+        if (cjsh_env::exit_requested()) {
+            return numeric_utils::parse_exit_status_or(
+                cjsh_env::get_shell_variable_value("EXIT_CODE"), 1, false);
+        }
         if (function_call) {
             *function_call = false;
         }
@@ -913,7 +933,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             }
         }
 
-        if (allow_semicolon_split && shell_parser && text.find(';') != std::string::npos) {
+        if (allow_semicolon_split && shell_parser &&
+            text.find_first_of(";&") != std::string::npos) {
             auto semicolon_commands = shell_parser->parse_semicolon_commands(text);
 
             if (semicolon_commands.size() > 1) {
@@ -921,6 +942,10 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 for (const auto& part : semicolon_commands) {
                     last_code = execute_simple_or_pipeline_impl(part, false, nullptr);
                     const bool errexit_exempt = last_result_errexit_exempt;
+
+                    if (cjsh_env::exit_requested()) {
+                        return last_code;
+                    }
 
                     if (is_terminating_signal_exit_code(last_code)) {
                         return last_code;
@@ -933,7 +958,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     if (g_shell && g_shell->should_abort_on_nonzero_exit(last_code) &&
                         last_code != 0 && !is_control_flow_exit_code(last_code) &&
                         !errexit_exempt) {
-                        return last_code;
+                        return cjsh_env::posix_error_exit(last_code);
                     }
                 }
                 return last_code;
@@ -955,6 +980,13 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         std::string arithmetic_command_expression;
         if (parser_parse_arithmetic_command_form(trimmed_text, negate_arithmetic_status,
                                                  arithmetic_command_expression)) {
+            if (config::posix_mode) {
+                print_error({ErrorType::SYNTAX_ERROR,
+                             "arithmetic",
+                             "arithmetic commands are disabled in POSIX mode",
+                             {}});
+                return cjsh_env::posix_error_exit(2);
+            }
             try {
                 std::string expanded_expression = expand_all_substitutions(
                     arithmetic_command_expression, execute_simple_or_pipeline);
@@ -1147,7 +1179,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 const auto& c = cmds[0];
 
                 if (!c.args.empty() && c.args[0] == "__INTERNAL_SUBSHELL__") {
-                    if (command_has_redirection(c)) {
+                    if (c.background || command_has_redirection(c)) {
                         return run_pipeline(cmds);
                     }
                     if (c.args.size() >= 2) {
@@ -1157,7 +1189,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     }
 
                 } else if (!c.args.empty() && c.args[0] == "__INTERNAL_BRACE_GROUP__") {
-                    if (command_has_redirection(c)) {
+                    if (c.background || command_has_redirection(c)) {
                         return run_pipeline(cmds);
                     }
 
@@ -1824,7 +1856,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     if (g_shell && g_shell->should_abort_on_nonzero_exit(code) && code != 0 &&
                         !is_nonfinal_logical_command) {
                         if (code != 253 && code != 254 && code != 255) {
-                            return code;
+                            return cjsh_env::posix_error_exit(code);
                         }
                     }
 
@@ -1868,7 +1900,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
         if (last_code == exit_command_not_found) {
             if (g_shell && g_shell->should_abort_on_nonzero_exit(last_code)) {
-                return last_code;
+                return cjsh_env::posix_error_exit(last_code);
             }
         } else if (is_control_flow_exit_code(last_code)) {
             return last_code;
@@ -1994,6 +2026,9 @@ long long ShellScriptInterpreter::evaluate_arithmetic_expression(const std::stri
     };
 
     auto var_writer = [this](const std::string& name, long long value) {
+        if (config::posix_mode && !readonly_manager_can_assign(name, "arithmetic")) {
+            throw std::runtime_error("parameter expansion error: " + name + ": readonly variable");
+        }
         std::string value_str = std::to_string(value);
 
         if (variable_manager.is_local_variable(name)) {
@@ -2027,11 +2062,20 @@ int ShellScriptInterpreter::run_pipeline(const std::vector<Command>& cmds) {
 
 std::string ShellScriptInterpreter::expand_parameter_expression(const std::string& param_expr) {
     auto var_reader = [this](const std::string& name) -> std::string {
+        if (config::posix_mode && name == "-" && shell_parser) {
+            std::string flags = "$-";
+            shell_parser->expand_env_vars(flags);
+            return flags;
+        }
         return variable_manager.get_variable_value(name);
     };
 
     auto var_writer = [this](const std::string& name, const std::string& value) {
         if (!readonly_manager_can_assign(name, "parameter expansion")) {
+            if (config::posix_mode) {
+                throw std::runtime_error("parameter expansion error: " + name +
+                                         ": readonly variable");
+            }
             return;
         }
 
@@ -2039,6 +2083,9 @@ std::string ShellScriptInterpreter::expand_parameter_expression(const std::strin
     };
 
     auto var_checker = [this](const std::string& name) -> bool {
+        if (config::posix_mode && name == "-") {
+            return true;
+        }
         return variable_manager.variable_is_set(name);
     };
 

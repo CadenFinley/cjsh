@@ -37,6 +37,7 @@
 
 #include "agent_mode.h"
 #include "error_out.h"
+#include "shell.h"
 #include "shell_env.h"
 #include "usage.h"
 
@@ -151,6 +152,35 @@ ParseResult parse_arguments(int argc, char* argv[]) {
 
     detect_login_mode(argv);
 
+    sh_invocation = invoked_via_sh(argc > 0 ? argv[0] : nullptr);
+    bool posix_invocation = sh_invocation;
+    // Decide the dialect before interpreting short flags, including -e --posix.
+    // Skip option operands: a command string containing --posix is just data.
+    for (int i = 1; i < argc; ++i) {
+        std::string_view arg(argv[i]);
+        if (arg == "--" || arg.empty() || (arg[0] != '-' && arg[0] != '+')) {
+            break;
+        }
+        if (arg == "--posix") {
+            posix_invocation = true;
+        }
+        if (arg == "--command" || arg.rfind("--command=", 0) == 0) {
+            break;
+        }
+        if (arg == "--config-dir" || arg == "-o" || arg == "+o") {
+            ++i;
+        } else if (arg.size() > 1 && arg[0] == '-' && arg[1] != '-') {
+            const auto c = arg.find('c', 1);
+            if (c != std::string_view::npos) {
+                break;
+            }
+        }
+    }
+    if (posix_invocation) {
+        apply_posix_mode_settings();
+    }
+    bool read_stdin = false;
+
     static struct option long_options[] = {
         {"login", no_argument, nullptr, 'l'},
         {"interactive", no_argument, nullptr, 'i'},
@@ -188,6 +218,99 @@ ParseResult parse_arguments(int argc, char* argv[]) {
     opterr = 0;
 
     while (true) {
+        if (posix_invocation && optind < argc) {
+            const std::string arg(argv[optind]);
+            if (arg.size() > 1 && (arg[0] == '+' || (arg[0] == '-' && arg[1] != '-'))) {
+                ++optind;
+                const bool enable = arg[0] == '-';
+                bool command_operand = false;
+                for (size_t j = 1; j < arg.size(); ++j) {
+                    const char flag = arg[j];
+                    if (flag == 'c') {
+                        command_operand = true;
+                    } else if (flag == 'o') {
+                        std::string operand = arg.substr(j + 1);
+                        if (operand.empty() && optind >= argc) {
+                            print_error({ErrorType::INVALID_ARGUMENT,
+                                         "startup",
+                                         std::string(1, flag) + " requires an operand",
+                                         {}});
+                            result.should_exit = true;
+                            result.exit_code = 2;
+                            return result;
+                        }
+                        if (operand.empty() && optind < argc) {
+                            operand = argv[optind++];
+                        }
+                        if (operand.empty() && flag == 'o') {
+                            print_error({ErrorType::INVALID_ARGUMENT,
+                                         "startup",
+                                         "-o requires an option",
+                                         {}});
+                            result.should_exit = true;
+                            result.exit_code = 2;
+                            return result;
+                        }
+                        if (auto option = parse_shell_option(operand);
+                            option && *option != ShellOption::Globstar &&
+                            *option != ShellOption::Huponexit) {
+                            result.shell_options.emplace_back(operand, enable);
+                            if (*option == ShellOption::Noexec) {
+                                config::no_exec = enable;
+                            }
+                        } else {
+                            print_error({ErrorType::INVALID_ARGUMENT,
+                                         "startup",
+                                         "invalid POSIX option: " + operand,
+                                         {}});
+                            result.should_exit = true;
+                            result.exit_code = 2;
+                            return result;
+                        }
+                        break;
+                    } else if (flag == 's') {
+                        read_stdin = enable;
+                    } else if (flag == 'i') {
+                        config::force_interactive = enable;
+                    } else if (flag == 'l') {
+                        config::login_mode = enable;
+                    } else if (auto option = parse_shell_option_short(flag)) {
+                        for (const auto& descriptor : get_shell_option_descriptors()) {
+                            if (descriptor.option == *option) {
+                                result.shell_options.emplace_back(descriptor.name, enable);
+                            }
+                        }
+                        if (flag == 'n') {
+                            config::no_exec = enable;
+                        }
+                    } else {
+                        print_error({ErrorType::INVALID_ARGUMENT,
+                                     "startup",
+                                     "invalid POSIX option: " + std::string(1, flag),
+                                     {}});
+                        result.should_exit = true;
+                        result.exit_code = 2;
+                        return result;
+                    }
+                }
+                if (command_operand) {
+                    if (optind >= argc) {
+                        print_error({ErrorType::INVALID_ARGUMENT,
+                                     "startup",
+                                     "-c requires a command string",
+                                     {}});
+                        result.should_exit = true;
+                        result.exit_code = 2;
+                        return result;
+                    }
+                    config::execute_command = true;
+                    config::cmd_to_execute = argv[optind++];
+                    config::interactive_mode = false;
+                    break;
+                }
+                continue;
+            }
+        }
         // getopt may leave optind on the current argument within a short-option bundle.
         const int argument_index = optind;
         const int c = getopt_long(argc, argv, short_options, long_options, &option_index);
@@ -209,6 +332,7 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 break;
             case 'n':
             case kOptNoExec:
+                result.shell_options.emplace_back("noexec", true);
                 config::no_exec = true;
                 break;
             case kOptNoConfig:
@@ -318,9 +442,16 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 result.should_exit = true;
                 return result;
         }
+        if (posix_invocation && config::execute_command) {
+            break;
+        }
     }
 
-    if (optind < argc) {
+    if (read_stdin && !config::execute_command) {
+        for (int i = optind; i < argc; ++i) {
+            result.script_args.emplace_back(argv[i]);
+        }
+    } else if (optind < argc) {
         result.script_file = argv[optind];
         config::interactive_mode = false;
 

@@ -96,7 +96,7 @@ void initialize_shell(int argc, char* argv[], const flags::ParseResult& parse_re
     }
 
     g_shell = std::make_unique<Shell>();
-    g_shell->apply_no_exec(config::no_exec);
+    g_shell->apply_startup_options(parse_result.shell_options);
     g_shell->set_interactive_mode(config::interactive_mode);
     if (config::interactive_mode) {
         g_shell->setup_interactive_handlers();

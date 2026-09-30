@@ -70,6 +70,12 @@ const std::string& noenv_end_plain();
 const std::string& substitution_placeholder();
 
 std::string trim_trailing_whitespace(const std::string& s);
+// Decode POSIX dollar-single-quotes and serialize the result as ordinary quoted text.
+bool decode_dollar_single_quote(std::string_view text, size_t start, size_t& end,
+                                std::string& quoted);
+// End of the parameter name (including an optional length prefix), or npos
+// when the expression uses syntax outside POSIX.1-2024.
+size_t posix_parameter_name_end(std::string_view expression);
 std::string trim_leading_whitespace(const std::string& s);
 std::string trim_whitespace(const std::string& s);
 bool is_valid_identifier_start(char c);

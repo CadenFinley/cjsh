@@ -107,8 +107,8 @@ std::string VariableExpander::resolve_parameter_value(const std::string& var_nam
             }
         };
 
-        append_flag('h', true);
-        append_flag('B', true);
+        append_flag('h', !config::posix_mode);
+        append_flag('B', !config::posix_mode);
 
         if (shell != nullptr) {
             append_flag('i', shell->get_interactive_mode());
@@ -142,6 +142,9 @@ std::string VariableExpander::resolve_parameter_value(const std::string& var_nam
         auto it = env_vars.find(var_name);
         if (it != env_vars.end()) {
             return it->second;
+        }
+        if (config::posix_mode && shell && shell->get_shell_option(ShellOption::Nounset)) {
+            throw std::runtime_error(var_name + ": parameter not set");
         }
         return "";
     }
@@ -222,6 +225,9 @@ void VariableExpander::expand_env_vars(std::string& arg) {
                                 shell->get_shell_script_interpreter()->expand_parameter_expression(
                                     param_expr);
                         } catch (...) {
+                            if (config::posix_mode) {
+                                throw;
+                            }
                             value = get_variable_value(param_expr);
                         }
                     } else {

@@ -185,6 +185,16 @@ cjsh_add_test(NAME parser_dispatch_tests COMMAND parser_dispatch_tests)
 cjsh_add_test(NAME pattern_endpoint_tests COMMAND pattern_endpoint_tests)
 
 if(Python3_Interpreter_FOUND)
+    foreach(category core expansion errors restrictions builtins invocation)
+        cjsh_add_test(NAME posix.${category}
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/posix/test_posix_mode.py"
+                    $<TARGET_FILE:cjsh> "${category}")
+        set_tests_properties(posix.${category} PROPERTIES LABELS "posix")
+    endforeach()
+    cjsh_add_test(NAME posix.interactive
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/posix/test_posix_interactive.py"
+                "$<TARGET_FILE:cjsh>")
+    set_tests_properties(posix.interactive PROPERTIES LABELS "posix")
     cjsh_add_test(NAME syntax_regression_tests
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/core/test_syntax_regressions.py"
                 $<TARGET_FILE:cjsh> $<TARGET_FILE:syntax_validation_probe>)

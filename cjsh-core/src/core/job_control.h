@@ -134,7 +134,7 @@ class JobManager {
 
     static pid_t get_last_background_pid_atomic();
 
-    void cleanup_finished_jobs();
+    void cleanup_finished_jobs(bool at_prompt = false);
 
     void set_shell(Shell* shell);
 
@@ -160,6 +160,7 @@ class JobManager {
     pid_t last_background_pid = -1;
     std::unordered_map<pid_t, int> completed_pid_statuses;
     Shell* shell_ref = nullptr;
+    bool allow_deferred_notifications = false;
 
     void update_current_previous(int new_current);
 };

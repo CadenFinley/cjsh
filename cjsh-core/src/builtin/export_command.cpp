@@ -127,6 +127,21 @@ int export_command(const std::vector<std::string>& args, Shell* shell) {
     }
 
     if (start_index >= args.size()) {
+        if (config::posix_mode) {
+            for (const auto& name : cjsh_env::exported_variable_names()) {
+                if (!cjsh_env::is_valid_env_name(name)) {
+                    continue;
+                }
+                std::cout << "export " << name;
+                if (cjsh_env::shell_variable_is_set(name)) {
+                    std::cout << '='
+                              << cjsh_env::quote_shell_value(
+                                     cjsh_env::get_shell_variable_value(name));
+                }
+                std::cout << '\n';
+            }
+            return 0;
+        }
         extern char** environ;
         for (char** env = environ; *env != nullptr; ++env) {
             std::cout << "export " << *env << '\n';
@@ -151,6 +166,12 @@ int export_command(const std::vector<std::string>& args, Shell* shell) {
             continue;
         }
 
+        if (config::posix_mode) {
+            cjsh_env::mark_exported(name);
+            if (!operand.has_assignment && !cjsh_env::shell_variable_is_set(name)) {
+                continue;
+            }
+        }
         if (operand.has_assignment) {
             std::string value = operand.value;
 

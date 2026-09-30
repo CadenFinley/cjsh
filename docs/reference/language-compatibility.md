@@ -42,7 +42,7 @@ is the source of truth for the extensions that are intentionally supported.
 | Namerefs | Supported extension | `declare -n`/`typeset -n`/`local -n` can reference scalars or array elements. Reads, assignments, `${!ref}`, normal `unset`, and `unset -n` follow Bash-style reference behavior. |
 | Coprocesses | Supported extension | Simple commands, pipelines, unnamed compound commands, and the recommended `coproc NAME { command; }` form run asynchronously. Descriptors are published in `NAME[0]`/`NAME[1]`, the PID in `NAME_PID`, dynamic descriptor redirection is supported, and `read -u` can consume the output. |
 | Extended globs | Supported, opt-in | Run `cjshopt extglob on` to enable `?()`, `*()`, `+()`, `@()`, and `!()` in pathname expansion, `[[ … ]]`, `case`, and parameter patterns. It is off by default and forced off in POSIX mode. |
-| Case continuation | Supported extension | `;&` executes the next clause body without testing its pattern. `;;&` continues testing subsequent patterns. Both are rejected in POSIX mode. |
+| Case continuation | POSIX.1-2024 and extension | `;&` executes the next clause body without testing its pattern and is available in POSIX mode. `;;&` continues testing subsequent patterns and is rejected in POSIX mode. |
 | Brace range strides | Supported extension | Numeric and character ranges accept `{start..end..stride}`. Direction is inferred, and numeric zero padding is preserved. |
 | Pattern replacement | Supported extension | `${parameter/pattern/replacement}` uses the leftmost-longest wildcard match; `//` replaces all matches and `/#`/`/%` anchor a single replacement. Escaped slashes, character classes, and extglobs are supported. |
 
@@ -80,7 +80,7 @@ Add the desired command to `~/.cjshrc` to apply it to future interactive session
 
 ## Known boundaries
 
-- `--posix` is a compatibility mode, not a standards certification.
+- [`--posix`](posix-mode.md) targets POSIX.1-2024, with explicit extension restrictions and dedicated mode tests. It is not a standards certification.
 - Only one coprocess connection is retained by the parent shell at a time. Starting another
   coprocess closes the parent's previous coprocess descriptors.
 - Associative-array enumeration is deterministic and key-sorted in CJSH. Scripts should not depend

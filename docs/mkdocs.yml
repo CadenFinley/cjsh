@@ -124,6 +124,7 @@ nav:
     - Completion Authoring: reference/completions.md
     - Language Compatibility: reference/language-compatibility.md
     - Non-POSIX Features: reference/non-posix-features.md
+    - POSIX Mode: reference/posix-mode.md
     - Hooks: reference/hooks.md
     - Built-in Commands: reference/commands.md
   - Themes:

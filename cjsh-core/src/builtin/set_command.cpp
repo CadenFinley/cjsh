@@ -39,6 +39,7 @@
 
 #include "error_out.h"
 #include "flags.h"
+#include "interpreter.h"
 #include "numeric_utils.h"
 #include "shell.h"
 #include "shell_env.h"
@@ -57,13 +58,24 @@ std::string pad_option_name(const std::string& name) {
     return padded;
 }
 
-void print_option_status(Shell* shell) {
+void print_option_status(Shell* shell, bool reusable = false) {
     for (const auto& opt : get_shell_option_descriptors()) {
+        if (config::posix_mode &&
+            (opt.option == ShellOption::Globstar || opt.option == ShellOption::Huponexit)) {
+            continue;
+        }
+        if (reusable) {
+            std::cout << "set " << (shell->get_shell_option(opt.option) ? "-o " : "+o ") << opt.name
+                      << '\n';
+            continue;
+        }
         std::cout << pad_option_name(opt.name) << '\t'
                   << (shell->get_shell_option(opt.option) ? "on" : "off") << '\n';
     }
-    std::cout << pad_option_name("errexit_severity") << '\t' << shell->get_errexit_severity()
-              << '\n';
+    if (!config::posix_mode && !reusable) {
+        std::cout << pad_option_name("errexit_severity") << '\t' << shell->get_errexit_severity()
+                  << '\n';
+    }
 }
 
 bool apply_short_flag(char flag, bool enable, Shell* shell) {
@@ -160,8 +172,7 @@ void report_invalid_option(const std::string& context) {
 }
 
 bool option_is_non_posix(ShellOption option) {
-    return option == ShellOption::Globstar || option == ShellOption::Huponexit ||
-           option == ShellOption::Pipefail;
+    return option == ShellOption::Globstar || option == ShellOption::Huponexit;
 }
 
 }  // namespace
@@ -200,6 +211,19 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
     }
 
     if (args.size() == 1) {
+        if (config::posix_mode) {
+            auto& manager = shell->get_shell_script_interpreter()->get_variable_manager();
+            auto names = manager.get_variable_names();
+            std::sort(names.begin(), names.end());
+            for (const auto& name : names) {
+                if (!cjsh_env::is_valid_env_name(name)) {
+                    continue;
+                }
+                std::cout << name << '='
+                          << cjsh_env::quote_shell_value(manager.get_variable_value(name)) << '\n';
+            }
+            return 0;
+        }
         extern char** environ;
         for (char** env = environ; *env != nullptr; ++env) {
             std::cout << *env << '\n';
@@ -222,6 +246,14 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
                 continue;
             }
 
+            if (config::posix_mode && (arg.rfind("--errexit-severity", 0) == 0 ||
+                                       arg.rfind("--errexit_severity", 0) == 0)) {
+                print_error({ErrorType::INVALID_ARGUMENT,
+                             "set",
+                             "errexit severity is disabled in POSIX mode",
+                             {}});
+                return 2;
+            }
             if (!arg.empty() && arg[0] == '-' && handle_long_errexit_severity(args, i, shell)) {
                 continue;
             }
@@ -238,7 +270,7 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
 
                     if (arg.size() == 2) {
                         if (i + 1 >= args.size()) {
-                            print_option_status(shell);
+                            print_option_status(shell, config::posix_mode && !enable_option);
                             return 0;
                         }
                         option_name = args[++i];
@@ -255,6 +287,13 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
                     bool inline_value = option_name.find('=') != std::string::npos;
 
                     if (config::posix_mode) {
+                        if (normalized_key.rfind("errexit_severity", 0) == 0) {
+                            print_error({ErrorType::INVALID_ARGUMENT,
+                                         "set",
+                                         "errexit severity is disabled in POSIX mode",
+                                         {}});
+                            return 2;
+                        }
                         auto requested_option = parse_shell_option(normalized_key);
                         if (requested_option.has_value() &&
                             option_is_non_posix(*requested_option)) {

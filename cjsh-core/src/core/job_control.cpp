@@ -722,6 +722,12 @@ void JobManager::notify_job_stopped(const std::shared_ptr<JobControlJob>& job) c
         return;
     }
 
+    if (config::posix_mode && job->background.load(std::memory_order_relaxed) &&
+        !allow_deferred_notifications && shell_ref &&
+        !shell_ref->get_shell_option(ShellOption::Notify)) {
+        return;
+    }
+
     job->state.store(JobState::STOPPED, std::memory_order_relaxed);
 
     char status_char = ' ';
@@ -752,6 +758,11 @@ void JobManager::notify_job_finished(const std::shared_ptr<JobControlJob>& job) 
     const bool is_background = job->background.load(std::memory_order_relaxed);
     const bool is_interactive = config::interactive_mode || config::force_interactive;
 
+    if (config::posix_mode && !is_interactive) {
+        job->notified = true;
+        return;
+    }
+
     if (state == JobState::DONE && !is_background) {
         job->notified = true;
         return;
@@ -761,6 +772,10 @@ void JobManager::notify_job_finished(const std::shared_ptr<JobControlJob>& job) 
         return;
     }
     if (state != JobState::DONE && state != JobState::TERMINATED) {
+        return;
+    }
+    if (config::posix_mode && is_background && !allow_deferred_notifications && shell_ref &&
+        !shell_ref->get_shell_option(ShellOption::Notify)) {
         return;
     }
 
@@ -866,12 +881,16 @@ void JobManager::update_current_previous(int new_current) {
     }
 }
 
-void JobManager::cleanup_finished_jobs() {
+void JobManager::cleanup_finished_jobs(bool at_prompt) {
+    allow_deferred_notifications = at_prompt;
     std::vector<int> to_remove;
 
     for (const auto& pair : jobs) {
         auto job = pair.second;
         const JobState state = job->state.load(std::memory_order_relaxed);
+        if (at_prompt && state == JobState::STOPPED) {
+            notify_job_stopped(job);
+        }
         if (state == JobState::DONE || state == JobState::TERMINATED) {
             notify_job_finished(job);
 
@@ -884,6 +903,7 @@ void JobManager::cleanup_finished_jobs() {
     for (int job_id : to_remove) {
         remove_job(job_id);
     }
+    allow_deferred_notifications = false;
 }
 
 bool JobManager::foreground_job_reads_stdin() {

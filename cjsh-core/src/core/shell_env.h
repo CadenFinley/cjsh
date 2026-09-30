@@ -110,10 +110,15 @@ void sync_parser_env_var(Shell* shell, const std::string& name);
 bool should_mirror_to_process_env(const std::string& name);
 void mirror_set_to_process_env(const std::string& name, const std::string& value);
 void mirror_unset_from_process_env(const std::string& name);
+void mark_exported(const std::string& name);
+std::vector<std::string> exported_variable_names();
+std::string quote_shell_value(const std::string& value);
 
 bool exit_requested();
 void request_exit();
 void clear_exit_request();
+// POSIX shell errors terminate a noninteractive execution environment, independent of -e.
+int posix_error_exit(int status);
 
 bool startup_active();
 void set_startup_active(bool value);

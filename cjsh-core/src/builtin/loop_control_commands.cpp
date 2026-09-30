@@ -28,6 +28,7 @@
 
 #include "loop_control_commands.h"
 
+#include "builtin.h"
 #include "builtin_help.h"
 
 #include <climits>
@@ -44,7 +45,7 @@ int set_loop_control_level(const std::vector<std::string>& args, const std::stri
     int level = 1;
     if (args.size() > 1 && !numeric_utils::parse_int_in_range(args[1], 1, INT_MAX, level)) {
         print_error({ErrorType::INVALID_ARGUMENT, command, "invalid level: " + args[1], {}});
-        return 1;
+        return posix_special_builtin_error(1);
     }
 
     (void)cjsh_env::set_shell_variable_value(variable, std::to_string(level));
@@ -82,7 +83,7 @@ int return_command(const std::vector<std::string>& args) {
         if (!numeric_utils::parse_int_in_range(args[1], 0, 255, exit_code)) {
             print_error(
                 {ErrorType::INVALID_ARGUMENT, "return", "invalid exit code: " + args[1], {}});
-            return 1;
+            return posix_special_builtin_error(1);
         }
     }
 

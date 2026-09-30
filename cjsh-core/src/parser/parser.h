@@ -123,6 +123,9 @@ class Parser {
 
     std::vector<std::string> parse_into_lines(const std::string& scripts);
     const std::vector<std::string>& prepare_interactive_input(const std::string& script);
+    bool awaiting_here_document() const {
+        return incomplete_here_document;
+    }
 
     std::vector<std::string> parse_command(const std::string& cmdline);
     std::vector<Command> parse_pipeline(const std::string& command);
@@ -167,6 +170,7 @@ class Parser {
         std::vector<std::string> lines;
     };
     std::optional<PreparedInput> prepared_input;
+    bool incomplete_here_document = false;
     // Cache only lexical structure, before aliases, variables, IFS, or globbing.
     std::unordered_map<std::string, std::vector<std::string>> command_tokens;
     bool command_tokens_extglob = false;

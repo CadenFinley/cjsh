@@ -121,6 +121,13 @@ bool parse_read_options(const std::vector<std::string>& args, size_t& start_inde
     }
 
     for (const auto& option : parsed_options) {
+        if (config::posix_mode && option.option != 'r') {
+            print_error({ErrorType::INVALID_ARGUMENT,
+                         "read",
+                         "option is disabled in POSIX mode: -" + std::string(1, option.option),
+                         {}});
+            return false;
+        }
         const std::string option_value = option.value.value_or("");
         switch (option.option) {
             case 'r':

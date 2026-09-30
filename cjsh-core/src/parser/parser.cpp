@@ -179,7 +179,7 @@ bool is_simple_command_candidate(std::string_view cmdline) {
         if (std::isspace(uc) == 0) {
             seen_non_space = true;
         }
-        if (kSpecialChars.find(c) != std::string_view::npos) {
+        if (kSpecialChars.find(c) != std::string_view::npos || (config::posix_mode && c == '~')) {
             return false;
         }
     }
@@ -560,7 +560,10 @@ const std::vector<std::string>& Parser::prepare_interactive_input(const std::str
     return prepared_input->lines;
 }
 
-std::vector<std::string> Parser::parse_into_lines(const std::string& script) {
+std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
+    std::string rewritten =
+        config::posix_mode && source.find("$'") != std::string::npos ? source : "";
+    const std::string& script = rewritten.empty() ? source : rewritten;
     if (prepared_input) {
         auto prepared = std::move(*prepared_input);
         prepared_input.reset();
@@ -569,6 +572,7 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& script) {
         }
     }
     // shared script splitter used by shell::execute and interactive continuation checks
+    incomplete_here_document = false;
     // control-flow blocks like if/then/fi depend on this producing stable logical line chunks
     std::vector<std::string> lines;
 
@@ -809,10 +813,6 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& script) {
                     reset_here_doc_state();
                     start = i + 1;
                 } else {
-                    if (!here_doc_content.empty()) {
-                        here_doc_content += '\n';
-                    }
-
                     std::string line_to_add = current_here_doc_line;
                     if (strip_tabs) {
                         size_t first_non_tab = line_to_add.find_first_not_of('\t');
@@ -823,12 +823,23 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& script) {
                         }
                     }
                     here_doc_content += line_to_add;
+                    here_doc_content += '\n';
                 }
                 current_here_doc_line.clear();
             } else {
                 current_here_doc_line += c;
             }
             continue;
+        }
+
+        if (!rewritten.empty() && !line_is_comment && !in_quotes && c == '$' &&
+            i + 1 < script.size() && script[i + 1] == '\'' && !is_char_escaped(script, i)) {
+            size_t end = i;
+            std::string quoted;
+            if (decode_dollar_single_quote(script, i, end, quoted)) {
+                rewritten.replace(i, end - i, quoted);
+                c = script[i];
+            }
         }
 
         if (!line_is_comment && !in_quotes) {
@@ -959,6 +970,7 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& script) {
             start = script.size();
         } else {
             std::string tail{script.substr(start)};
+            incomplete_here_document = true;
             if (!tail.empty() && tail.back() == '\r') {
                 tail.pop_back();
             }
@@ -1100,11 +1112,12 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
                 command_tokens_extglob = config::extglob_enabled;
             }
             const auto cached = command_tokens.find(cmdline);
-            if (cached != command_tokens.end()) {
+            const bool dynamic_tilde = config::posix_mode && cmdline.find('~') != std::string::npos;
+            if (cached != command_tokens.end() && !dynamic_tilde) {
                 args = cached->second;
             } else {
                 args = Tokenizer::tokenize_command(cmdline);
-                if (cmdline.size() <= 1024 && args.size() <= 64) {
+                if (!dynamic_tilde && cmdline.size() <= 1024 && args.size() <= 64) {
                     if (command_tokens.size() >= 64) {
                         command_tokens.clear();
                     }
@@ -1189,6 +1202,9 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
 
     auto report_environment_expansion_error = [&](const std::runtime_error& error) {
         const std::string message = error.what();
+        if (config::posix_mode) {
+            (void)cjsh_env::posix_error_exit(2);
+        }
         if (shell != nullptr && shell->get_shell_option(ShellOption::Nounset) &&
             message.find("parameter not set") != std::string::npos) {
             print_error({ErrorType::RUNTIME_ERROR,
@@ -1197,6 +1213,10 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
                          message,
                          {"Disable 'set -u' or ensure all parameters are defined before "
                           "expansion."}});
+            return true;
+        }
+        if (config::posix_mode) {
+            print_error({ErrorType::RUNTIME_ERROR, "parser", message, {}});
             return true;
         }
         print_error({ErrorType::RUNTIME_ERROR,
@@ -1242,6 +1262,10 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
         try {
             variableExpander->expand_env_vars_selective(value_to_expand);
         } catch (const std::runtime_error& e) {
+            if (config::posix_mode) {
+                (void)cjsh_env::posix_error_exit(2);
+                throw;
+            }
             print_error(
                 {ErrorType::RUNTIME_ERROR,
                  ErrorSeverity::WARNING,
@@ -1765,6 +1789,10 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                         variableExpander->expand_env_vars(val);
                     }
                 } catch (const std::runtime_error&) {
+                    if (config::posix_mode) {
+                        (void)cjsh_env::posix_error_exit(2);
+                        throw;
+                    }
                     // Ignore optional env expansion failures; use unexpanded value.
                 }
                 (void)strip_subst_literal_markers(val);
@@ -2091,7 +2119,7 @@ std::vector<LogicalCommand> Parser::parse_logical_commands(const std::string& co
 std::vector<std::string> Parser::parse_semicolon_commands(const std::string& command,
                                                           bool split_on_newlines) {
     std::vector<std::string> commands;
-    if (command.find(';') == std::string::npos &&
+    if (command.find_first_of(";&") == std::string::npos &&
         (!split_on_newlines || command.find('\n') == std::string::npos)) {
         std::string trimmed = trim_whitespace(command);
         if (!trimmed.empty()) {
@@ -2105,6 +2133,7 @@ std::vector<std::string> Parser::parse_semicolon_commands(const std::string& com
     int control_depth = 0;
 
     std::vector<bool> is_semicolon_split_point(command.length(), false);
+    std::vector<bool> is_background_split_point(command.length(), false);
     std::vector<bool> is_newline_split_point;
     if (split_on_newlines) {
         is_newline_split_point.assign(command.length(), false);
@@ -2129,6 +2158,13 @@ std::vector<std::string> Parser::parse_semicolon_commands(const std::string& com
                                           control_depth);
 
         if (!scan_state.in_quotes && scan_state.paren_depth == 0 && scan_state.brace_depth == 0) {
+            if (command[i] == '&' && control_depth == 0 && !is_char_escaped(command, i) &&
+                (i == 0 ||
+                 std::string_view("&<>|;").find(command[i - 1]) == std::string_view::npos) &&
+                (i + 1 == command.size() ||
+                 std::string_view("&>^").find(command[i + 1]) == std::string_view::npos)) {
+                is_background_split_point[i] = true;
+            }
             if ((split_on_newlines && command[i] == '\n' && control_depth == 0) &&
                 (!is_newline_split_point.empty())) {
                 is_newline_split_point[i] = true;
@@ -2148,9 +2184,13 @@ std::vector<std::string> Parser::parse_semicolon_commands(const std::string& com
     for (size_t i = 0; i < command.length(); ++i) {
         if (parse_state.update_quote(command[i])) {
             current += command[i];
-        } else if ((command[i] == ';' && is_semicolon_split_point[i]) ||
+        } else if (is_background_split_point[i] ||
+                   (command[i] == ';' && is_semicolon_split_point[i]) ||
                    (split_on_newlines && !parse_state.in_quotes && command[i] == '\n' &&
                     (is_newline_split_point.empty() || is_newline_split_point[i]))) {
+            if (is_background_split_point[i]) {
+                current += '&';
+            }
             if (!current.empty()) {
                 current = trim_trailing_whitespace(trim_leading_whitespace(current));
                 if (!current.empty()) {

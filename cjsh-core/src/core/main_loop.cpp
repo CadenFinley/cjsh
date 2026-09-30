@@ -202,9 +202,9 @@ CommandProcessResult process_command_line(const std::string& command) {
     return {cjsh_env::exit_requested(), exit_code};
 }
 
-void update_job_management() {
+void update_job_management(bool at_prompt = true) {
     SignalHandler::reap_pending_children(g_shell->shell_exec.get(), true);
-    JobManager::instance().cleanup_finished_jobs();
+    JobManager::instance().cleanup_finished_jobs(at_prompt);
 }
 
 void handle_readline_event(void*) {
@@ -218,7 +218,7 @@ void handle_readline_event(void*) {
     }
     // Poll children without executing signal traps inside the editor. Notifications
     // are copied into isocline's queue and printed after this callback returns.
-    update_job_management();
+    update_job_management(false);
 }
 
 std::string generate_prompt() {
@@ -340,6 +340,10 @@ std::optional<std::string> get_next_command() {
         if (readline_result.disposition == IC_READLINE_DISPOSITION_EOF) {
             if (input != nullptr) {
                 ic_free(input);
+            }
+            if (g_shell->get_shell_option(ShellOption::Ignoreeof)) {
+                std::cerr << "Use 'exit' to leave the shell.\n";
+                continue;
             }
             cjsh_env::increment_command_sequence();
             (void)exit_command({"exit"});

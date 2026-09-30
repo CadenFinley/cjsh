@@ -41,9 +41,137 @@
 #include <utility>
 #include <vector>
 
+bool decode_dollar_single_quote(std::string_view text, size_t start, size_t& end,
+                                std::string& quoted) {
+    std::string value;
+    for (size_t i = start + 2; i < text.size(); ++i) {
+        char c = text[i];
+        if (c == '\'') {
+            end = i + 1;
+            quoted = "'";
+            for (char byte : value) {
+                if (byte == '\'') {
+                    quoted += "'\\''";
+                } else if (byte != '\0') {
+                    quoted += byte;
+                } else {
+                    break;  // Shell words cannot carry NUL bytes.
+                }
+            }
+            quoted += '\'';
+            return true;
+        }
+        if (c == '\\' && i + 1 < text.size()) {
+            c = text[++i];
+            switch (c) {
+                case 'a':
+                    c = '\a';
+                    break;
+                case 'b':
+                    c = '\b';
+                    break;
+                case 'e':
+                    c = '\x1b';
+                    break;
+                case 'f':
+                    c = '\f';
+                    break;
+                case 'n':
+                    c = '\n';
+                    break;
+                case 'r':
+                    c = '\r';
+                    break;
+                case 't':
+                    c = '\t';
+                    break;
+                case 'v':
+                    c = '\v';
+                    break;
+                case '\\':
+                case '\'':
+                case '"':
+                case '?':
+                    break;
+                case 'c':
+                    if (i + 1 < text.size()) {
+                        c = text[++i];
+                        if (c == '\\' && i + 1 < text.size() && text[i + 1] == '\\') {
+                            ++i;
+                        }
+                        c = c == '?' ? '\x7f'
+                                     : static_cast<char>(static_cast<unsigned char>(c) & 0x1f);
+                    }
+                    break;
+                default:
+                    if ((c >= '0' && c <= '7') || c == 'x') {
+                        const bool hex = c == 'x';
+                        unsigned value_byte = hex ? 0 : static_cast<unsigned>(c - '0');
+                        int digits = hex ? 0 : 1;
+                        while (i + 1 < text.size() && digits < (hex ? 2 : 3)) {
+                            const char next = text[i + 1];
+                            if (hex ? !is_hex_digit(next) : (next < '0' || next > '7')) {
+                                break;
+                            }
+                            value_byte = value_byte * (hex ? 16 : 8) +
+                                         (hex ? from_hex_digit(next) : next - '0');
+                            ++i;
+                            ++digits;
+                        }
+                        if (digits != 0) {
+                            c = static_cast<char>(value_byte);
+                        } else {
+                            value += '\\';
+                        }
+                    } else {
+                        value += '\\';
+                    }
+            }
+        }
+        value += c;
+    }
+    return false;
+}
+
 const std::string& subst_literal_start() {
     static const std::string kValue = "\x1E__SUBST_LITERAL_START__\x1E";
     return kValue;
+}
+
+size_t posix_parameter_name_end(std::string_view expression) {
+    if (expression.empty()) {
+        return std::string_view::npos;
+    }
+    const bool length = expression[0] == '#' && expression.size() > 1;
+    size_t end = length ? 1 : 0;
+    const size_t start = end;
+    if (std::isdigit(static_cast<unsigned char>(expression[end]))) {
+        while (end < expression.size() &&
+               std::isdigit(static_cast<unsigned char>(expression[end]))) {
+            ++end;
+        }
+    } else if (is_valid_identifier_start(expression[end])) {
+        while (end < expression.size() && is_valid_identifier_char(expression[end])) {
+            ++end;
+        }
+    } else if (std::string_view("@*#?$!-").find(expression[end]) != std::string_view::npos) {
+        ++end;
+    }
+    if (end == start) {
+        return std::string_view::npos;
+    }
+    if (end == expression.size()) {
+        return end;
+    }
+    if (length) {
+        return std::string_view::npos;
+    }
+    if (std::string_view("-=+?#%").find(expression[end]) != std::string_view::npos ||
+        (expression[end] == ':' && end + 1 < expression.size() &&
+         std::string_view("-=+?").find(expression[end + 1]) != std::string_view::npos)) {
+        return end;
+    }
+    return std::string_view::npos;
 }
 
 const std::string& subst_literal_end() {

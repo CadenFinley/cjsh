@@ -84,14 +84,27 @@
 
 namespace {
 
+thread_local std::string regular_builtin;
+thread_local bool executing_special_builtin = false;
+
+struct SpecialBuiltinScope {
+    bool previous;
+    explicit SpecialBuiltinScope(bool value) : previous(executing_special_builtin) {
+        executing_special_builtin = value;
+    }
+    ~SpecialBuiltinScope() {
+        executing_special_builtin = previous;
+    }
+};
+
 bool is_posix_restricted_builtin(const std::string& name) {
     return name == "abbr" || name == "abbreviate" || name == "approot" || name == "pushd" ||
            name == "popd" || name == "dirs" || name == "unabbr" || name == "unabbreviate" ||
            name == "help" || name == "version" || name == "history" || name == "restart" ||
-           name == "type" || name == "which" || name == "jobname" || name == "disown" ||
+           name == "which" || name == "jobname" || name == "disown" ||
            name == "generate-completions" || name == "firstboot" || name == "hook" ||
            name == "cjsh-widget" || name == "cjshopt" || name == "builtin" || name == "quit" ||
-           name == "bye" || name == "suspend";
+           name == "bye" || name == "suspend" || name == "[[";
 }
 
 int reject_posix_restricted_builtin(const std::string& name) {
@@ -103,6 +116,18 @@ int reject_posix_restricted_builtin(const std::string& name) {
 }
 
 }  // namespace
+
+RegularBuiltinScope::RegularBuiltinScope(std::string name) : previous(std::move(regular_builtin)) {
+    regular_builtin = std::move(name);
+}
+
+RegularBuiltinScope::~RegularBuiltinScope() {
+    regular_builtin = std::move(previous);
+}
+
+int posix_special_builtin_error(int status) {
+    return executing_special_builtin ? cjsh_env::posix_error_exit(status) : status;
+}
 
 bool is_posix_special_builtin(const std::string& name) {
     return name == "." || name == ":" || name == "break" || name == "continue" || name == "eval" ||
@@ -365,7 +390,17 @@ int Built_ins::builtin_command(const std::vector<std::string>& args) {
         if (config::posix_mode && is_posix_restricted_builtin(args[0])) {
             return reject_posix_restricted_builtin(args[0]);
         }
+        const bool special = is_posix_special_builtin(args[0]) && regular_builtin != args[0];
+        // Consume the override so eval and dot do not suppress nested errors.
+        RegularBuiltinScope nested_scope("");
+        SpecialBuiltinScope special_scope(special);
         int status = it->second(args);
+        // eval and dot return ordinary command statuses as well as their own
+        // errors. Their errors are marked at the point of detection.
+        if (special && status > 0 && args[0] != "eval" && args[0] != "." && args[0] != "return" &&
+            args[0] != "break" && args[0] != "continue") {
+            (void)cjsh_env::posix_error_exit(status);
+        }
         if (args[0] == "firstboot" && !cjsh_filesystem::is_first_boot()) {
             builtins.erase(args[0]);
         }

@@ -163,7 +163,8 @@ Persistent caches (history, generated completions, etc.) live under `~/.cache/cj
 - `-c, --command <string>` – execute a single command and exit (disables history expansion)
 - `--no-exec` – read commands but do not execute them
 - `--no-system-paths` – skip automatic PATH setup from `/etc/paths` and `/etc/paths.d`
-- `--posix` – enable POSIX mode and reject non-POSIX syntax and non-POSIX builtins
+- `--posix` – select [POSIX.1-2024 mode](posix-mode.md), including `sh` short-option
+  meanings (`-v` verbose, `-C` noclobber, `-m` monitor, `-s` stdin, `-h` hashall)
 - `-m, --minimal` – disable colors, completions and completion learning, syntax
   highlighting, rc sourcing, smart cd, the title line, history expansion, the status line,
   multiline line numbers, the startup time banner, error suggestions, prompt vars, and special

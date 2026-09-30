@@ -40,6 +40,19 @@
 class Shell;
 
 bool is_posix_special_builtin(const std::string& name);
+int posix_special_builtin_error(int status);
+
+// `command` removes special-builtin error behavior from its immediate operand.
+class RegularBuiltinScope {
+   public:
+    explicit RegularBuiltinScope(std::string name);
+    ~RegularBuiltinScope();
+    RegularBuiltinScope(const RegularBuiltinScope&) = delete;
+    RegularBuiltinScope& operator=(const RegularBuiltinScope&) = delete;
+
+   private:
+    std::string previous;
+};
 
 class Built_ins {
    public:

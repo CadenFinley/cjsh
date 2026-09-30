@@ -551,8 +551,8 @@ bool find_embedded_loop_keyword(const std::string& line, const std::string& keyw
     bool found = false;
     for_each_effective_char(
         line, false, false,
-        [&](size_t index, char c, QuoteState&, size_t& next_index) -> IterationAction {
-            if (index == 0 || c != keyword[0]) {
+        [&](size_t index, char c, QuoteState& state, size_t& next_index) -> IterationAction {
+            if (state.in_quotes || index == 0 || c != keyword[0]) {
                 return IterationAction::Continue;
             }
             if (index + keyword.size() > line.size()) {
@@ -911,7 +911,6 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
 
             QuoteState posix_state;
             bool reported_double_bracket = false;
-            bool reported_plus_equal = false;
             bool reported_pipe_amp = false;
             bool reported_amp_caret = false;
             bool reported_amp_gt = false;
@@ -928,20 +927,35 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                     continue;
                 }
 
+                if (sanitized_line_without_comments.compare(i, 3, "$((") == 0) {
+                    size_t start = 0, end = 0, after = 0;
+                    if (parser_find_balanced_double_parens(sanitized_line_without_comments, i + 1,
+                                                           start, end, after)) {
+                        i = after - 1;
+                        continue;
+                    }
+                }
+                if (sanitized_line_without_comments.compare(i, 2, "((") == 0) {
+                    add_posix_error(
+                        "POSIX015", i, i + 2,
+                        "Arithmetic commands and C-style loops are disabled in POSIX mode",
+                        "Use arithmetic expansion and a POSIX loop");
+                }
+
                 if (!reported_double_bracket &&
-                    sanitized_line_without_comments.compare(i, 2, "[[") == 0) {
+                    sanitized_line_without_comments.compare(i, 2, "[[") == 0 &&
+                    (i == 0 ||
+                     std::isspace(
+                         static_cast<unsigned char>(sanitized_line_without_comments[i - 1])) ||
+                     std::string(";|&(").find(sanitized_line_without_comments[i - 1]) !=
+                         std::string::npos) &&
+                    (i + 2 == sanitized_line_without_comments.size() ||
+                     std::isspace(
+                         static_cast<unsigned char>(sanitized_line_without_comments[i + 2])))) {
                     add_posix_error("POSIX001", i, i + 2,
                                     "'[[' conditionals are disabled in POSIX mode",
                                     "Use '[' or 'test' instead");
                     reported_double_bracket = true;
-                }
-
-                if (!reported_plus_equal &&
-                    sanitized_line_without_comments.compare(i, 2, "+=") == 0) {
-                    add_posix_error("POSIX006", i, i + 2,
-                                    "+= assignments are disabled in POSIX mode",
-                                    "Use explicit value with '=' instead");
-                    reported_plus_equal = true;
                 }
 
                 if (!reported_pipe_amp &&
@@ -978,18 +992,11 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                     reported_amp_gt = true;
                 }
 
-                if (!reported_case_fallthrough && c == ';' &&
-                    sanitized_line_without_comments[i + 1] == '&') {
-                    add_posix_error("POSIX013", i, i + 2,
-                                    "case fall-through is disabled in POSIX mode",
-                                    "Use ';;' to terminate each case clause");
-                    reported_case_fallthrough = true;
-                } else if (!reported_case_fallthrough &&
-                           i + 2 < sanitized_line_without_comments.size() &&
-                           sanitized_line_without_comments.compare(i, 3, ";;&") == 0) {
+                if (!reported_case_fallthrough && i + 2 < sanitized_line_without_comments.size() &&
+                    sanitized_line_without_comments.compare(i, 3, ";;&") == 0) {
                     add_posix_error("POSIX013", i, i + 3,
-                                    "case fall-through is disabled in POSIX mode",
-                                    "Use ';;' to terminate each case clause");
+                                    "case pattern continuation (;;&) is disabled in POSIX mode",
+                                    "Use ';;' to terminate or ';&' to fall through");
                     reported_case_fallthrough = true;
                 }
             }
@@ -999,6 +1006,11 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                                 first_non_space + std::strlen("function"),
                                 "The 'function' keyword is disabled in POSIX mode",
                                 "Define functions as 'name() { ... }'");
+            }
+
+            if (starts_with_token_keyword(trimmed_for_parsing, ControlToken::Select)) {
+                add_posix_error("POSIX016", first_non_space, first_non_space + 6,
+                                "'select' is disabled in POSIX mode", "Use a POSIX loop with read");
             }
 
             auto posix_tokens = tokenize_whitespace(trimmed_for_parsing);

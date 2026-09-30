@@ -137,8 +137,8 @@ run_expect_posix_code "source builtin syntax disabled" "source '$tmp_source_file
 run_expect_posix_code "local builtin syntax disabled" "local foo=1" "POSIX010"
 run_expect_posix_code "declare builtin syntax disabled" "declare foo=1" "POSIX011"
 run_expect_posix_code "typeset builtin syntax disabled" "typeset foo=1" "POSIX011"
-run_expect_posix_code "case ;& fall-through disabled" \
-    "case x in x) echo one ;& y) echo two ;; esac" "POSIX013"
+run_expect_literal "POSIX.1-2024 case fall-through" \
+    "case x in x) printf one ;& y) printf two ;; esac" "onetwo"
 run_expect_posix_code "case ;;& pattern continuation disabled" \
     "case x in x) echo one ;;& x) echo two ;; esac" "POSIX013"
 run_expect_fail "source builtin disabled at runtime" \
@@ -157,7 +157,7 @@ run_expect_fail "local disabled through command builtin" "command local foo=1" \
 run_expect_fail "declare disabled through command builtin" "command declare foo=1" \
     "'declare' is disabled in POSIX mode"
 run_expect_fail "set -o globstar disabled" "set -o globstar" "not available in POSIX mode"
-run_expect_fail "set -o pipefail disabled" "set -o pipefail" "not available in POSIX mode"
+run_expect_literal "POSIX.1-2024 pipefail" 'set -o pipefail; false | true; echo "$?"' "1"
 run_expect_fail "set -o huponexit disabled" "set -o huponexit" "not available in POSIX mode"
 run_expect_fail "pushd builtin disabled" "pushd /tmp" "not available in POSIX mode"
 run_expect_fail "popd builtin disabled" "popd" "not available in POSIX mode"
@@ -166,7 +166,7 @@ run_expect_fail "help builtin disabled" "help" "not available in POSIX mode"
 run_expect_fail "version builtin disabled" "version" "not available in POSIX mode"
 run_expect_fail "history builtin disabled" "history" "not available in POSIX mode"
 run_expect_fail "restart builtin disabled" "restart" "not available in POSIX mode"
-run_expect_fail "type builtin disabled" "type echo" "not available in POSIX mode"
+run_expect_literal "XSI type builtin available" 'type echo >/dev/null; echo "$?"' "0"
 run_expect_fail "which builtin disabled" "which echo" "not available in POSIX mode"
 run_expect_fail "jobname builtin disabled" "jobname %1 test-name" "not available in POSIX mode"
 run_expect_fail "disown builtin disabled" "disown" "not available in POSIX mode"
@@ -189,7 +189,7 @@ run_expect_fail "quit disabled through command builtin" "command quit" \
 run_expect_literal "dot builtin allowed" ". '$tmp_source_file'" "from source"
 
 run_expect_literal "brace expansion stays literal" "echo {1..3}" "{1..3}"
-run_expect_literal "tilde stays literal" "HOME=/tmp/cjsh_posix_home; echo ~" "~"
+run_expect_literal "tilde expands HOME" "HOME=/tmp/cjsh_posix_home; echo ~" "/tmp/cjsh_posix_home"
 run_expect_literal "disabled syntax stays literal in single quotes" \
     "printf '%s' '[[ not-a-conditional ]]'" "[[ not-a-conditional ]]"
 run_expect_literal "disabled syntax stays literal in double quotes" \

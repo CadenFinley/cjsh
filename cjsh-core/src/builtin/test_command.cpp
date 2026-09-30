@@ -29,6 +29,7 @@
 #include "test_command.h"
 #include "builtin_help.h"
 #include "error_out.h"
+#include "shell_env.h"
 #include "test_expression_utils.h"
 
 #include <sys/stat.h>
@@ -348,6 +349,12 @@ int test_command(const std::vector<std::string>& args) {
 
     if (test_args.empty()) {
         return 1;
+    }
+
+    if (config::posix_mode && test_args.size() == 3 && test_args[1] == "==") {
+        print_error(
+            {ErrorType::SYNTAX_ERROR, command_name, "'==' is disabled in POSIX mode; use '='", {}});
+        return 2;
     }
 
     if ((test_args.size() == 1 && (is_unary_op(test_args[0]) || is_binary_op(test_args[0]))) ||

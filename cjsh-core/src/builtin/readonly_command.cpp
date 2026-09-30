@@ -130,8 +130,9 @@ void print_readonly_variables(bool quote_values) {
         }
 
         if (quote_values) {
-            std::cout << "readonly " << var << "='" << cjsh_env::get_shell_variable_value(var)
-                      << "'" << '\n';
+            std::cout << "readonly " << var << '='
+                      << cjsh_env::quote_shell_value(cjsh_env::get_shell_variable_value(var))
+                      << '\n';
         } else {
             std::cout << "readonly " << var << "=" << cjsh_env::get_shell_variable_value(var)
                       << '\n';

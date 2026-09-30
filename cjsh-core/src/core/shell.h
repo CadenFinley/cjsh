@@ -38,6 +38,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <termios.h>
@@ -68,6 +69,10 @@ enum class ShellOption : std::uint8_t {
     Huponexit,
     Pipefail,
     Monitor,
+    Hashall,
+    Notify,
+    Ignoreeof,
+    Nolog,
     Count
 };
 
@@ -151,7 +156,7 @@ class Shell {
     void clear_hooks(HookType hook_type);
     void execute_hooks(HookType hook_type, const std::vector<std::string>& arguments = {});
 
-    void apply_no_exec(bool enabled);
+    void apply_startup_options(const std::vector<std::pair<std::string, bool>>& options);
     void set_shell_option(ShellOption option, bool value);
     bool get_shell_option(ShellOption option) const;
     bool is_errexit_enabled() const;

@@ -66,6 +66,7 @@ extern "C" char** environ;
 #include "command_line_utils.h"
 #include "error_out.h"
 #include "interpreter.h"
+#include "interpreter_utils.h"
 #include "numeric_utils.h"
 #include "parser_utils.h"
 #include "pipeline_status_utils.h"
@@ -117,6 +118,8 @@ ExitConfirmationMode exit_confirmation_mode = ExitConfirmationMode::Smart;
 namespace cjsh_env {
 
 namespace {
+
+std::unordered_set<std::string> exported_names;
 
 bool is_process_mirrored_shell_var(const std::string& name) {
     return name == "PATH" || name == "PWD" || name == "HOME" || name == "USER" || name == "SHELL";
@@ -298,10 +301,45 @@ bool unset_shell_variable_value(const std::string& name) {
 }
 
 bool should_mirror_to_process_env(const std::string& name) {
-    return is_process_mirrored_shell_var(name);
+    return config::posix_mode || is_process_mirrored_shell_var(name);
+}
+
+void mark_exported(const std::string& name) {
+    exported_names.insert(name);
+}
+
+std::vector<std::string> exported_variable_names() {
+    auto names = exported_names;
+    for (char** env = cjsh_environ(); *env != nullptr; ++env) {
+        std::string entry(*env);
+        names.insert(entry.substr(0, entry.find('=')));
+    }
+    std::vector<std::string> result(names.begin(), names.end());
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+std::string quote_shell_value(const std::string& value) {
+    std::string result = "'";
+    for (const char c : value) {
+        if (c == '\'') {
+            result += "'\\''";
+        } else {
+            result += c;
+        }
+    }
+    return result + "'";
 }
 
 void mirror_set_to_process_env(const std::string& name, const std::string& value) {
+    if (config::posix_mode) {
+        if (getenv(name.c_str()) != nullptr || exported_names.count(name) != 0 ||
+            (g_shell && g_shell->get_shell_option(ShellOption::Allexport))) {
+            exported_names.insert(name);
+            (void)setenv(name.c_str(), value.c_str(), 1);
+        }
+        return;
+    }
     if (!is_process_mirrored_shell_var(name)) {
         return;
     }
@@ -309,6 +347,11 @@ void mirror_set_to_process_env(const std::string& name, const std::string& value
 }
 
 void mirror_unset_from_process_env(const std::string& name) {
+    if (config::posix_mode) {
+        exported_names.erase(name);
+        (void)unsetenv(name.c_str());
+        return;
+    }
     if (!is_process_mirrored_shell_var(name)) {
         return;
     }
@@ -686,6 +729,14 @@ void clear_exit_request() {
     g_exit_flag = false;
 }
 
+int posix_error_exit(int status) {
+    if (status != 0 && config::posix_mode && !config::interactive_mode) {
+        (void)set_shell_variable_value("EXIT_CODE", std::to_string(status));
+        request_exit();
+    }
+    return status;
+}
+
 ReplacementShellLevel::ReplacementShellLevel() {
     // Only the exec environment changes; shell variables retain their current level.
     if (const char* value = getenv("SHLVL")) {
@@ -723,6 +774,7 @@ void increment_command_sequence() {
 }
 
 void reset_shell_state() {
+    exported_names.clear();
     g_exit_flag = false;
     g_startup_active = true;
     g_command_sequence = 0;
@@ -813,6 +865,54 @@ int handle_non_interactive_mode(const std::string& script_file) {
         }
 
         script_content = read_result.value();
+    } else if (config::posix_mode && g_shell) {
+        // Do not buffer past a complete command: read and external commands
+        // must be able to consume subsequent bytes from this same descriptor.
+        int status = 0;
+        char byte;
+        for (;;) {
+            (void)g_shell->process_pending_signals();
+            if (cjsh_env::exit_requested()) {
+                return read_exit_code_or(status);
+            }
+            const ssize_t count = read(STDIN_FILENO, &byte, 1);
+            if (count < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                print_error_errno({ErrorType::RUNTIME_ERROR, "read", "standard input", {}});
+                return 1;
+            }
+            if (count == 0) {
+                break;
+            }
+            script_content += byte;
+            if (byte != '\n' || has_line_continuation_suffix(script_content, true)) {
+                continue;
+            }
+            // Validation can parse function bodies and replace the parser's cache.
+            const auto lines = g_shell->get_parser()->prepare_interactive_input(script_content);
+            if (g_shell->get_parser()->awaiting_here_document()) {
+                continue;
+            }
+            if (g_shell->get_shell_script_interpreter()->needs_additional_input(lines)) {
+                continue;
+            }
+            if (std::all_of(lines.begin(), lines.end(), [](const std::string& line) {
+                    return shell_script_interpreter::detail::trim(
+                               shell_script_interpreter::detail::strip_inline_comment(line))
+                        .empty();
+                })) {
+                script_content.clear();
+                continue;
+            }
+            status = g_shell->execute(script_content);
+            script_content.clear();
+        }
+        if (!script_content.empty()) {
+            status = g_shell->execute(script_content);
+        }
+        return read_exit_code_or(status);
     } else {
         char buffer[4096];
         for (;;) {

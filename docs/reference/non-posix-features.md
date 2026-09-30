@@ -79,8 +79,8 @@ See [Prompt Markup and Styling](../themes/thedetails.md) for the full markup ref
   associative arrays, and reference variables.
 - **Extended globs** – `?()`, `*()`, `+()`, `@()`, and `!()` work in pathname expansion,
   `[[ … ]]`, `case`, and parameter patterns after `cjshopt extglob on`.
-- **Case fall-through** – `;&` executes the following clause body and `;;&` resumes pattern
-  testing at the following clause.
+- **Case pattern continuation** – `;;&` resumes pattern testing at the following clause.
+  `;&` executes the following clause body and is standard in POSIX.1-2024.
 - **Coprocesses** – `coproc command` and `coproc NAME { command; }` expose two-way descriptors in
   `COPROC`/`NAME` and a waitable `COPROC_PID`/`NAME_PID`. `read -u fd` reads from a descriptor.
 - **Here-strings** – Feed a single string into a command's stdin.

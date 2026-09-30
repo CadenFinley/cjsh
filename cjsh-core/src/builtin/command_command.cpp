@@ -160,6 +160,7 @@ int command_command(const std::vector<std::string>& args, Shell* shell) {
         (void)cjsh_env::set_shell_variable_value("PATH", "/usr/bin:/bin");
     }
 
+    RegularBuiltinScope regular_scope(command_name);
     int exit_code = shell->execute_command(exec_args, false);
 
     if (use_default_path) {

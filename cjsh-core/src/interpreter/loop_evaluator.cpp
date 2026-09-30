@@ -720,6 +720,11 @@ int handle_for_block(
         }
 
         if (parse_c_style_for_header(normalized_header, c_style_header)) {
+            if (config::posix_mode) {
+                (void)cjsh_env::posix_error_exit(2);
+                (void)report_loop_header_error("for", "C-style loops are disabled in POSIX mode");
+                return false;
+            }
             return true;
         }
 
@@ -923,6 +928,10 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
                         const std::function<int(const std::vector<std::string>&)>& execute_block,
                         const std::function<int(const std::string&)>& execute_simple_or_pipeline,
                         Parser* shell_parser, const std::function<bool()>& should_abort_execution) {
+    if (config::posix_mode) {
+        (void)report_loop_header_error("select", "select is disabled in POSIX mode");
+        return cjsh_env::posix_error_exit(2);
+    }
     std::string first = trim(strip_inline_comment(src_lines[idx]));
     if (!parser_starts_with_keyword_token(first, "select") && first.rfind("select;", 0) != 0) {
         return 1;

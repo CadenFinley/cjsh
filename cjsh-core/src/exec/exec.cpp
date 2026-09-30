@@ -72,6 +72,7 @@
 #include "interpreter.h"
 #include "job_control.h"
 #include "parser.h"
+#include "readonly_command.h"
 #include "script_dispatch.h"
 #include "shell.h"
 #include "shell_env.h"
@@ -953,10 +954,6 @@ bool apply_ordered_redirections(const Command& cmd, ErrorHandler&& on_error) {
 
 template <typename ErrorHandler>
 bool setup_here_document_stdin(const std::string& here_doc, ErrorHandler&& on_error) {
-    if (here_doc.empty()) {
-        return true;
-    }
-
     int here_pipe[2] = {-1, -1};
     auto pipe_result = cjsh_filesystem::create_pipe_cloexec(here_pipe);
     if (pipe_result.is_error()) {
@@ -985,14 +982,6 @@ bool setup_here_document_stdin(const std::string& here_doc, ErrorHandler&& on_er
             return false;
         }
         return true;
-    }
-
-    auto newline_result = cjsh_filesystem::write_all(here_pipe[1], std::string_view("\n", 1));
-    if (newline_result.is_error() &&
-        !cjsh_filesystem::error_indicates_broken_pipe(newline_result.error())) {
-        on_error(HereDocErrorKind::NewlineWrite, newline_result.error());
-        cjsh_filesystem::close_pipe(here_pipe);
-        return false;
     }
 
     if (!duplicate_pipe_to_stdin()) {
@@ -1274,6 +1263,9 @@ int Exec::execute_builtin_with_redirections(Command cmd) {
 
     if (!action_invoked) {
         last_exit_code = exit_code;
+        if (is_posix_special_builtin(command_name)) {
+            (void)cjsh_env::posix_error_exit(exit_code);
+        }
         return exit_code;
     }
 
@@ -1563,7 +1555,8 @@ int Exec::execute_prepared_command_async(cjsh_env::PreparedCommand command) {
         }
         JobManager::instance().set_last_background_pid(pid);
 
-        if (!job.suppress_notifications) {
+        if (!job.suppress_notifications &&
+            (!config::posix_mode || config::interactive_mode || config::force_interactive)) {
             std::cerr << "[" << job_id << "] " << pid << " " << job.command << '\n';
         }
         last_exit_code = 0;
@@ -1624,8 +1617,21 @@ int Exec::execute_pipeline(const std::vector<Command>& commands) {
         size_t cmd_start_idx = cjsh_env::collect_env_assignments(cmd.args, env_assignments);
         const size_t original_arg_count = cmd.args.size();
 
+        if (config::posix_mode) {
+            for (const auto& [name, value] : env_assignments) {
+                if (!readonly_manager_can_assign(name, "assignment")) {
+                    return finalize_exit(cjsh_env::posix_error_exit(1));
+                }
+            }
+        }
         if (cmd_start_idx >= original_arg_count) {
             apply_assignments_to_shell_env(env_assignments);
+            if (config::posix_mode) {
+                const int status =
+                    run_with_command_redirections(cmd, [] { return 0; }, "assignment", false);
+                set_last_pipeline_statuses({status});
+                return finalize_exit(status);
+            }
             set_last_pipeline_statuses({0});
             return finalize_exit(0);
         }
@@ -2399,7 +2405,9 @@ int Exec::execute_pipeline(const std::vector<Command>& commands) {
 
     if (job.background) {
         put_job_in_background(job_id, false);
-        std::cerr << "[" << job_id << "] " << pgid << " " << job.command << '\n';
+        if (!config::posix_mode || config::interactive_mode || config::force_interactive) {
+            std::cerr << "[" << job_id << "] " << pgid << " " << job.command << '\n';
+        }
         raw_exit = 0;
     } else {
         put_job_in_foreground(job_id, false);

@@ -27,6 +27,9 @@
 */
 
 #include "parameter_expansion_evaluator.h"
+#include "parser_utils.h"
+#include "shell.h"
+#include "shell_env.h"
 
 #include <cctype>
 #include <cstdlib>
@@ -61,6 +64,23 @@ ParameterExpansionEvaluator::ParameterExpansionEvaluator(
 std::string ParameterExpansionEvaluator::expand(const std::string& param_expr) {
     if (param_expr.empty()) {
         return "";
+    }
+
+    if (config::posix_mode) {
+        const size_t end = posix_parameter_name_end(param_expr);
+        if (end == std::string::npos) {
+            throw std::runtime_error("parameter expansion error: ${" + param_expr +
+                                     "} is disabled in POSIX mode");
+        }
+        const bool length = param_expr[0] == '#' && param_expr.size() > 1;
+        const std::string name = param_expr.substr(length ? 1 : 0, end - (length ? 1 : 0));
+        if (end == param_expr.size() && name != "@" && name != "*" && g_shell &&
+            g_shell->get_shell_option(ShellOption::Nounset) && !is_variable_set(name)) {
+            throw std::runtime_error(name + ": parameter not set");
+        }
+        if (param_expr.size() == 1) {
+            return read_variable(param_expr);
+        }
     }
 
     if (param_expr[0] == '!') {
@@ -200,6 +220,11 @@ std::string ParameterExpansionEvaluator::expand(const std::string& param_expr) {
     std::string var_value = read_variable(var_name);
 
     if (op_pos == std::string::npos) {
+        if (config::posix_mode && g_shell && g_shell->get_shell_option(ShellOption::Nounset) &&
+            var_name != "@" && var_name != "*" && !is_variable_set(var_name)) {
+            throw std::runtime_error("parameter expansion error: " + var_name +
+                                     ": parameter not set");
+        }
         return var_value;
     }
 

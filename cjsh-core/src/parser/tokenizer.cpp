@@ -28,9 +28,11 @@
 
 #include "tokenizer.h"
 
+#include <pwd.h>
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -65,6 +67,7 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
     bool token_saw_double = false;
     bool token_saw_escape = false;
     bool token_saw_substitution = false;
+    bool token_saw_unquoted = false;
     std::vector<size_t> io_number_tokens;
 
     const size_t cmdline_len = cmdline.length();
@@ -84,7 +87,12 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                 if (token_saw_escape) {
                     current_token = remove_escape_markers(current_token);
                 }
-                char quote_type = token_saw_double ? QUOTE_DOUBLE : QUOTE_SINGLE;
+                char quote_type = token_saw_double || (config::posix_mode && token_saw_unquoted)
+                                      ? QUOTE_DOUBLE
+                                      : QUOTE_SINGLE;
+                if (config::posix_mode && quote_type == QUOTE_SINGLE) {
+                    current_token = strip_noenv_sentinels(current_token).first;
+                }
                 tokens.push_back(create_quote_tag(quote_type, current_token));
             } else {
                 tokens.push_back(current_token);
@@ -92,6 +100,7 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
             current_token.clear();
             token_saw_single = token_saw_double = false;
             token_saw_escape = token_saw_substitution = false;
+            token_saw_unquoted = false;
         }
     };
 
@@ -146,13 +155,66 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
             quote_char = c;
             if (c == '\'') {
                 token_saw_single = true;
+                if (config::posix_mode) {
+                    current_token += noenv_start();
+                }
             } else {
                 token_saw_double = true;
             }
         } else if (c == quote_char && in_quotes && !in_subst_literal) {
+            if (config::posix_mode && quote_char == '\'') {
+                current_token += noenv_end();
+            }
             in_quotes = false;
             quote_char = '\0';
         } else if (!in_quotes) {
+            // Resolve tilde from source spelling, before parameter expansion and
+            // quote removal. Protect only the inserted home directory.
+            if (config::posix_mode && c == '~' && brace_depth == 0 && arith_depth == 0) {
+                const size_t assignment_eq = current_token.find('=');
+                const bool assignment_prefix =
+                    assignment_eq != std::string::npos &&
+                    cjsh_env::is_valid_env_name(current_token.substr(0, assignment_eq)) &&
+                    (current_token.back() == '=' || current_token.back() == ':') &&
+                    (std::all_of(tokens.begin(), tokens.end(),
+                                 [](const std::string& token) {
+                                     return looks_like_assignment(QuoteInfo(token).value);
+                                 }) ||
+                     (!tokens.empty() && (tokens[0] == "export" || tokens[0] == "readonly")));
+                if (current_token.empty() || assignment_prefix) {
+                    size_t end = i + 1;
+                    while (end < cmdline_len && !is_whitespace(cmdline[end]) &&
+                           std::string_view("/:;|&<>()").find(cmdline[end]) ==
+                               std::string_view::npos) {
+                        ++end;
+                    }
+                    const std::string login = cmdline.substr(i + 1, end - i - 1);
+                    std::optional<std::string> directory;
+                    if (login.empty() && cjsh_env::shell_variable_is_set("HOME")) {
+                        directory = cjsh_env::get_shell_variable_value("HOME");
+                    } else if (!login.empty()) {
+                        if (const passwd* entry = getpwnam(login.c_str())) {
+                            directory = entry->pw_dir;
+                        }
+                    }
+                    if (directory) {
+                        current_token += noenv_start();
+                        const std::string protected_chars =
+                            cjsh_env::get_ifs_delimiters() + "*?[]\\";
+                        for (const char ch : *directory) {
+                            if (protected_chars.find(ch) != std::string::npos) {
+                                current_token += QUOTE_PREFIX;
+                                token_saw_escape = true;
+                            }
+                            current_token += ch;
+                        }
+                        current_token += noenv_end();
+                        token_saw_unquoted = true;
+                        i = end - 1;
+                        continue;
+                    }
+                }
+            }
             if (extglob_depth > 0) {
                 if (c == '(') {
                     ++extglob_depth;
@@ -202,7 +264,10 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                 i++;
             }
 
-            else if (c == '[' && i + 1 < cmdline_len && cmdline[i + 1] == '[') {
+            else if (c == '[' && i + 1 < cmdline_len && cmdline[i + 1] == '[' &&
+                     (!config::posix_mode ||
+                      (current_token.empty() &&
+                       (i + 2 == cmdline_len || is_whitespace(cmdline[i + 2]))))) {
                 bracket_depth++;
                 flush_current_token();
                 tokens.push_back("[[");
@@ -312,6 +377,7 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                 }
                 (void)tokens.emplace_back(1, c);
             } else {
+                token_saw_unquoted = true;
                 current_token += c;
             }
         } else {
