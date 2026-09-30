@@ -1147,6 +1147,9 @@ which is applied before result limits in Tab completion, inline hints, and autom
 <p>When the cursor is inside an existing recognized command or shell keyword, cjsh offers no
 completions for that word. For example, moving just after the <code>t</code> in <code>then</code> does not suggest
 <code>tests/</code>. Completion remains available for unfinished words and at the end of a word.</p>
+<p>The automatic menu stays hidden when its only candidate already matches the text being
+completed, including candidates that would only append a space for the next argument.
+It reappears when further editing produces a useful completion.</p>
 <p>Inline hints and passive automatic menus use cached documentation and static value choices. Press
 <code>Tab</code> to fetch missing manual-page data or invoke dynamic value providers. Automatic suggestions,
 Tab completion, status-line analysis, and command-error suggestions share cached PATH filenames
