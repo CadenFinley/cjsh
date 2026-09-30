@@ -3544,7 +3544,10 @@ def main() -> int:
             "runoff custom menu should return the selected original item index, "
             f"got {custom_menu_result!r}"
         )
-    normalized_custom_menu_output = normalize_terminal_output(custom_menu_output)
+    # Selected descriptions can wrap across terminal rows; join only soft wraps.
+    normalized_custom_menu_output = re.sub(
+        r"[←↵]\n", "", normalize_terminal_output(custom_menu_output)
+    )
     if "custom actions:" not in normalized_custom_menu_output or not all(
         label in normalized_custom_menu_output
         for label in ("Show status", "Restart service", "Open logs")
