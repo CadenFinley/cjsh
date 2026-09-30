@@ -1403,7 +1403,7 @@ const HistoryCache* cached_history_records(bool ranked) {
     static HistoryCache cache;
     const auto path = cjsh_filesystem::g_cjsh_history_path();
     const auto snapshot = cjsh_filesystem::FileSnapshot::read(path);
-    if (!cache.observed || cache.path != path || cache.snapshot != snapshot) {
+    if (!cache.observed || cache.path != path || !cache.snapshot.can_reuse_cached_data(snapshot)) {
         cache.path = path;
         cache.snapshot = snapshot;
         cache.observed = true;

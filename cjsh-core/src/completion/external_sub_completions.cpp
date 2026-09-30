@@ -1363,7 +1363,7 @@ ScopedCompletionDocumentationLookup::ScopedCompletionDocumentationLookup() {
             cjsh_filesystem::g_cjsh_generated_completions_path());
         std::lock_guard<std::mutex> lock(g_cache_mutex);
         if (!g_documentation_directory_snapshot ||
-            *g_documentation_directory_snapshot != snapshot) {
+            !g_documentation_directory_snapshot->can_reuse_cached_data(snapshot)) {
             g_passive_cache_misses.clear();
             g_documentation_directory_snapshot = snapshot;
         }

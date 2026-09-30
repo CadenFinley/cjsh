@@ -31,6 +31,7 @@
 
 #include <sys/stat.h>
 #include <cerrno>
+#include <chrono>
 #include <filesystem>
 #include <tuple>
 
@@ -41,9 +42,11 @@ namespace cjsh_filesystem {
 struct FileSnapshot {
     struct stat info{};
     int error = 0;
+    std::chrono::system_clock::time_point observed_at{};
 
     static FileSnapshot read(const std::filesystem::path& path) {
         FileSnapshot snapshot;
+        snapshot.observed_at = std::chrono::system_clock::now();
         if (::stat(path.c_str(), &snapshot.info) != 0) {
             snapshot.error = errno;
         }
@@ -74,6 +77,22 @@ struct FileSnapshot {
 
     bool operator!=(const FileSnapshot& other) const {
         return !(*this == other);
+    }
+
+    bool can_reuse_cached_data(const FileSnapshot& current) const {
+        if (*this != current) {
+            return false;
+        }
+        if (error != 0) {
+            return true;
+        }
+        // Nanosecond fields can still use a coarse filesystem/kernel clock.
+        // Rapid writes may leave both timestamps unchanged. Only reuse data
+        // observed after that timestamp's resolution window has passed. Use
+        // the original observation time: waiting cannot make stale data safe.
+        const auto stable_before = observed_at.time_since_epoch() - std::chrono::seconds(2);
+        return std::chrono::seconds(info.st_mtime) < stable_before &&
+               std::chrono::seconds(info.st_ctime) < stable_before;
     }
 };
 

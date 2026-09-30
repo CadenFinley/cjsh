@@ -595,12 +595,13 @@ class PathHashCache {
         }
         ensure_snapshot_locked(current_path_env_value());
         // Always recheck emitted candidates' permissions and symlink targets.
-        // The name index itself only needs rebuilding when a PATH directory
-        // changes. This keeps repeated Tab presses from rereading every entry.
+        // Reuse the name index when directory metadata is unchanged and old
+        // enough to distinguish edits on filesystems with coarse timestamps.
         interactive_results_.clear();
         if (std::any_of(interactive_directories_.begin(), interactive_directories_.end(),
                         [](const auto& entry) {
-                            return FileSnapshot::read(entry.first) != entry.second;
+                            return !entry.second.can_reuse_cached_data(
+                                FileSnapshot::read(entry.first));
                         })) {
             reset_interactive_locked();
         }

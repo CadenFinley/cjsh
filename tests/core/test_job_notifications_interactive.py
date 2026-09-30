@@ -91,8 +91,12 @@ class NotificationSession(IdleHookSession):
     def cancel(self) -> None:
         start = len(self.output)
         self.write(b"\x03")
-        self.wait_for_prompt(start)
-        self.pump(0.05)
+        # Ctrl-C redraws the old prompt before closing its input region. Wait
+        # for that boundary so the next key reaches the new editor, even on a
+        # busy runner where teardown takes longer than a fixed delay.
+        cancelled = b"\x1b]133;D\x1b\\"
+        end = self.wait_for(cancelled, start) + len(cancelled)
+        self.wait_for_prompt(end)
 
 
 def main() -> int:
