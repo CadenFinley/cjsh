@@ -422,10 +422,9 @@ again:;
         const char* query = sbuf_string(eb->input);
         bool is_filtered = (query != NULL && query[0] != '\0');
         if (showing_all_due_to_no_matches) {
-            (void)sbuf_appendf(
-                eb->extra,
-                "[ic-info]No matches - showing all actions - case %s%s[/]\n",
-                session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
+            (void)sbuf_appendf(eb->extra,
+                               "[ic-info]No matches - showing all actions - case %s%s[/]\n",
+                               session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
         } else if (is_filtered) {
             (void)sbuf_appendf(eb->extra, "[ic-info]Actions found - case %s%s[/]\n",
                                session_case_sensitive ? "sensitive" : "insensitive", mouse_suffix);
@@ -436,7 +435,8 @@ again:;
 
         const ssize_t content_width = edit_menu_content_width(env);
         const ssize_t reserved_rows =
-            edit_menu_input_rows(env, eb) + edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra)) +
+            edit_menu_input_rows(env, eb) +
+            edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra)) +
             (!env->no_help ? edit_menu_rendered_rows(env, eb, k_command_palette_footer) : 0) + 1;
         ssize_t available_lines = edit_menu_available_lines(
             env, eb, reserved_rows, 1, env->command_palette_max_line_count, menu_session.maximized);

@@ -125,7 +125,8 @@ static void custom_menu_render_item(ic_env_t* env, editor_t* eb, stringbuf_t* di
         (void)sbuf_append(eb->extra, "\n");
         return;
     }
-    const edit_menu_preview_t preview = edit_menu_preview(display, edit_menu_content_width(env) - 2);
+    const edit_menu_preview_t preview =
+        edit_menu_preview(display, edit_menu_content_width(env) - 2);
 
     if (is_selected) {
         (void)sbuf_append(eb->extra, "[ic-menu-selected]");
@@ -269,7 +270,8 @@ again:;
         }
 
         const ssize_t reserved_rows =
-            edit_menu_input_rows(env, eb) + edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra)) +
+            edit_menu_input_rows(env, eb) +
+            edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra)) +
             (!env->no_help ? edit_menu_rendered_rows(env, eb, k_custom_menu_footer) : 0) + 1;
         ssize_t available_lines = edit_menu_available_lines(
             env, eb, reserved_rows, 1, env->custom_menu_max_line_count, menu_session.maximized);

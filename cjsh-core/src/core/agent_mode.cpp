@@ -762,11 +762,9 @@ class ScopedWaitingStatus {
         }
         last_frame_ = frame;
 
-        const std::string label =
-            "Running [" + std::to_string(seconds) + "s]: " + command_display_;
-        const auto character_count = std::count_if(label.begin(), label.end(), [](unsigned char ch) {
-            return (ch & 0xC0) != 0x80;
-        });
+        const std::string label = "Running [" + std::to_string(seconds) + "s]: " + command_display_;
+        const auto character_count = std::count_if(
+            label.begin(), label.end(), [](unsigned char ch) { return (ch & 0xC0) != 0x80; });
         std::ostringstream message;
         message << "[ic-info]";
         // A soft light sweeps left to right, then pauses offscreen before repeating.

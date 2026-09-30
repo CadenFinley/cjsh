@@ -156,8 +156,8 @@ struct ic_env_s {
     size_t history_menu_max_line_count;
     size_t command_palette_max_line_count;
     size_t custom_menu_max_line_count;
-    long hint_delay;                     // delay before displaying a hint in milliseconds
-    long idle_timeout;                   // inactivity timeout in milliseconds (0 disables)
+    long hint_delay;    // delay before displaying a hint in milliseconds
+    long idle_timeout;  // inactivity timeout in milliseconds (0 disables)
 
     ic_key_binding_entry_t* key_bindings;  // dynamic array of custom key bindings
     ssize_t key_binding_count;
@@ -174,7 +174,7 @@ struct ic_env_s {
     ic_command_palette_entry_handler_t* command_palette_handler;
     void* command_palette_handler_arg;
 
-    char* whitespace_marker;  // custom marker used when visualizing spaces
+    char* whitespace_marker;         // custom marker used when visualizing spaces
     char line_wrap_marker[5];        // one UTF-8 code point, or empty to hide soft-wrap indicators
     ssize_t line_wrap_marker_width;  // terminal columns reserved for the marker
 };

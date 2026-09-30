@@ -373,10 +373,9 @@ bool test_cursor_shell_command_hints() {
     };
     const std::string cd_hint = "(cd) - Change the current directory";
     const std::string echo_hint = "(echo) - Write arguments to standard output";
-    bool ok =
-        expect(hint("cd /tmp", 0) == cd_hint && hint("cd /tmp", 1) == cd_hint &&
-                   hint("cd /tmp", 2) == cd_hint,
-               "builtins show their name and description at either edge and inside the name");
+    bool ok = expect(hint("cd /tmp", 0) == cd_hint && hint("cd /tmp", 1) == cd_hint &&
+                         hint("cd /tmp", 2) == cd_hint,
+                     "builtins show their name and description at either edge and inside the name");
     ok = expect(hint("cd /tmp", 3).empty() && hint("cd /tmp", 0) == cd_hint,
                 "builtin hints follow cursor-only movement") &&
          ok;
@@ -418,12 +417,11 @@ bool test_cursor_shell_command_hints() {
 
     config::colors_enabled = true;
     config::syntax_highlighting_enabled = true;
-    ok = expect(
-             hint("echo", 2) == "[ic-diminish](echo)[/] - Write arguments to standard output" &&
-                 hint("lookupfunction", 3) == "[ic-diminish](function)[/] - lookupfunction" &&
-                 hint("if true; then :; fi", 1) ==
-                     "[ic-diminish](keyword)[/] - Evaluate a conditional block",
-             "source tags use the completion menu style without coloring descriptions") &&
+    ok = expect(hint("echo", 2) == "[ic-diminish](echo)[/] - Write arguments to standard output" &&
+                    hint("lookupfunction", 3) == "[ic-diminish](function)[/] - lookupfunction" &&
+                    hint("if true; then :; fi", 1) ==
+                        "[ic-diminish](keyword)[/] - Evaluate a conditional block",
+                "source tags use the completion menu style without coloring descriptions") &&
          ok;
     const std::string external = hint("lookuptool", 3);
     ok = expect(external.rfind("[ic-diminish](/", 0) == 0 &&

@@ -492,14 +492,12 @@ static bool test_multiline_bottom_line_count_defaults_and_clamps(void) {
 
 static bool test_menu_max_line_count_defaults_and_clamps(void) {
     EXPECT_TRUE(ensure_env() != NULL, "menu configuration requires an environment");
-    size_t (*setters[])(size_t) = {ic_set_completion_menu_max_line_count,
-                                  ic_set_history_menu_max_line_count,
-                                  ic_set_command_palette_max_line_count,
-                                  ic_set_custom_menu_max_line_count};
-    size_t (*getters[])(void) = {ic_get_completion_menu_max_line_count,
-                               ic_get_history_menu_max_line_count,
-                               ic_get_command_palette_max_line_count,
-                               ic_get_custom_menu_max_line_count};
+    size_t (*setters[])(size_t) = {
+        ic_set_completion_menu_max_line_count, ic_set_history_menu_max_line_count,
+        ic_set_command_palette_max_line_count, ic_set_custom_menu_max_line_count};
+    size_t (*getters[])(void) = {
+        ic_get_completion_menu_max_line_count, ic_get_history_menu_max_line_count,
+        ic_get_command_palette_max_line_count, ic_get_custom_menu_max_line_count};
     const size_t defaults[] = {15, 15, 15, 15};
     for (size_t i = 0; i < 4; i++) {
         EXPECT_TRUE(getters[i]() == defaults[i], "each menu should use its own default row limit");

@@ -1089,8 +1089,8 @@ int history_menu_max_lines_command(const std::vector<std::string>& args) {
         "Use a positive count; values above 256 are clamped to 256.",
         "Ctrl+J temporarily toggles the open menu to full terminal height."};
     return max_lines_command(args, "history-menu-max-lines", "History menu",
-                             ic_get_history_menu_max_line_count,
-                             ic_set_history_menu_max_line_count, usage_lines);
+                             ic_get_history_menu_max_line_count, ic_set_history_menu_max_line_count,
+                             usage_lines);
 }
 
 int command_palette_max_lines_command(const std::vector<std::string>& args) {
