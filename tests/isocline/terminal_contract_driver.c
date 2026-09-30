@@ -114,7 +114,8 @@ int main(int argc, char** argv) {
     // Allow the Python PTY peer to be scheduled between query and response on
     // busy CI runners. Incomplete escape sequences still time out promptly.
     tty_set_esc_delay(tty, 1000, 100);
-    if (strcmp(scenario, "query") == 0 || strcmp(scenario, "osc") == 0) {
+    if (strcmp(scenario, "query") == 0 || strcmp(scenario, "osc") == 0 ||
+        strcmp(scenario, "osc-late") == 0) {
         term_t* term = term_new(&memory, tty, true, true, STDOUT_FILENO);
         if (term == NULL) {
             return 4;
@@ -123,16 +124,21 @@ int main(int argc, char** argv) {
         (void)write(STDERR_FILENO, "QUERY_READY\n", 12);
         ssize_t row = 0, column = 0;
         bool matched;
-        if (strcmp(scenario, "osc") == 0) {
+        if (strcmp(scenario, "osc") == 0 || strcmp(scenario, "osc-late") == 0) {
             char response[128];
             (void)write(STDOUT_FILENO, "\x1b]4;0;?\x07", 8);
-            matched = tty_read_esc_response(tty, ']', true, response, sizeof(response), matches_osc,
-                                            NULL);
+            matched = tty_read_esc_response_with_timeout(
+                tty, ']', true, response, sizeof(response), matches_osc, NULL,
+                strcmp(scenario, "osc-late") == 0 ? 40 : -1);
         } else {
             matched = term_query_cursor_pos(term, &row, &column);
         }
         (void)printf("QUERY:%d:%zd:%zd\n", matched, row, column);
         (void)fflush(stdout);
+        if (strcmp(scenario, "osc-late") == 0) {
+            const code_t key = tty_read(tty);
+            (void)printf("LATE_KEY:%u\n", (unsigned)key);
+        }
         long length = 0;
         if (argc > 2) {
             char* end = NULL;

@@ -26,14 +26,19 @@
   SOFTWARE.
 */
 
+#include <glob.h>
+#include <unistd.h>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
+#include "expansion_engine.h"
 
 #include "builtin_help.h"
 #include "cjsh_filesystem.h"
@@ -275,6 +280,89 @@ void test_redirection_argument_boundaries(Parser& parser) {
            "attached duplication, input, and stderr append descriptors retain their meaning");
 }
 
+void test_repeated_expansion(Parser& parser) {
+    for (const char* value : {"first", "second", ""}) {
+        g_shell->execute(std::string("profile_value='") + value + "'");
+        expect(
+            parser.parse_command(": \"$profile_value\"") == std::vector<std::string>({":", value}),
+            "repeated command text expands the current variable value");
+    }
+    for (const char* value : {"first", "second"}) {
+        parser.set_aliases({{"profile_alias", std::string(": ") + value}});
+        expect(parser.parse_command("profile_alias 'arg'") ==
+                   std::vector<std::string>({":", value, "arg"}),
+               "repeated command text uses current aliases");
+    }
+    parser.set_aliases({});
+    g_shell->execute("profile_value='a:b c'");
+    g_shell->execute("IFS=:");
+    expect(parser.parse_command("echo $profile_value") ==
+               std::vector<std::string>({"echo", "a", "b c"}),
+           "field splitting uses changed IFS");
+    g_shell->execute("IFS=' '");
+    expect(parser.parse_command("echo $profile_value") ==
+               std::vector<std::string>({"echo", "a:b", "c"}),
+           "repeated command text does not cache IFS");
+    g_shell->execute("unset IFS");
+    const bool old_extglob = config::extglob_enabled;
+    for (bool enabled : {false, true, false}) {
+        config::extglob_enabled = enabled;
+        Parser fresh;
+        fresh.set_shell(g_shell.get());
+        expect(parser.parse_command(": @(missing-one|missing-two)") ==
+                   fresh.parse_command(": @(missing-one|missing-two)"),
+               "tokenization reflects extglob changes");
+    }
+    config::extglob_enabled = old_extglob;
+}
+
+void test_simple_glob_matches_libc() {
+    namespace fs = std::filesystem;
+    const auto original_cwd = fs::current_path();
+    std::string directory_template = (fs::temp_directory_path() / "cjsh-glob-XXXXXX").string();
+    const char* created = mkdtemp(directory_template.data());
+    expect(created != nullptr, "create an isolated glob fixture");
+    if (created == nullptr) {
+        return;
+    }
+    const fs::path root(created);
+    fs::create_directories(root / "folder");
+    for (const char* name : {"z.txt", "a.txt", "b.c", ".hidden", "a b", "a*", "a?", "A.txt"}) {
+        std::ofstream(root / name) << "fixture";
+    }
+    fs::create_symlink("folder", root / "dirlink");
+    fs::create_symlink("a.txt", root / "filelink");
+    fs::create_symlink("missing", root / "broken");
+    fs::current_path(root);
+    ExpansionEngine expansion;
+    for (bool unicode_file : {false, true}) {
+        if (unicode_file) {
+            std::ofstream(root / "é.txt") << "fixture";
+        }
+        for (const std::string& prefix :
+             std::vector<std::string>{"", "./", root.string() + "/", root.string() + "//"}) {
+            for (const char* suffix : {"*", "*.txt", "a?", ".*", "f*", "*link", "b*", "no*",
+                                       "[ab]*", "*/", "folder/*"}) {
+                const auto pattern = prefix + suffix;
+                glob_t results{};
+                const int status = glob(pattern.c_str(), GLOB_TILDE | GLOB_MARK, nullptr, &results);
+                std::vector<std::string> expected;
+                if (status == 0) {
+                    expected.assign(results.gl_pathv, results.gl_pathv + results.gl_pathc);
+                } else if (status == GLOB_NOMATCH) {
+                    expected.push_back(pattern);
+                }
+                globfree(&results);
+                expect(
+                    expansion.expand_wildcards(pattern) == expected,
+                    "glob matches libc sorting, dotfiles, prefixes, directory marks, and symlinks");
+            }
+        }
+    }
+    fs::current_path(original_cwd);
+    fs::remove_all(root);
+}
+
 void test_redirection_path_expansion() {
     namespace fs = std::filesystem;
     const fs::path original_cwd = fs::current_path();
@@ -329,6 +417,8 @@ int main() {
     test_escaped_whitespace(*g_shell->get_parser());
     test_redirection_argument_boundaries(*g_shell->get_parser());
     test_redirection_path_expansion();
+    test_repeated_expansion(*g_shell->get_parser());
+    test_simple_glob_matches_libc();
     g_shell.reset();
     if (failures != 0) {
         (void)std::fprintf(stderr, "%zu/%zu parser dispatch tests failed\n", failures, checks);

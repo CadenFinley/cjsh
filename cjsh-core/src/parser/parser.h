@@ -167,6 +167,9 @@ class Parser {
         std::vector<std::string> lines;
     };
     std::optional<PreparedInput> prepared_input;
+    // Cache only lexical structure, before aliases, variables, IFS, or globbing.
+    std::unordered_map<std::string, std::vector<std::string>> command_tokens;
+    bool command_tokens_extglob = false;
 
     std::unique_ptr<Tokenizer> tokenizer;
     std::unique_ptr<VariableExpander> variableExpander;

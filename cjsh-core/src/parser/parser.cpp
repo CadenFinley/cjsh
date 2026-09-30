@@ -991,6 +991,12 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& script) {
 std::vector<std::string> Parser::prepare_expansion_tokens(std::vector<std::string> args) {
     ensure_parsers_initialized();
 
+    if (std::none_of(args.begin(), args.end(), [](const std::string& arg) {
+            return arg.find('{') != std::string::npos || arg.find("$@") != std::string::npos;
+        })) {
+        return args;
+    }
+
     std::vector<std::string> expanded_args;
     expanded_args.reserve(args.empty() ? 8 : args.size() * 3);
     for (std::string& raw_arg : args) {
@@ -1088,9 +1094,23 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
     } else if (arithmetic_assignment_candidate) {
         (void)args.emplace_back(cmdline);
     } else {
-        args.reserve(16);
         try {
-            args = Tokenizer::tokenize_command(cmdline);
+            if (command_tokens_extglob != config::extglob_enabled) {
+                command_tokens.clear();
+                command_tokens_extglob = config::extglob_enabled;
+            }
+            const auto cached = command_tokens.find(cmdline);
+            if (cached != command_tokens.end()) {
+                args = cached->second;
+            } else {
+                args = Tokenizer::tokenize_command(cmdline);
+                if (cmdline.size() <= 1024 && args.size() <= 64) {
+                    if (command_tokens.size() >= 64) {
+                        command_tokens.clear();
+                    }
+                    command_tokens.emplace(cmdline, args);
+                }
+            }
         } catch (const std::exception&) {
             return args;
         }
@@ -1273,11 +1293,14 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
 
     std::vector<std::string> ifs_expanded_args;
     ifs_expanded_args.reserve(args.size() * 2);
+    // Expansion above may assign IFS; resolve it after expansion, once for this
+    // field-splitting pass. Never retain it across commands or function scopes.
+    const std::string ifs = cjsh_env::get_ifs_delimiters();
     for (std::string& raw_arg : args) {
         QuoteInfo qi(raw_arg);
 
         if (qi.is_unquoted()) {
-            std::vector<std::string> split_words = tokenizer->split_by_ifs(raw_arg);
+            std::vector<std::string> split_words = tokenizer->split_by_ifs(raw_arg, ifs);
             (void)ifs_expanded_args.insert(ifs_expanded_args.end(),
                                            std::make_move_iterator(split_words.begin()),
                                            std::make_move_iterator(split_words.end()));

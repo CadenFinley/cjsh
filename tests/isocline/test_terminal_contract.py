@@ -45,7 +45,7 @@ class TerminalContractTests(unittest.TestCase):
     def start(self, scenario: str, *args: str) -> IdleHookSession:
         directory = tempfile.TemporaryDirectory(prefix="isocline-terminal-contract-")
         self.addCleanup(directory.cleanup)
-        query = scenario in ("query", "osc")
+        query = scenario in ("query", "osc", "osc-late")
         session = IdleHookSession(self.binary, directory.name,
                                   argv=[self.binary, scenario, *args],
                                   cursor_response=None if query else b"\x1b[1;1R",
@@ -103,6 +103,14 @@ class TerminalContractTests(unittest.TestCase):
                 output = normalize_terminal_output(bytes(session.output))
                 self.assertIn(b"QUERY:1:0:0\n", output)
                 self.assertIn(b"7461696c\nREPLAY_DONE", output)
+
+    def test_late_palette_reply_does_not_become_keyboard_input(self) -> None:
+        session = self.start("osc-late")
+        session.wait_for(b"QUERY:0:0:0")
+        session.write(b"\x1b]4;0;rgb:ff/ff/ff\x07x")
+        self.assertEqual(session.wait_for_exit(), 0)
+        output = normalize_terminal_output(bytes(session.output))
+        self.assertIn(b"LATE_KEY:120\n", output)
 
     def test_default_signal_actions(self) -> None:
         for signum in (signal.SIGINT, signal.SIGHUP, signal.SIGTERM):

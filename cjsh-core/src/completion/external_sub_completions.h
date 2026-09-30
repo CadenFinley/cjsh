@@ -42,6 +42,14 @@ void handle_external_sub_completions(ic_completion_env_t* cenv,
 completion_specs::CommandDoc parse_man_page_completion_spec(const std::string& command,
                                                             const std::string& man_text);
 std::string get_command_summary(const std::string& command, bool allow_fetch = true);
+class ScopedCompletionDocumentationLookup {
+   public:
+    ScopedCompletionDocumentationLookup();
+    ~ScopedCompletionDocumentationLookup();
+    ScopedCompletionDocumentationLookup(const ScopedCompletionDocumentationLookup&) = delete;
+    ScopedCompletionDocumentationLookup& operator=(const ScopedCompletionDocumentationLookup&) =
+        delete;
+};
 using CompletionCacheProgressCallback =
     std::function<void(const std::string& target, bool generated, bool is_root_target)>;
 using CompletionCacheCancelCallback = std::function<bool()>;

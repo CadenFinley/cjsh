@@ -1102,7 +1102,7 @@ static bool term_write_direct(term_t* term, const char* s, ssize_t len) {
 
 // send escape query that may return a response on the tty
 static bool term_esc_query_raw(term_t* term, const char* query, char* buf, ssize_t buflen,
-                               tty_response_fun_t* matches, void* arg) {
+                               tty_response_fun_t* matches, void* arg, long initial_timeout_ms) {
     if (!term_is_interactive(term) || term->tty == NULL || tty_input_pending(term->tty) ||
         buf == NULL || buflen <= 0 || query[0] == 0) {
         return false;
@@ -1112,7 +1112,8 @@ static bool term_esc_query_raw(term_t* term, const char* query, char* buf, ssize
         return false;
     }
     debug_msg("term: read tty query response to: ESC %s\n", query + 1);
-    return tty_read_esc_response(term->tty, query[1], osc, buf, buflen, matches, arg);
+    return tty_read_esc_response_with_timeout(term->tty, query[1], osc, buf, buflen, matches, arg,
+                                              initial_timeout_ms);
 }
 
 static bool term_esc_query(term_t* term, const char* query, char* buf, ssize_t buflen,
@@ -1124,7 +1125,7 @@ static bool term_esc_query(term_t* term, const char* query, char* buf, ssize_t b
     if (!was_raw && !tty_start_raw(term->tty)) {
         return false;
     }
-    bool ok = term_esc_query_raw(term, query, buf, buflen, matches, arg);
+    bool ok = term_esc_query_raw(term, query, buf, buflen, matches, arg, -1);
     if (!was_raw) {
         tty_end_raw(term->tty);
     }
@@ -1296,7 +1297,9 @@ static bool term_esc_query_color_raw(term_t* term, ssize_t color_idx, uint32_t* 
     char buf[128];
     (void)snprintf(query, sizeof(query), "\x1B]4;%zd;?\x1B\\", color_idx);
     (void)snprintf(prefix, sizeof(prefix), "4;%zd;rgb:", color_idx);
-    if (!term_esc_query_raw(term, query, buf, sizeof(buf), color_response_matches, prefix)) {
+    // Palette discovery is optional. An unsupported OSC 4 query should not
+    // delay the first prompt by the much longer escape-key ambiguity timeout.
+    if (!term_esc_query_raw(term, query, buf, sizeof(buf), color_response_matches, prefix, 40)) {
         return false;
     }
     const char* rgb = buf + strlen(prefix);

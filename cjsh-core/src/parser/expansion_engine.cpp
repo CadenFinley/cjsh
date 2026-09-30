@@ -28,10 +28,14 @@
 
 #include "expansion_engine.h"
 
+#include <dirent.h>
 #include <fnmatch.h>
 #include <glob.h>
+#include <sys/stat.h>
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
+#include <clocale>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -39,6 +43,8 @@
 #include <filesystem>
 #include <iomanip>
 #include <iterator>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -52,6 +58,80 @@
 #include "shell_env.h"
 
 namespace {
+
+// libc glob commonly stats every match for GLOB_MARK. For a simple final
+// component, directory entry types already tell us which paths need a slash.
+// Keep complex syntax and locale-dependent matching with libc.
+std::optional<std::vector<std::string>> expand_simple_glob(const std::string& pattern) {
+#if defined(DT_UNKNOWN) && defined(DT_DIR) && defined(DT_LNK)
+    const auto c_locale = [](int category) {
+        const char* locale = std::setlocale(category, nullptr);
+        return locale != nullptr &&
+               (std::strcmp(locale, "C") == 0 || std::strcmp(locale, "POSIX") == 0);
+    };
+    if (!c_locale(LC_COLLATE) || !c_locale(LC_CTYPE) ||
+        pattern.find_first_of("[\\\x1f~") != std::string::npos ||
+        std::any_of(pattern.begin(), pattern.end(),
+                    [](unsigned char c) { return c == 0 || c >= 128; })) {
+        return std::nullopt;
+    }
+    const size_t slash = pattern.find_last_of('/');
+    const std::string prefix = slash == std::string::npos ? "" : pattern.substr(0, slash + 1);
+    const std::string component = pattern.substr(prefix.size());
+    if (component.empty() || prefix.find_first_of("*?") != std::string::npos) {
+        return std::nullopt;
+    }
+    const std::string directory = prefix.empty() ? "." : prefix;
+    std::unique_ptr<DIR, decltype(&closedir)> entries(opendir(directory.c_str()), &closedir);
+    if (!entries) {
+        return std::nullopt;
+    }
+    std::vector<std::string> matches;
+    while (true) {
+        errno = 0;
+        const dirent* entry = readdir(entries.get());
+        if (entry == nullptr) {
+            if (errno != 0) {
+                return std::nullopt;
+            }
+            break;
+        }
+        const std::string name(entry->d_name);
+        if (std::any_of(name.begin(), name.end(), [](unsigned char c) { return c >= 128; })) {
+            return std::nullopt;
+        }
+        if (fnmatch(component.c_str(), name.c_str(), FNM_PERIOD) != 0) {
+            continue;
+        }
+        std::string path = prefix + name;
+        bool directory_match = entry->d_type == DT_DIR;
+        if (entry->d_type == DT_UNKNOWN || entry->d_type == DT_LNK) {
+            struct stat info{};
+            if (entry->d_type == DT_UNKNOWN) {
+                if (lstat(path.c_str(), &info) != 0) {
+                    continue;
+                }
+                directory_match = S_ISDIR(info.st_mode);
+            }
+            if (entry->d_type == DT_LNK || S_ISLNK(info.st_mode)) {
+                directory_match = stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
+            }
+        }
+        if (directory_match) {
+            path += '/';
+        }
+        matches.push_back(std::move(path));
+    }
+    std::sort(matches.begin(), matches.end());
+    if (matches.empty()) {
+        matches.push_back(pattern);
+    }
+    return matches;
+#else
+    (void)pattern;
+    return std::nullopt;
+#endif
+}
 
 struct GlobComponent {
     std::string text;
@@ -545,6 +625,12 @@ std::vector<std::string> ExpansionEngine::expand_wildcards(const std::string& pa
             }
             result.push_back(unescaped);
             return result;
+        }
+    }
+
+    if (pattern.find('\x1f') == std::string::npos) {
+        if (auto matches = expand_simple_glob(unescaped)) {
+            return std::move(*matches);
         }
     }
 

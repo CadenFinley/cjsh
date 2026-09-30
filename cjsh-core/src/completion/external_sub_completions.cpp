@@ -50,6 +50,7 @@
 #include "completion_tracker.h"
 #include "completion_utils.h"
 #include "exec.h"
+#include "file_snapshot.h"
 #include "isocline.h"
 #include "shell_env.h"
 #include "string_utils.h"
@@ -99,6 +100,9 @@ std::mutex g_cache_mutex;
 std::unordered_map<std::string, CommandDoc> g_memory_cache;
 std::unordered_set<std::string> g_failed_targets;
 std::unordered_map<std::string, std::string> g_summary_cache;
+std::unordered_set<std::string> g_passive_cache_misses;
+std::optional<cjsh_filesystem::FileSnapshot> g_documentation_directory_snapshot;
+thread_local size_t g_documentation_lookup_depth = 0;
 std::optional<std::string> lookup_summary_cache(const std::string& key) {
     std::lock_guard<std::mutex> lock(g_cache_mutex);
     auto it = g_summary_cache.find(key);
@@ -1033,6 +1037,7 @@ CommandDoc load_entries_for_target(const std::string& doc_target, bool allow_fet
     if (doc_target.empty()) {
         return {};
     }
+    const ScopedCompletionDocumentationLookup documentation_lookup;
 
     std::string key = normalize_key(doc_target);
     std::filesystem::path cache_path = cjsh_filesystem::g_cjsh_generated_completions_path() /
@@ -1043,6 +1048,7 @@ CommandDoc load_entries_for_target(const std::string& doc_target, bool allow_fet
         if (should_update_memory_cache) {
             g_memory_cache[key] = doc;
         }
+        (void)g_passive_cache_misses.erase(key);
         if (doc.entries.empty() && doc.summary.empty()) {
             (void)g_failed_targets.insert(key);
         } else {
@@ -1096,6 +1102,9 @@ CommandDoc load_entries_for_target(const std::string& doc_target, bool allow_fet
         if (g_failed_targets.find(key) != g_failed_targets.end()) {
             return {};
         }
+        if (!allow_fetch && g_passive_cache_misses.count(key) != 0) {
+            return {};
+        }
     }
 
     if (auto cached_doc_opt = read_cache_entries(cache_path, doc_target);
@@ -1112,6 +1121,16 @@ CommandDoc load_entries_for_target(const std::string& doc_target, bool allow_fet
     }
 
     if (!allow_fetch) {
+        // Only memoize a missing file. An existing malformed file may be fixed
+        // in place, without changing its containing directory's timestamps.
+        struct stat cache_info{};
+        if (lstat(cache_path.c_str(), &cache_info) != 0 && errno == ENOENT) {
+            std::lock_guard<std::mutex> lock(g_cache_mutex);
+            if (g_passive_cache_misses.size() >= 2048) {
+                g_passive_cache_misses.clear();
+            }
+            g_passive_cache_misses.insert(key);
+        }
         return {};
     }
 
@@ -1338,6 +1357,24 @@ std::vector<completion_specs::DynamicCompletionCandidate> collect_value_candidat
 
 }  // namespace
 
+ScopedCompletionDocumentationLookup::ScopedCompletionDocumentationLookup() {
+    if (g_documentation_lookup_depth == 0) {
+        const auto snapshot = cjsh_filesystem::FileSnapshot::read(
+            cjsh_filesystem::g_cjsh_generated_completions_path());
+        std::lock_guard<std::mutex> lock(g_cache_mutex);
+        if (!g_documentation_directory_snapshot ||
+            *g_documentation_directory_snapshot != snapshot) {
+            g_passive_cache_misses.clear();
+            g_documentation_directory_snapshot = snapshot;
+        }
+    }
+    ++g_documentation_lookup_depth;
+}
+
+ScopedCompletionDocumentationLookup::~ScopedCompletionDocumentationLookup() {
+    --g_documentation_lookup_depth;
+}
+
 completion_specs::CommandDoc parse_man_page_completion_spec(const std::string& command,
                                                             const std::string& man_text) {
     completion_specs::CommandDoc doc;
@@ -1352,6 +1389,7 @@ std::string get_command_summary(const std::string& command, bool allow_fetch) {
     if (command.empty()) {
         return {};
     }
+    const ScopedCompletionDocumentationLookup documentation_lookup;
 
     std::string key = normalize_key(command);
     if (auto cached = lookup_summary_cache(key); cached.has_value()) {
@@ -1439,6 +1477,8 @@ CompletionCacheTargetResult regenerate_external_completion_cache_target(const st
         std::lock_guard<std::mutex> lock(g_cache_mutex);
         (void)g_memory_cache.erase(normalized_target);
         (void)g_failed_targets.erase(normalized_target);
+        (void)g_summary_cache.erase(normalized_target);
+        (void)g_passive_cache_misses.erase(normalized_target);
     }
 
     std::filesystem::path cache_path = cjsh_filesystem::g_cjsh_generated_completions_path() /

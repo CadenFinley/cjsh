@@ -61,6 +61,7 @@
 #include "completion_utils.h"
 #include "error_out.h"
 #include "external_sub_completions.h"
+#include "file_snapshot.h"
 #include "interpreter.h"
 #include "isocline/isocline.h"
 #include "job_control.h"
@@ -1317,6 +1318,151 @@ struct HistoryCompletionBatch {
     std::vector<FileMatch> file_matches;
 };
 
+struct HistoryRecord {
+    HistoryMatch match;
+    std::string directory;
+};
+
+HistoryRecord parse_history_record(const std::string& entry_text, const std::string& header_line) {
+    int last_exit_code = 0;
+    bool has_last_exit_code = false;
+    long long last_timestamp = 0;
+    long long last_frequency = 1;
+    std::string directory;
+    // Parse fields as views into the saved header. Ranked history can visit
+    // every record on each completion, so avoid a stream and strings per field.
+    const std::string_view header(header_line);
+    size_t token_start = header.find_first_not_of(" \t\r\n\v\f", 1);
+    while (token_start != std::string_view::npos) {
+        size_t token_end = header.find_first_of(" \t\r\n\v\f", token_start);
+        if (token_end == std::string_view::npos) {
+            token_end = header.size();
+        }
+        const std::string_view token = header.substr(token_start, token_end - token_start);
+        const size_t equals_pos = token.find('=');
+        if (equals_pos != std::string_view::npos && equals_pos != 0 &&
+            equals_pos + 1 < token.size()) {
+            const std::string_view key = token.substr(0, equals_pos);
+            const std::string_view value = token.substr(equals_pos + 1);
+            if (key == "code" || key == "exit_code") {
+                char* endptr = nullptr;
+                const long exit_ll = std::strtol(value.data(), &endptr, 10);
+                if (endptr != value.data() && endptr == value.data() + value.size()) {
+                    last_exit_code = static_cast<int>(exit_ll);
+                    has_last_exit_code = true;
+                }
+            } else if (key == "cwd") {
+                directory.clear();
+                for (size_t i = 0; i < value.size(); ++i) {
+                    if (value[i] == '%' && i + 2 < value.size()) {
+                        unsigned int byte = 0;
+                        const auto result =
+                            std::from_chars(value.data() + i + 1, value.data() + i + 3, byte, 16);
+                        if (result.ec == std::errc{} && result.ptr == value.data() + i + 3) {
+                            directory.push_back(static_cast<char>(byte));
+                            i += 2;
+                            continue;
+                        }
+                    }
+                    directory.push_back(value[i]);
+                }
+            } else if ((key == "timestamp" || key == "frequency")) {
+                long long parsed = 0;
+                const auto result =
+                    std::from_chars(value.data(), value.data() + value.size(), parsed);
+                if (result.ec == std::errc{} && result.ptr == value.data() + value.size() &&
+                    parsed >= 0) {
+                    if (key == "timestamp") {
+                        last_timestamp = parsed;
+                    } else if (parsed > 0) {
+                        last_frequency = parsed;
+                    }
+                }
+            }
+        }
+        token_start = header.find_first_not_of(" \t\r\n\v\f", token_end);
+    }
+    return {{entry_text, has_last_exit_code, last_exit_code, last_timestamp, last_frequency},
+            std::move(directory)};
+}
+
+// Keep decoded records and their ranking, not filtered results: directory scope,
+// case sensitivity and completion limits can change without changing the file.
+struct HistoryCache {
+    std::filesystem::path path;
+    cjsh_filesystem::FileSnapshot snapshot;
+    bool observed = false;
+    bool usable = false;
+    std::vector<HistoryRecord> records;
+    std::vector<size_t> ranked_indices;
+};
+
+const HistoryCache* cached_history_records(bool ranked) {
+    constexpr size_t max_bytes = 8 * 1024 * 1024;
+    constexpr size_t max_records = 10000;
+    static HistoryCache cache;
+    const auto path = cjsh_filesystem::g_cjsh_history_path();
+    const auto snapshot = cjsh_filesystem::FileSnapshot::read(path);
+    if (!cache.observed || cache.path != path || cache.snapshot != snapshot) {
+        cache.path = path;
+        cache.snapshot = snapshot;
+        cache.observed = true;
+        cache.usable = false;
+        cache.records.clear();
+        cache.ranked_indices.clear();
+        if (snapshot.error == 0 && S_ISREG(snapshot.info.st_mode) && snapshot.info.st_size >= 0 &&
+            static_cast<uintmax_t>(snapshot.info.st_size) <= max_bytes) {
+            std::ifstream input(path);
+            if (input.is_open()) {
+                std::string line, header, decoded;
+                size_t bytes = 0;
+                bool within_limit = true;
+                while (std::getline(input, line)) {
+                    bytes += line.size() + 1;
+                    if (bytes > max_bytes || cache.records.size() >= max_records) {
+                        within_limit = false;
+                        break;
+                    }
+                    if (line.empty()) {
+                        continue;
+                    }
+                    if (line[0] == '#') {
+                        header = line;
+                        continue;
+                    }
+                    if (!decode_history_command_line(line, decoded)) {
+                        decoded = line;
+                    }
+                    cache.records.push_back(parse_history_record(decoded, header));
+                    header.clear();
+                }
+                cache.usable = within_limit && input.eof() && !input.bad();
+                // A writer may have appended or replaced the file while it was read.
+                cache.observed = cjsh_filesystem::FileSnapshot::read(path) == snapshot;
+                if (!cache.usable) {
+                    cache.records.clear();
+                }
+            }
+        }
+    }
+    if (cache.usable && ranked && cache.ranked_indices.empty()) {
+        cache.ranked_indices.reserve(cache.records.size());
+        for (size_t i = cache.records.size(); i > 0; --i) {
+            cache.ranked_indices.push_back(i - 1);
+        }
+        std::stable_sort(cache.ranked_indices.begin(), cache.ranked_indices.end(),
+                         [](size_t left, size_t right) {
+                             const auto& lhs = cache.records[left].match;
+                             const auto& rhs = cache.records[right].match;
+                             if (lhs.timestamp != rhs.timestamp) {
+                                 return lhs.timestamp > rhs.timestamp;
+                             }
+                             return lhs.frequency > rhs.frequency;
+                         });
+    }
+    return cache.usable ? &cache : nullptr;
+}
+
 bool collect_history_completion_matches(ic_completion_env_t* cenv, const char* prefix,
                                         HistoryCompletionBatch& batch, bool rank_by_usage = false,
                                         bool include_file_matches = false) {
@@ -1324,6 +1470,38 @@ bool collect_history_completion_matches(ic_completion_env_t* cenv, const char* p
     size_t prefix_len = 0;
     if (!prepare_prefix_state(cenv, prefix, prefix_str, prefix_len)) {
         return false;
+    }
+
+    if (const auto* cache = cached_history_records(rank_by_usage)) {
+        batch.prefix_len = prefix_len;
+        batch.matches.clear();
+        batch.file_matches.clear();
+        const bool directory_aware = ic_history_directory_is_enabled();
+        const size_t limit = rank_by_usage ? static_cast<size_t>(get_completion_max_results()) : 50;
+        std::unordered_set<std::string> seen;
+        for (size_t i = 0; i < cache->records.size(); ++i) {
+            const auto& record = cache->records[rank_by_usage ? cache->ranked_indices[i] : i];
+            const auto& match = record.match;
+            if (match.command == prefix_str ||
+                (prefix_len != 0 &&
+                 !completion_utils::matches_completion_prefix(match.command, prefix_str)) ||
+                (directory_aware && !ic_history_matches_directory(record.directory.c_str())) ||
+                (match.has_exit_code && match.exit_code == kHistoryCompletionHiddenExitCode) ||
+                (!rank_by_usage && !include_file_matches && looks_like_file_path(match.command)) ||
+                string_utils::trim_ascii_whitespace_copy(match.command).empty()) {
+                continue;
+            }
+            if (rank_by_usage &&
+                !seen.insert(string_utils::trim_right_ascii_whitespace_copy(match.command))
+                     .second) {
+                continue;
+            }
+            batch.matches.push_back(match);
+            if (batch.matches.size() >= limit) {
+                break;
+            }
+        }
+        return true;
     }
 
     std::ifstream history_file(cjsh_filesystem::g_cjsh_history_path());
@@ -1368,64 +1546,10 @@ bool collect_history_completion_matches(ic_completion_env_t* cenv, const char* p
 
         // Metadata only affects eligible matches. Consume it with this command,
         // including when the command is filtered out, so it cannot leak forward.
-        int last_exit_code = 0;
-        bool has_last_exit_code = false;
-        long long last_timestamp = 0;
-        long long last_frequency = 1;
-        std::string directory;
-        // Parse fields as views into the saved header. Ranked history can visit
-        // every record on each completion, so avoid a stream and strings per field.
-        const std::string_view header(header_line);
-        size_t token_start = header.find_first_not_of(" \t\r\n\v\f", 1);
-        while (token_start != std::string_view::npos) {
-            size_t token_end = header.find_first_of(" \t\r\n\v\f", token_start);
-            if (token_end == std::string_view::npos) {
-                token_end = header.size();
-            }
-            const std::string_view token = header.substr(token_start, token_end - token_start);
-            const size_t equals_pos = token.find('=');
-            if (equals_pos != std::string_view::npos && equals_pos != 0 &&
-                equals_pos + 1 < token.size()) {
-                const std::string_view key = token.substr(0, equals_pos);
-                const std::string_view value = token.substr(equals_pos + 1);
-                if (key == "code" || key == "exit_code") {
-                    char* endptr = nullptr;
-                    const long exit_ll = std::strtol(value.data(), &endptr, 10);
-                    if (endptr != value.data() && endptr == value.data() + value.size()) {
-                        last_exit_code = static_cast<int>(exit_ll);
-                        has_last_exit_code = true;
-                    }
-                } else if (directory_aware && key == "cwd") {
-                    directory.clear();
-                    for (size_t i = 0; i < value.size(); ++i) {
-                        if (value[i] == '%' && i + 2 < value.size()) {
-                            unsigned int byte = 0;
-                            const auto result = std::from_chars(value.data() + i + 1,
-                                                                value.data() + i + 3, byte, 16);
-                            if (result.ec == std::errc{} && result.ptr == value.data() + i + 3) {
-                                directory.push_back(static_cast<char>(byte));
-                                i += 2;
-                                continue;
-                            }
-                        }
-                        directory.push_back(value[i]);
-                    }
-                } else if (rank_by_usage && (key == "timestamp" || key == "frequency")) {
-                    long long parsed = 0;
-                    const auto result =
-                        std::from_chars(value.data(), value.data() + value.size(), parsed);
-                    if (result.ec == std::errc{} && result.ptr == value.data() + value.size() &&
-                        parsed >= 0) {
-                        if (key == "timestamp") {
-                            last_timestamp = parsed;
-                        } else if (parsed > 0) {
-                            last_frequency = parsed;
-                        }
-                    }
-                }
-            }
-            token_start = header.find_first_not_of(" \t\r\n\v\f", token_end);
-        }
+        HistoryRecord record = parse_history_record(entry_text, header_line);
+        const auto& directory = record.directory;
+        const bool has_last_exit_code = record.match.has_exit_code;
+        const int last_exit_code = record.match.exit_code;
         header_line.clear();
 
         if ((directory_aware && !ic_history_matches_directory(directory.c_str())) ||
@@ -1435,8 +1559,7 @@ bool collect_history_completion_matches(ic_completion_env_t* cenv, const char* p
             continue;
         }
 
-        batch.matches.push_back(HistoryMatch{entry_text, has_last_exit_code, last_exit_code,
-                                             last_timestamp, last_frequency});
+        batch.matches.push_back(std::move(record.match));
     }
 
     if (rank_by_usage) {
@@ -1854,6 +1977,7 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
         cjsh_filesystem::reset_interactive_path_cache();
     }
     const cjsh_filesystem::ScopedInteractivePathLookup path_lookup;
+    const ScopedCompletionDocumentationLookup documentation_lookup;
 
     const char* effective_prefix = (prefix != nullptr) ? prefix : "";
     std::string completion_scope_prefix = extract_completion_scope_prefix(effective_prefix);

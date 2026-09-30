@@ -348,6 +348,11 @@ ic_private bool tty_read_timeout(tty_t* tty, long timeout_ms, code_t* code) {
 
         if (c == KEY_ESC) {
             *code = tty_read_esc(tty, tty->esc_initial_timeout, tty->esc_timeout);
+            // A discarded terminal response is not a NUL key. In particular,
+            // late palette replies must not become Ctrl+Space completions.
+            if (*code == KEY_NONE) {
+                continue;
+            }
         } else if (c <= 0x7F) {
             *code = key_unicode(c);
         } else if (tty->is_utf8) {
@@ -437,6 +442,14 @@ ic_private code_t tty_read(tty_t* tty) {
 
 ic_private bool tty_read_esc_response(tty_t* tty, char esc_start, bool final_st, char* buf,
                                       ssize_t buflen, tty_response_fun_t* matches, void* arg) {
+    return tty_read_esc_response_with_timeout(tty, esc_start, final_st, buf, buflen, matches, arg,
+                                              -1);
+}
+
+ic_private bool tty_read_esc_response_with_timeout(tty_t* tty, char esc_start, bool final_st,
+                                                   char* buf, ssize_t buflen,
+                                                   tty_response_fun_t* matches, void* arg,
+                                                   long initial_timeout_ms) {
     if (tty == NULL || buf == NULL || buflen <= 1 || buflen > TTY_CPUSH_MAX - 4) {
         return false;
     }
@@ -445,7 +458,8 @@ ic_private bool tty_read_esc_response(tty_t* tty, char esc_start, bool final_st,
     ssize_t count = 0;
     ssize_t len = 0;
     uint8_t c = 0;
-    if (!tty_readc_noblock(tty, &c, 2 * tty->esc_initial_timeout)) {
+    const long wait_ms = initial_timeout_ms < 0 ? 2 * tty->esc_initial_timeout : initial_timeout_ms;
+    if (!tty_readc_noblock(tty, &c, wait_ms)) {
         return false;
     }
     consumed[count++] = c;

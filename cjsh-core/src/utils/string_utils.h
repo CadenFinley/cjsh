@@ -66,7 +66,12 @@ inline std::string trim_right_ascii_whitespace_copy(const std::string& input) {
 }
 
 inline std::string trim_ascii_whitespace_copy(const std::string& input) {
-    return trim_right_ascii_whitespace_copy(trim_left_ascii_whitespace_copy(input));
+    const size_t begin = input.find_first_not_of(" \t\n\r");
+    if (begin == std::string::npos) {
+        return {};
+    }
+    const size_t end = input.find_last_not_of(" \t\n\r");
+    return input.substr(begin, end - begin + 1);
 }
 
 inline std::string trim_trailing_line_endings_copy(std::string input) {
@@ -82,8 +87,8 @@ inline bool equals_case_insensitive(std::string_view left, std::string_view righ
     }
 
     return std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) {
-        return std::tolower(static_cast<unsigned char>(a)) ==
-               std::tolower(static_cast<unsigned char>(b));
+        return a == b || std::tolower(static_cast<unsigned char>(a)) ==
+                             std::tolower(static_cast<unsigned char>(b));
     });
 }
 
@@ -93,8 +98,8 @@ inline bool starts_with_case_insensitive(std::string_view value, std::string_vie
     }
 
     return std::equal(prefix.begin(), prefix.end(), value.begin(), [](char a, char b) {
-        return std::tolower(static_cast<unsigned char>(a)) ==
-               std::tolower(static_cast<unsigned char>(b));
+        return a == b || std::tolower(static_cast<unsigned char>(a)) ==
+                             std::tolower(static_cast<unsigned char>(b));
     });
 }
 

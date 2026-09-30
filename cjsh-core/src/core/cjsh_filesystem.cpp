@@ -27,6 +27,7 @@
 */
 
 #include "cjsh_filesystem.h"
+#include "file_snapshot.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -588,7 +589,21 @@ class PathHashCache {
 
     void reset_interactive() {
         std::lock_guard<std::mutex> lock(mutex_);
-        reset_interactive_locked();
+        if (!interactive_names_ready_) {
+            reset_interactive_locked();
+            return;
+        }
+        ensure_snapshot_locked(current_path_env_value());
+        // Always recheck emitted candidates' permissions and symlink targets.
+        // The name index itself only needs rebuilding when a PATH directory
+        // changes. This keeps repeated Tab presses from rereading every entry.
+        interactive_results_.clear();
+        if (std::any_of(interactive_directories_.begin(), interactive_directories_.end(),
+                        [](const auto& entry) {
+                            return FileSnapshot::read(entry.first) != entry.second;
+                        })) {
+            reset_interactive_locked();
+        }
     }
 
     std::vector<std::string> completion_candidates() {
@@ -616,6 +631,7 @@ class PathHashCache {
     void reset_interactive_locked() {
         interactive_results_.clear();
         interactive_paths_.clear();
+        interactive_directories_.clear();
         interactive_names_ready_ = false;
         interactive_index_complete_ = true;
     }
@@ -630,6 +646,9 @@ class PathHashCache {
                 if (raw_segment.empty() || !visited.emplace(raw_segment).second) {
                     return false;
                 }
+                interactive_directories_.emplace_back(
+                    std::string(raw_segment),
+                    FileSnapshot::read(std::filesystem::path(raw_segment)));
                 std::error_code ec;
                 std::filesystem::directory_iterator it(std::filesystem::path(raw_segment), ec);
                 for (; !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
@@ -739,6 +758,7 @@ class PathHashCache {
     bool seeded_{false};
     std::unordered_map<std::string, std::string> interactive_results_;
     std::unordered_map<std::string, std::vector<std::string>> interactive_paths_;
+    std::vector<std::pair<std::string, FileSnapshot>> interactive_directories_;
     bool interactive_names_ready_{false};
     bool interactive_index_complete_{true};
 };

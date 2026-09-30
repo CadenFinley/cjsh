@@ -1165,6 +1165,46 @@ static bool test_empty_prompt_history_ranking() {
     return true;
 }
 
+static bool test_history_file_refresh() {
+    const char* test_name = "history_file_refresh";
+    namespace fs = std::filesystem;
+    const auto history_path = cjsh_filesystem::g_cjsh_history_path();
+    const auto expect_history = [&](const std::vector<std::string>& expected) {
+        (void)run_completion_generation("", &cjsh_default_completer, 256);
+        const bool ok = generated_completion_replacements() == expected;
+        clear_generated_completions();
+        return ok;
+    };
+    EXPECT_TRUE(write_completion_history("echo first\n"), test_name, "write original history");
+    EXPECT_TRUE(expect_history({"echo first"}), test_name, "read initial history");
+    EXPECT_TRUE(write_completion_history("echo other\n"), test_name, "rewrite at the same size");
+    EXPECT_TRUE(expect_history({"echo other"}), test_name, "see same-size in-place rewrites");
+    const fs::path replacement = history_path.string() + ".replacement";
+    std::ofstream(replacement) << "echo third\n";
+    fs::last_write_time(replacement, fs::last_write_time(history_path));
+    fs::rename(replacement, history_path);
+    EXPECT_TRUE(expect_history({"echo third"}), test_name,
+                "see atomic replacements even with identical size and mtime");
+    std::ofstream(history_path, std::ios::app) << "echo later\n";
+    EXPECT_TRUE(expect_history({"echo later", "echo third"}), test_name, "see appends");
+    fs::remove(history_path);
+    EXPECT_TRUE(expect_history({}), test_name, "discard removed history");
+    EXPECT_TRUE(write_completion_history("echo again\n"), test_name, "recreate history");
+    EXPECT_TRUE(expect_history({"echo again"}), test_name, "see recreated history");
+    std::string oversized;
+    for (int i = 0; i < 10000; ++i) {
+        oversized += "echo repeated\n";
+    }
+    oversized += "echo newest";
+    EXPECT_TRUE(write_completion_history(oversized), test_name,
+                "write history beyond the cache cap");
+    EXPECT_TRUE(expect_history({"echo newest", "echo repeated"}), test_name,
+                "large histories retain their final unterminated record and streaming ranking");
+    EXPECT_TRUE(write_completion_history(""), test_name, "truncate history");
+    EXPECT_TRUE(expect_history({}), test_name, "discard truncated history");
+    return true;
+}
+
 static bool test_empty_prompt_history_limits() {
     const char* test_name = "empty_prompt_history_limits";
     std::string history;
@@ -2351,6 +2391,35 @@ static bool test_hints_defer_documentation_fetch() {
     return true;
 }
 
+static bool test_passive_documentation_refresh() {
+    const char* test_name = "passive_documentation_refresh";
+    namespace fs = std::filesystem;
+    const auto root = cjsh_filesystem::g_cjsh_generated_completions_path();
+    fs::create_directories(root);
+    for (const char* name : {"doccache-created", "doccache-repaired", "doccache-symlink"}) {
+        const auto file = root / (std::string(name) + ".txt");
+        if (std::strcmp(name, "doccache-repaired") == 0) {
+            std::ofstream(file) << "invalid document";
+        }
+        fs::path writable_file = file;
+        if (std::strcmp(name, "doccache-symlink") == 0) {
+            writable_file = root.parent_path() / "doccache-symlink-target";
+            fs::create_symlink(writable_file, file);
+        }
+        EXPECT_TRUE(get_command_summary(name, false).empty(), test_name,
+                    "missing and malformed documents have no summary");
+        EXPECT_TRUE(get_command_summary(name, false).empty(), test_name,
+                    "repeated passive misses remain empty");
+        completion_specs::CommandDoc doc;
+        doc.summary = "Fresh fixture documentation";
+        doc.summary_present = true;
+        std::ofstream(writable_file) << completion_specs::serialize_command_doc(name, doc);
+        EXPECT_TRUE(get_command_summary(name, false) == doc.summary, test_name,
+                    "passive lookup sees new files and in-place repairs");
+    }
+    return true;
+}
+
 static bool test_tab_path_candidates_and_refresh() {
     const char* test_name = "tab_path_candidates_and_refresh";
     namespace fs = std::filesystem;
@@ -2382,6 +2451,14 @@ static bool test_tab_path_candidates_and_refresh() {
         hashed_commands.begin(), hashed_commands.end(),
         [](const auto& entry) { return entry.command == "unrelated-command-in-path"; });
 
+    fs::permissions(root / "tabfixture-tool", fs::perms::owner_read);
+    fs::permissions(root / "tabfixture-plain", fs::perms::owner_all);
+    (void)run_completion_generation("tabfixture-", &cjsh_default_completer, 256);
+    const bool permissions_refreshed =
+        generated_completions_include_replacement("tabfixture-plain ") &&
+        !generated_completions_include_replacement("tabfixture-tool ") &&
+        !generated_completions_include_replacement("tabfixture-link ");
+
     (void)run_hint_generation("tabfixture-new");
     executable("tabfixture-new");
     fs::permissions(root / "tabfixture-tool", fs::perms::owner_read);
@@ -2400,6 +2477,8 @@ static bool test_tab_path_candidates_and_refresh() {
                 "Tab must reject nonexecutables, directories, and broken symlinks in PATH");
     EXPECT_TRUE(skipped_unrelated, test_name,
                 "Tab must not eagerly hash unrelated PATH executables");
+    EXPECT_TRUE(permissions_refreshed, test_name,
+                "Tab must recheck file permissions even when the PATH directory is unchanged");
     EXPECT_TRUE(refreshed, test_name,
                 "Tab must discover new commands and recheck permissions after cached hints");
     return true;
@@ -2993,6 +3072,7 @@ static const test_case_t kTests[] = {
     {"successful_history_prefers_executable_completion",
      test_successful_history_prefers_executable_completion},
     {"history_command_with_arguments_priority", test_history_command_with_arguments_priority},
+    {"history_file_refresh", test_history_file_refresh},
     {"empty_prompt_history_limits", test_empty_prompt_history_limits},
     {"empty_prompt_legacy_history", test_empty_prompt_legacy_history},
     {"empty_prompt_without_history", test_empty_prompt_without_history},
@@ -3070,6 +3150,7 @@ static const test_case_t kTests[] = {
     {"man_page_value_metadata", test_man_page_value_metadata},
     {"rich_completion_runtime", test_rich_completion_runtime},
     {"hints_defer_documentation_fetch", test_hints_defer_documentation_fetch},
+    {"passive_documentation_refresh", test_passive_documentation_refresh},
     {"tab_path_candidates_and_refresh", test_tab_path_candidates_and_refresh},
     {"command_completion_ranking", test_command_completion_ranking},
     {"command_completion_ranking_across_sources", test_command_completion_ranking_across_sources},

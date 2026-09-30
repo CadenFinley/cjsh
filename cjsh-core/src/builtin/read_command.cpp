@@ -33,6 +33,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <algorithm>
@@ -66,6 +67,7 @@ enum class ReadInputStatus : std::uint8_t {
     Success,
     TimeoutNoData,
     EndOfFileNoData,
+    Error,
 };
 
 struct ReadOptions {
@@ -221,6 +223,15 @@ ReadInputStatus collect_input(const ReadOptions& options, std::string& input) {
 
     bool timed_out = false;
     bool reached_eof = false;
+    char buffer[4096];
+    size_t buffered = 0;
+    size_t consumed = 0;
+    struct stat input_stat{};
+    // Pipes and terminals must leave subsequent readers' bytes in the kernel.
+    // Only seekable regular files can safely restore unread buffered bytes.
+    const bool buffered_file = !options.has_timeout && fstat(options.input_fd, &input_stat) == 0 &&
+                               S_ISREG(input_stat.st_mode) &&
+                               lseek(options.input_fd, 0, SEEK_CUR) >= 0;
     auto read_char = [&](char& out) -> bool {
         if (read_interrupted()) {
             return false;
@@ -229,12 +240,22 @@ ReadInputStatus collect_input(const ReadOptions& options, std::string& input) {
             timed_out = true;
             return false;
         }
+        if (consumed < buffered) {
+            out = buffer[consumed++];
+            return true;
+        }
         ssize_t count = 0;
         do {
-            count = read(options.input_fd, &out, 1);
+            count = read(options.input_fd, buffer, buffered_file ? sizeof(buffer) : 1);
         } while (count < 0 && errno == EINTR && !read_interrupted());
         reached_eof = count == 0;
-        return count == 1;
+        if (count <= 0) {
+            return false;
+        }
+        buffered = static_cast<size_t>(count);
+        consumed = 1;
+        out = buffer[0];
+        return true;
     };
 
     char c = 0;
@@ -252,6 +273,15 @@ ReadInputStatus collect_input(const ReadOptions& options, std::string& input) {
             }
             input += c;
         }
+    }
+
+    if (consumed < buffered &&
+        lseek(options.input_fd, -static_cast<off_t>(buffered - consumed), SEEK_CUR) < 0) {
+        print_error({ErrorType::RUNTIME_ERROR,
+                     kReadCommandName,
+                     "could not restore the input file position",
+                     {}});
+        return ReadInputStatus::Error;
     }
 
     if (timed_out && input.empty()) {

@@ -224,6 +224,11 @@ if(Python3_Interpreter_FOUND)
         )
     endif()
     cjsh_add_test(
+        NAME read_file_position_tests
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/core/test_read_file_position.py"
+                $<TARGET_FILE:cjsh>
+    )
+    cjsh_add_test(
         NAME child_signal_startup_tests
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/core/test_child_signal_startup.py"
                 $<TARGET_FILE:cjsh>
