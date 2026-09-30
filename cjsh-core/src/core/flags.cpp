@@ -131,7 +131,8 @@ void warn_if_invoked_via_sh() {
         print_error({ErrorType::INVALID_ARGUMENT,
                      ErrorSeverity::WARNING,
                      "sh",
-                     "cjsh was invoked as sh, but it is not 100% POSIX compliant",
+                     "cjsh was invoked as sh, but it is not 100% POSIX compliant in its "
+                     "interactive behaviors",
                      {"Pass --no-sh-warning to hide this warning"}});
     }
 }
