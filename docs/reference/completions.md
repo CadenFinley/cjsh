@@ -59,6 +59,10 @@ When the cursor is inside an existing recognized command or shell keyword, cjsh 
 completions for that word. For example, moving just after the `t` in `then` does not suggest
 `tests/`. Completion remains available for unfinished words and at the end of a word.
 
+The automatic menu stays hidden when its only candidate already matches the text being
+completed, including candidates that would only append a space for the next argument.
+It reappears when further editing produces a useful completion.
+
 Inline hints and passive automatic menus use cached documentation and static value choices. Press
 `Tab` to fetch missing manual-page data or invoke dynamic value providers. Automatic suggestions,
 Tab completion, status-line analysis, and command-error suggestions share cached PATH filenames

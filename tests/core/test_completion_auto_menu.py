@@ -113,12 +113,16 @@ def main(binary: str) -> None:
             # Escape dismissal lasts for one prompt. Submitting or interrupting
             # starts a fresh prompt with the configured automatic menu restored.
             for finish in (b"\r", b"\x03"):
-                start = type_text(session, "automenu-tool1")
-                session.wait_for(b"tab:complete", start)
+                start = type_text(session, "automenu-tool")
+                session.wait_for(b"tab:activate", start)
                 start = len(session.output)
                 session.write(b"\x1b")
-                session.wait_for_normalized(b"cjsh> automenu-tool1", start)
-                for key, expected in ((b"\x7f", b"automenu-tool"), (b"1", b"automenu-tool1")):
+                session.wait_for_normalized(b"cjsh> automenu-tool", start)
+                for key, expected in (
+                    (b"1", b"automenu-tool1"),
+                    (b"\x7f", b"automenu-tool"),
+                    (b"1", b"automenu-tool1"),
+                ):
                     start = len(session.output)
                     session.write(key)
                     session.wait_for_normalized(b"cjsh> " + expected, start)
@@ -161,6 +165,37 @@ def main(binary: str) -> None:
             session.wait_for(b"tab:complete", start)
             if calls.read_bytes() != fetched:
                 raise AssertionError("passive completion fetched cached documentation again")
+            cancel(session)
+
+            # Descriptions do not make an exact option match useful.
+            start = type_text(session, "automenu-tool1 --sample")
+            session.pump()
+            if b"Completions" in session.output[start:]:
+                raise AssertionError(
+                    "an exact option match kept the automatic menu open: "
+                    f"{normalize_terminal_output(bytes(session.output[start:]))!r}"
+                )
+            start = len(session.output)
+            session.write(b"\x7f")
+            session.wait_for(b"tab:complete", start)
+            cancel(session)
+
+            # Finishing the only matching command hides its redundant menu.
+            # Tab still adds the command separator. Deleting it and the final
+            # character makes the remaining matches useful again.
+            start = type_text(session, "automenu-tool1")
+            session.pump()
+            if b"Completions" in session.output[start:]:
+                raise AssertionError(
+                    "an exact command match kept the automatic menu open: "
+                    f"{normalize_terminal_output(bytes(session.output[start:]))!r}"
+                )
+            start = len(session.output)
+            session.write(b"\t")
+            session.wait_for_normalized(b"cjsh> automenu-tool1 ", start)
+            start = len(session.output)
+            session.write(b"\x7f\x7f")
+            session.wait_for(b"tab:activate", start)
             cancel(session)
 
             # A command installed during editing must not trigger PATH rescans
@@ -222,7 +257,7 @@ def main(binary: str) -> None:
                 cancel(session)
         finally:
             session.close()
-    print("All 11 automatic completion menu integration tests passed")
+    print("All 13 automatic completion menu integration tests passed")
 
 
 if __name__ == "__main__":

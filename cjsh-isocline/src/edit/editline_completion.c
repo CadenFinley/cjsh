@@ -274,6 +274,27 @@ static bool edit_completion_auto_menu_has_prefix(editor_t* eb) {
            !ic_char_is_white(sbuf_string(eb->input) + eb->pos - 1, 1);
 }
 
+static bool edit_completion_matches_input(ic_env_t* env, editor_t* eb, ssize_t index) {
+    const char* input = sbuf_string(eb->input);
+    const char* replacement = NULL;
+    ssize_t start = 0;
+    ssize_t delete_after = 0;
+    if (!completions_get_apply_range(env->completions, index, input, eb->pos, &replacement, &start,
+                                     &delete_after)) {
+        return false;
+    }
+    const ssize_t length = eb->pos - start + delete_after;
+    const ssize_t replacement_len = ic_strlen(replacement);
+    if (replacement_len < length || strncmp(input + start, replacement, to_size_t(length)) != 0) {
+        return false;
+    }
+    // Completers may append a separator for the next argument. An escaped space
+    // is part of the word itself and must still be offered as a completion.
+    return replacement_len == length ||
+           (replacement_len == length + 1 && replacement[length] == ' ' &&
+            !edit_is_escaped_at(eb->input, eb->pos + delete_after));
+}
+
 // A passive menu is only rendered here: it never reads keys, captures the mouse, applies a
 // common prefix, or previews a replacement. The main editor continues to own all input.
 static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb, bool delay_hint) {
@@ -291,7 +312,8 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb, bool 
     // caches and defer process launches until Tab, while retaining the full menu budget.
     const ssize_t count = completions_generate_hint(env, env->completions, sbuf_string(eb->input),
                                                     eb->pos, IC_MAX_COMPLETIONS_TO_TRY);
-    if (count <= 0) {
+    // A sole candidate that already matches the replaced text has nothing to offer.
+    if (count <= 0 || (count == 1 && edit_completion_matches_input(env, eb, 0))) {
         eb->completion_menu_maximized = false;
         edit_refresh(env, eb);
         return;
@@ -302,8 +324,7 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb, bool 
     // completion request or changing the unselected menu's input buffer.
     const char* hint = (env->no_hint ? NULL : completions_get_hint(env->completions, 0, NULL));
     const ssize_t hint_len = ic_strlen(hint);
-    const bool hint_inserted =
-        (hint_len > 0 && sbuf_insert_at(eb->input, hint, eb->pos) >= 0);
+    const bool hint_inserted = (hint_len > 0 && sbuf_insert_at(eb->input, hint, eb->pos) >= 0);
     const ssize_t input_rows = edit_menu_input_rows(env, eb);
     if (hint_inserted) {
         sbuf_delete_at(eb->input, eb->pos, hint_len);
@@ -317,8 +338,7 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb, bool 
     const char* more = (count >= IC_MAX_COMPLETIONS_TO_TRY ? " (more available)" : "");
     char header[192];
     (void)snprintf(header, sizeof(header), "[ic-info]Completions%s[/]\n", more);
-    const ssize_t reserved_rows = input_rows +
-                                  edit_menu_rendered_rows(env, eb, header) +
+    const ssize_t reserved_rows = input_rows + edit_menu_rendered_rows(env, eb, header) +
                                   edit_menu_rendered_rows(env, eb, footer) + 1;
     const ssize_t available =
         edit_menu_available_lines(env, eb, reserved_rows, 1, env->completion_menu_max_line_count,
