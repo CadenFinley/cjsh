@@ -848,8 +848,12 @@ int hint_delay_command(const std::vector<std::string>& args) {
 
     if (!cjsh_env::startup_active()) {
         if (applied_delay != delay_ms) {
-            std::cout << "Hint delay exceeds the supported maximum; using " << applied_delay
-                      << " milliseconds instead.\n";
+            print_error({ErrorType::INVALID_ARGUMENT,
+                         ErrorSeverity::WARNING,
+                         "hint-delay",
+                         "Hint delay exceeds the supported maximum; using " +
+                             std::to_string(applied_delay) + " milliseconds instead.",
+                         {}});
         }
         std::cout << "Hint delay set to " << applied_delay << " milliseconds.\n";
         std::cout << "Add `cjshopt hint-delay " << applied_delay
@@ -974,8 +978,12 @@ int multiline_start_lines_command(const std::vector<std::string>& args) {
 
     if (!cjsh_env::startup_active()) {
         if (applied != requested) {
-            std::cout << "Line count exceeds the supported maximum; using " << applied
-                      << " instead.\n";
+            print_error({ErrorType::INVALID_ARGUMENT,
+                         ErrorSeverity::WARNING,
+                         "multiline-start-lines",
+                         "Line count exceeds the supported maximum; using " +
+                             std::to_string(applied) + " instead.",
+                         {}});
         }
         std::cout << "Multiline prompts will now start with " << applied << " line"
                   << (applied == 1 ? "" : "s") << ".\n";
@@ -1047,8 +1055,12 @@ int max_lines_command(const std::vector<std::string>& args, const std::string& c
 
     if (!cjsh_env::startup_active()) {
         if (applied != requested) {
-            std::cout << "Line count exceeds the supported maximum; using " << applied
-                      << " instead.\n";
+            print_error({ErrorType::INVALID_ARGUMENT,
+                         ErrorSeverity::WARNING,
+                         command,
+                         "Line count exceeds the supported maximum; using " +
+                             std::to_string(applied) + " instead.",
+                         {}});
         }
         std::cout << label << " will now show up to " << applied << " line"
                   << (applied == 1 ? "" : "s") << ".\n";
@@ -1173,8 +1185,12 @@ int multiline_bottom_lines_command(const std::vector<std::string>& args) {
 
     if (!cjsh_env::startup_active()) {
         if (applied != requested) {
-            std::cout << "Line count exceeds the supported maximum; using " << applied
-                      << " instead.\n";
+            print_error({ErrorType::INVALID_ARGUMENT,
+                         ErrorSeverity::WARNING,
+                         "multiline-bottom-lines",
+                         "Line count exceeds the supported maximum; using " +
+                             std::to_string(applied) + " instead.",
+                         {}});
         }
         std::cout << "Multiline input will now use a cursor margin of up to " << applied
                   << " content line" << (applied == 1 ? "" : "s") << ".\n";
@@ -1730,8 +1746,12 @@ int status_line_callback_command(const std::vector<std::string>& args) {
         }
 
         if (!function_exists) {
-            std::cout << "Function '" << option
-                      << "' is not defined yet; define it in this session or in ~/.cjshrc.\n";
+            print_error({ErrorType::RUNTIME_ERROR,
+                         ErrorSeverity::WARNING,
+                         "status-line-callback",
+                         "Function '" + option +
+                             "' is not defined yet; define it in this session or in ~/.cjshrc.",
+                         {}});
         }
 
         std::cout << "Add `cjshopt status-line-callback " << option

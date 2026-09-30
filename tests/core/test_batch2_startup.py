@@ -181,7 +181,11 @@ class StartupTests(unittest.TestCase):
                     result = self.run_shell("-c", f"cjshopt {command} {requested}; "
                                             f"cjshopt {command} --status")
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(result.stderr, "")
+                    if requested != applied:
+                        self.assertIn("exceeds the supported maximum", result.stderr)
+                        self.assertNotIn("exceeds the supported maximum", result.stdout)
+                    else:
+                        self.assertEqual(result.stderr, "")
                     unit = "line" if applied == 1 else "lines"
                     self.assertEqual(result.stdout.splitlines()[-1],
                                      f"{label} currently shows up to {applied} {unit}.")

@@ -31,7 +31,6 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <cstdlib>
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -152,13 +151,19 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         {"no-sh-warning", no_argument, nullptr, 'W'},
         {nullptr, 0, nullptr, 0}};
 
-    const char* short_options = "+lic:nvhCLUNOSmsHW";
+    const char* short_options = "+:lic:nvhCLUNOSmsHW";
 
     int option_index = 0;
-    int c;
     optind = 1;
+    opterr = 0;
 
-    while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
+    while (true) {
+        // getopt may leave optind on the current argument within a short-option bundle.
+        const int argument_index = optind;
+        const int c = getopt_long(argc, argv, short_options, long_options, &option_index);
+        if (c == -1) {
+            break;
+        }
         switch (c) {
             case 'l':
                 config::login_mode = true;
@@ -181,8 +186,10 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 break;
             case kOptConfigDir:
                 if (optarg[0] == '\0') {
-                    std::cerr << "cjsh: --config-dir requires a nonempty directory\n"
-                              << get_usage();
+                    print_error({ErrorType::INVALID_ARGUMENT,
+                                 "startup",
+                                 "--config-dir requires a nonempty directory",
+                                 {get_usage()}});
                     result.exit_code = 1;
                     result.should_exit = true;
                     return result;
@@ -258,11 +265,20 @@ ParseResult parse_arguments(int argc, char* argv[]) {
             case 'W':
                 config::suppress_sh_warning = true;
                 break;
-            case '?':
-                std::cerr << get_usage();
+            case ':':
+            case '?': {
+                std::string option =
+                    (argument_index > 0 && argument_index < argc) ? argv[argument_index] : "";
+                if (option.rfind("--", 0) != 0 && optopt > 0 && optopt < 256) {
+                    option = "-" + std::string(1, static_cast<char>(optopt));
+                }
+                const std::string message = c == ':' ? "option requires an argument: " + option
+                                                     : "invalid option: " + option;
+                print_error({ErrorType::INVALID_ARGUMENT, "startup", message, {get_usage()}});
                 result.exit_code = 1;
                 result.should_exit = true;
                 return result;
+            }
             default:
                 print_error({ErrorType::INVALID_ARGUMENT,
                              std::string(1, static_cast<char>(c)),

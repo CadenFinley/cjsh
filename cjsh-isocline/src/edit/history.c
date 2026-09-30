@@ -2107,9 +2107,7 @@ static bool history_collect_entries(history_t* h, history_list_t* list, bool ded
 
 static void history_persistence_error(history_t* h) {
     if (!h->persistence_failed) {
-        (void)fputs("cjsh: history: persistence unavailable; disabling history storage: ", stderr);
-        (void)fputs(h->fname == NULL ? "(unset)" : h->fname, stderr);
-        (void)fputc('\n', stderr);
+        (void)fputs("isocline: history storage unavailable\n", stderr);
         h->persistence_failed = true;
     }
 }

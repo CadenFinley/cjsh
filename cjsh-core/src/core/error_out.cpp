@@ -176,7 +176,7 @@ void append_error_suggestions(std::ostream& out, const ErrorInfo& error) {
 std::string build_error_log_message(const ErrorInfo& error) {
     std::ostringstream out;
     append_error_header(out, error);
-    out << ' ';
+    out << '\n';
     append_fatal_error_context(out, error);
     append_error_suggestions(out, error);
     return out.str();

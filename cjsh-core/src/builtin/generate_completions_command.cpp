@@ -122,20 +122,22 @@ std::string truncate_progress_text(const std::string& text, std::size_t width) {
     return text.substr(0, width - 3) + "...";
 }
 
-std::string format_target_result_line(const std::string& target_name, bool generated,
-                                      bool is_root_target) {
-    std::ostringstream line;
-    if (generated) {
-        line << "  [OK] " << target_name;
-    } else {
-        line << "  [WARN] " << target_name << " (no manual entry or unable to generate)";
+void print_target_result_line(const std::string& target_name, bool generated, bool is_root_target) {
+    if (!generated) {
+        print_error({ErrorType::RUNTIME_ERROR,
+                     ErrorSeverity::WARNING,
+                     kCommandName,
+                     target_name + " (no manual entry or unable to generate)" +
+                         (is_root_target ? "" : " (subcommand cache)"),
+                     {}});
+        return;
     }
 
+    std::cout << "  [OK] " << target_name;
     if (!is_root_target) {
-        line << " (subcommand cache)";
+        std::cout << " (subcommand cache)";
     }
-
-    return line.str();
+    std::cout << std::endl;
 }
 
 class GenerateCompletionsProgressDisplay {
@@ -189,8 +191,8 @@ class GenerateCompletionsProgressDisplay {
             return;
         }
 
-        std::cout << '\r' << kAnsiClearLine
-                  << format_target_result_line(target_name, generated, is_root_target) << '\n';
+        std::cout << '\r' << kAnsiClearLine << std::flush;
+        print_target_result_line(target_name, generated, is_root_target);
 
         last_target_ = target_name;
         last_target_is_root_ = is_root_target;
@@ -452,14 +454,10 @@ std::size_t resolve_job_count(std::size_t requested_jobs, std::size_t target_cou
     return job_count;
 }
 
-void print_target_result_line(const std::string& target_name, bool generated, bool is_root_target) {
-    std::cout << format_target_result_line(target_name, generated, is_root_target) << std::endl;
-}
-
 void report_target_result(bool quiet, std::mutex* output_mutex, const std::string& target_name,
                           bool generated, bool is_root_target,
                           GenerateCompletionsProgressDisplay* progress_display) {
-    if (quiet) {
+    if (quiet && (generated || !is_root_target)) {
         return;
     }
 
@@ -495,7 +493,7 @@ int generate_completions_command(const std::vector<std::string>& args, Shell* sh
                 {"Usage: generate-completions [OPTIONS] [COMMAND ...]",
                  "Regenerate cached completion data for commands.",
                  "With no COMMAND, all executables in PATH are processed.",
-                 "Options:", "  --quiet, -q       Suppress per-command output",
+                 "Options:", "  --quiet, -q       Suppress progress; report failures on stderr",
                  "  --no-force        Reuse existing cache entries when present",
                  "  --force, -f       Force regeneration (default)",
                  "  --subcommands, -s Also generate caches for discovered subcommands",
@@ -738,11 +736,6 @@ int generate_completions_command(const std::vector<std::string>& args, Shell* sh
         }
 
         if (!failures.empty()) {
-            if (options.quiet) {
-                for (const auto& command : failures) {
-                    std::cout << command << std::endl;
-                }
-            }
             return 1;
         }
 
