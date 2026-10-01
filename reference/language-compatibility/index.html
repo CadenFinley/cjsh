@@ -576,8 +576,6 @@
       
         
       
-        
-      
     
     
     
@@ -881,34 +879,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../bash-mode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Bash Dialect
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../hooks/" class="md-nav__link">
         
   
@@ -1153,8 +1123,8 @@
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 --><h1 id="language-compatibility-inventory">Language Compatibility Inventory</h1>
-<p>CJSH is a POSIX-focused shell with selected Bash and Zsh conveniences. It does not claim formal
-POSIX certification, complete Bash compatibility, or complete Zsh compatibility. This inventory
+<p>CJSH is a POSIX-focused shell with native extensions. It does not claim formal
+POSIX certification or Bash/Zsh emulation. This inventory
 is the source of truth for the extensions that are intentionally supported.</p>
 <h2 id="current-support">Current support</h2>
 <table>
@@ -1234,7 +1204,9 @@ quotes, or in comments does not complete an unfinished block.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>extglob
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">shopt</span><span class="w"> </span>-u<span class="w"> </span>extglob
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">shopt</span><span class="w"> </span>-p<span class="w"> </span>extglob
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>cjshopt<span class="w"> </span>dialect<span class="w"> </span>bash
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>cjshopt<span class="w"> </span>dialect<span class="w"> </span>posix
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>cjshopt<span class="w"> </span>dialect<span class="w"> </span>status
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>cjshopt<span class="w"> </span>dialect<span class="w"> </span>cjsh
 </span></code></pre></div>
 <p>Add the desired command to <code>~/.cjshrc</code> to apply it to future interactive sessions.</p>
 <h2 id="known-boundaries">Known boundaries</h2>
@@ -1244,10 +1216,10 @@ quotes, or in comments does not complete an unfinished block.</p>
   coprocess closes the parent's previous coprocess descriptors.</li>
 <li>Associative-array enumeration is deterministic and key-sorted in CJSH. Scripts should not depend
   on Bash or Zsh producing the same enumeration order.</li>
-<li>The experimental <a href="../bash-mode/">Bash dialect</a> implements a tested subset of Bash 5.3
-  behavior. The initial <code>shopt</code> registry is deliberately limited; unknown options fail.</li>
+<li>cjsh supports its native dialect and strict POSIX mode. It does not provide a Bash
+  compatibility mode. The <code>shopt</code> registry is deliberately limited; unknown options fail.</li>
 <li>Zsh-only parameter modifiers, glob qualifiers, option dialect, modules, and completion language
-  are outside the Bash-style compatibility surface listed above.</li>
+  are outside the supported extensions listed above.</li>
 </ul>
 <p>For maximally portable scripts, continue to target POSIX <code>sh</code> syntax and test with <code>cjsh --posix</code>.</p>
 

@@ -576,8 +576,6 @@
       
         
       
-        
-      
     
     
     
@@ -953,34 +951,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../bash-mode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Bash Dialect
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../hooks/" class="md-nav__link">
         
   
@@ -1327,7 +1297,7 @@ for full details.</p>
 <li><code>cjshopt keybind …</code> and <code>cjshopt keybind ext …</code> for keymap management</li>
 <li><code>cjshopt set-history-max</code> to adjust persistent history size (0 or more entries; no upper limit)</li>
 <li><code>shopt -s huponexit</code> sends SIGHUP to background jobs on exit. Native interactive shells
-    enable it by default; Bash mode defaults to off and applies it only to interactive login shells.</li>
+    enable it by default; noninteractive shells default to off.</li>
 </ul>
 </li>
 <li><strong>Generated config skeletons</strong> – <code>cjshopt generate-env</code>, <code>cjshopt generate-profile</code>,
@@ -1377,8 +1347,7 @@ enables history expansion, and <code>-O NAME</code> enables a <code>shopt</code>
 options for the former native shortcuts (help, version, colors, minimal mode,
 secure mode, completions, and disabling history expansion).</p>
 <ul>
-<li><code>--dialect cjsh|posix|bash</code> selects the language dialect; <code>--bash</code> selects the
-  experimental <a href="../bash-mode/">Bash dialect</a>. <code>cjshopt dialect</code> changes it at runtime.</li>
+<li><code>--dialect cjsh|posix</code> selects the language dialect. <code>cjshopt dialect</code> changes it at runtime.</li>
 </ul>
 <p>Other switches:</p>
 <ul>

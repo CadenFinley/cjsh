@@ -576,8 +576,6 @@
       
         
       
-        
-      
     
     
     
@@ -781,34 +779,6 @@
     
   
     POSIX Mode
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../bash-mode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Bash Dialect
   
 
     
@@ -2709,6 +2679,8 @@ already exist. It has no arguments.</p>
 <p>When you execute a script file directly (for example, <code>./script.sh</code>) CJSH can infer an interpreter
 from the file extension if the file has no shebang. Toggle this with
 <code>cjshopt script-extension-interpreter</code> or <code>--no-script-extension-interpreter</code>.</p>
+<p>Executable scripts with a shebang run through their specified interpreter. Files read directly
+by cjsh or sourced with <code>source</code> or <code>.</code> use the current cjsh dialect; shebangs do not change it.</p>
 <h3 id="eval">eval</h3>
 <p>Evaluate a string as shell code.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nb">eval</span><span class="w"> </span>string<span class="w"> </span><span class="o">[</span>string...<span class="o">]</span>
@@ -2757,22 +2729,25 @@ the failure status. Successful replacement does not run exit hooks or logout fil
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nb">readonly</span><span class="w"> </span><span class="o">[</span>-pf<span class="o">]</span><span class="w"> </span>name<span class="o">[=</span>value<span class="o">]</span><span class="w"> </span><span class="o">[</span>name<span class="o">[=</span>value<span class="o">]</span>...<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="shopt">shopt</h3>
-<p>Inspect or change shell language options. Supported options are <code>extglob</code>, <code>globstar</code>,
-<code>huponexit</code>, <code>expand_aliases</code>, and <code>inherit_errexit</code>.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>extglob<span class="w"> </span>globstar
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nb">shopt</span><span class="w"> </span>-u<span class="w"> </span>huponexit
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="nb">shopt</span><span class="w"> </span>-p<span class="w"> </span>extglob
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="nb">shopt</span><span class="w"> </span>-q<span class="w"> </span>globstar
+<p>Inspect or change shell language options. Supported options are <code>autocd</code>, <code>extglob</code>, <code>globstar</code>,
+<code>huponexit</code>, and <code>expand_aliases</code>.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>autocd
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>extglob<span class="w"> </span>globstar
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="nb">shopt</span><span class="w"> </span>-u<span class="w"> </span>huponexit
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="nb">shopt</span><span class="w"> </span>-p<span class="w"> </span>extglob
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="nb">shopt</span><span class="w"> </span>-q<span class="w"> </span>globstar
 </span></code></pre></div>
 <p><code>-s</code> enables, <code>-u</code> disables, <code>-p</code> prints reusable commands, <code>-q</code> queries without output,
-and <code>-o</code> selects the <code>set</code> option namespace. See <a href="../bash-mode/">Bash dialect</a> for defaults,
-compatibility boundaries, and migration from the previous option interfaces.</p>
+and <code>-o</code> selects the <code>set</code> option namespace. Unknown options fail. <code>shopt</code> is rejected
+in strict POSIX mode.</p>
 <ul>
+<li><code>autocd</code> treats directory names as implicit <code>cd</code> commands in interactive shells. It defaults
+  to on in the native dialect; <code>shopt -u autocd</code> disables it.</li>
+<li><code>expand_aliases</code> enables alias expansion and defaults to on.</li>
 <li>Native interactive shells enable <code>huponexit</code> by default, including <code>-i -c</code> invocations.
   Native noninteractive shells default to off. When enabled, normal exit sends SIGHUP to
   managed jobs. Use <code>shopt -u huponexit</code> to keep jobs running, or <code>disown</code>/<code>disown -h</code>
   to exempt individual jobs.</li>
-<li>Bash mode defaults <code>huponexit</code> to off and applies it only to interactive login shells.</li>
 <li>HUP cleanup resumes stopped jobs so they can handle the signal. Jobs that handle or ignore
   HUP may survive; cjsh does not escalate to SIGKILL and waits at most 100 ms for child cleanup.</li>
 </ul>
@@ -3118,7 +3093,7 @@ without printing a literal newline).</p>
 - <code>completion-learning</code> - Toggle automatic completion learning from man pages
 - <code>exit-confirmation</code> - Configure when <code>exit</code>, <code>quit</code>, and <code>bye</code> require confirmation
 - <code>smart-cd</code> - Toggle fuzzy auto-jumps for <code>cd</code>
-- <code>dialect cjsh|posix|bash|status</code> - Select or inspect the shell language dialect
+- <code>dialect cjsh|posix|status</code> - Select or inspect the shell language dialect
 - <code>script-extension-interpreter</code> - Toggle extension-based script runners
 - <code>line-numbers</code> - Configure line numbers in multiline input (on/off/relative/absolute)
 - <code>line-numbers-continuation</code> - Keep line numbers when a continuation prompt is set

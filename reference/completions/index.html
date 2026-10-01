@@ -576,8 +576,6 @@
       
         
       
-        
-      
     
     
     
@@ -889,34 +887,6 @@
     
   
     POSIX Mode
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../bash-mode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Bash Dialect
   
 
     
@@ -1294,7 +1264,7 @@ creates an empty cache entry. You can delete that file or replace it with a manu
 <code>completion_spec.h</code>. The request includes the command path, arguments, cursor argument, current
 value, working directory, and declared value metadata. Providers return value/description pairs.
 Complete in-memory specifications can similarly be installed with <code>register_command_doc()</code>. These
-are the extension points intended for future Bash and Zsh compatibility workers.</p>
+are the extension points for custom completion integrations.</p>
 <h2 id="authoring-or-overriding-completions-manually">Authoring or overriding completions manually</h2>
 <ol>
 <li><strong>Create the cache directory (once):</strong> <code>generate-completions</code> or the first automatic scrape will

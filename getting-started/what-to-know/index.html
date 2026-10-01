@@ -927,10 +927,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#posix-bash-compatibility" class="md-nav__link">
+  <a href="#posix-compatibility-and-extensions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        POSIX &amp; Bash Compatibility
+        POSIX Compatibility and Extensions
       
     </span>
   </a>
@@ -1077,8 +1077,6 @@
   
     
     
-      
-        
       
         
       
@@ -1298,34 +1296,6 @@
     
   
     POSIX Mode
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/bash-mode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Bash Dialect
   
 
     
@@ -1810,7 +1780,7 @@ usable storage can still work (for example, custom history outside an unavailabl
 Configuration directories are created only by explicit configuration-writing commands.
 History requires a writable parent directory for its lock and atomic replacement;
 later history write failures disable further writes for the session after one diagnostic.</p>
-<h3 id="posix-bash-compatibility">POSIX &amp; Bash Compatibility</h3>
+<h3 id="posix-compatibility-and-extensions">POSIX Compatibility and Extensions</h3>
 <p>cjsh targets broad POSIX compatibility for scripting while providing POSIX+ extensions such as <code>[[ ... ]]</code>, arrays, namerefs, coprocesses, extended globs, brace expansion, here-strings, process substitution, and rich redirection semantics. This is not a formal conformance or complete Bash/Zsh-emulation claim; consult the <a href="../../reference/language-compatibility/">Language Compatibility Inventory</a> for precise support. Syntax extensions are available in scripts and interactive sessions; interactive-only features like history expansion, completions, and prompt styling disable themselves automatically when stdin is not a tty. Use <code>--minimal</code> or <code>--secure</code> when you want fewer extras in interactive shells.</p>
 <h3 id="completion-learning-paths">Completion Learning Paths</h3>
 <p>When cjsh scrapes man pages for completions, it uses <code>man</code> from <code>PATH</code> by default. Set
