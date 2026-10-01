@@ -901,7 +901,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
             }
         }
 
-        if (config::posix_mode) {
+        if (config::is_posix_mode()) {
             auto add_posix_error = [&](const std::string& code, size_t start, size_t end,
                                        const std::string& message, const std::string& suggestion) {
                 errors.push_back(SyntaxError({display_line, start, end, 0}, ErrorSeverity::ERROR,
@@ -1246,18 +1246,18 @@ ShellScriptInterpreter::StructuralSyntax ShellScriptInterpreter::take_structural
     const std::vector<std::string>& lines) {
     auto prepared = std::move(structural_syntax);
     structural_syntax.reset();
-    if (prepared && prepared->posix_mode == config::posix_mode && prepared->lines == lines) {
+    if (prepared && prepared->posix_mode == config::is_posix_mode() && prepared->lines == lines) {
         return std::move(*prepared);
     }
     return StructuralSyntax{
-        {}, config::posix_mode, validate_script_syntax(lines), std::nullopt, std::nullopt};
+        {}, config::is_posix_mode(), validate_script_syntax(lines), std::nullopt, std::nullopt};
 }
 
 bool ShellScriptInterpreter::has_syntax_errors(const std::vector<std::string>& lines,
                                                bool print_errors) {
     std::vector<SyntaxError> errors;
 
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         errors = validate_comprehensive_syntax(lines, false, false);
     } else {
         auto syntax = take_structural_syntax(lines);
@@ -1334,7 +1334,7 @@ bool ShellScriptInterpreter::has_syntax_errors(const std::vector<std::string>& l
     }
 
     auto is_blocking_error = [&](const SyntaxError& error) {
-        if (config::posix_mode && error.error_code.rfind("POSIX", 0) == 0) {
+        if (config::is_posix_mode() && error.error_code.rfind("POSIX", 0) == 0) {
             return true;
         }
         if (error.error_code == "SYN002" || error.error_code == "SYN003" ||

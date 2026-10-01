@@ -108,11 +108,11 @@ void test_validation_and_continuation() {
                "unfinished loop still requests input: " + header);
     }
 
-    config::posix_mode = true;
+    config::set_shell_dialect(config::ShellDialect::Posix);
     const std::vector<std::string> posix_loop = {"for in in one two; do :; done"};
     expect(!interpreter->has_syntax_errors(posix_loop, false),
            "POSIX mode accepts in as a loop variable");
-    config::posix_mode = false;
+    config::set_shell_dialect(config::ShellDialect::Cjsh);
     expect(interpreter->has_syntax_errors(posix_loop, false),
            "normal mode rejects in as a loop variable after switching from POSIX mode");
 }
@@ -155,12 +155,12 @@ void test_prepared_input_execution() {
            "prepared syntax reads the current variable value");
 
     const std::vector<std::string> extension = {"function prepared_fn() { :; }"};
-    config::posix_mode = false;
+    config::set_shell_dialect(config::ShellDialect::Cjsh);
     (void)interpreter->needs_additional_input(extension);
-    config::posix_mode = true;
+    config::set_shell_dialect(config::ShellDialect::Posix);
     expect(interpreter->has_syntax_errors(extension, false),
            "changing POSIX mode invalidates prepared syntax diagnostics");
-    config::posix_mode = false;
+    config::set_shell_dialect(config::ShellDialect::Cjsh);
 }
 
 void test_runtime_guards_without_validation() {

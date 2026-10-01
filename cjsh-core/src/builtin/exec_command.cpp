@@ -156,7 +156,7 @@ int exec_replacing_shell(const std::vector<std::string>& exec_args) {
         saved_errno = errno;
     }
     print_exec_runtime_error(exec_args[0] + ": " + std::strerror(saved_errno));
-    if (config::posix_mode && !config::interactive_mode) {
+    if (config::is_posix_mode() && !config::interactive_mode) {
         cjsh_env::request_exit();
         (void)cjsh_env::set_shell_variable_value(
             "EXIT_CODE", std::to_string(exec_failure_exit_code(saved_errno)));

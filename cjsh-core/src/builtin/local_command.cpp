@@ -49,7 +49,7 @@ int local_command(const std::vector<std::string>& args, Shell* shell) {
         return 0;
     }
 
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         print_error({ErrorType::INVALID_ARGUMENT,
                      "local",
                      "'local' is disabled in POSIX mode",

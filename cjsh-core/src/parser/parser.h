@@ -174,6 +174,7 @@ class Parser {
     // Cache only lexical structure, before aliases, variables, IFS, or globbing.
     std::unordered_map<std::string, std::vector<std::string>> command_tokens;
     bool command_tokens_extglob = false;
+    int command_tokens_dialect = -1;
 
     std::unique_ptr<Tokenizer> tokenizer;
     std::unique_ptr<VariableExpander> variableExpander;

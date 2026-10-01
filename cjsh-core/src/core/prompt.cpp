@@ -1144,7 +1144,7 @@ void execute_prompt_command() {
     if (!g_shell) {
         return;
     }
-    if (config::secure_mode || config::posix_mode) {
+    if (config::secure_mode || config::is_posix_mode()) {
         return;
     }
     std::string command = get_env("PROMPT_COMMAND");
@@ -1183,7 +1183,7 @@ void initialize_colors() {
 }
 
 void apply_terminal_window_title() {
-    if (!config::interactive_mode || config::posix_mode) {
+    if (!config::interactive_mode || config::is_posix_mode()) {
         return;
     }
     FILE* output = isatty(STDOUT_FILENO) ? stdout : (isatty(STDERR_FILENO) ? stderr : nullptr);

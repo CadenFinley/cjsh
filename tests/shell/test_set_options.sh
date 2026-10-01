@@ -225,20 +225,20 @@ else
     pass_test "set +oxtrace disables tracing via long form"
 fi
 
-echo "Test set -ohuponexit"
-output=$("$CJSH_PATH" -c 'set -ohuponexit; set -o' 2>/dev/null)
+echo "Test shopt -s huponexit"
+output=$("$CJSH_PATH" -c 'shopt -s huponexit; shopt huponexit' 2>/dev/null)
 if echo "$output" | grep -q "huponexit" && echo "$output" | grep -q "huponexit[[:space:]]*on"; then
-    pass_test "set -ohuponexit enables huponexit"
+    pass_test "shopt -s huponexit enables huponexit"
 else
-    fail_test "set -ohuponexit should enable huponexit, got: '$output'"
+    fail_test "shopt -s huponexit should enable huponexit, got: '$output'"
 fi
 
-echo "Test set +ohuponexit"
-output=$("$CJSH_PATH" -c 'set -ohuponexit; set +ohuponexit; set -o' 2>/dev/null)
+echo "Test shopt -u huponexit"
+output=$("$CJSH_PATH" -c 'shopt -s huponexit; shopt -u huponexit; shopt huponexit' 2>/dev/null)
 if echo "$output" | grep -q "huponexit[[:space:]]*off"; then
-    pass_test "set +ohuponexit disables huponexit"
+    pass_test "shopt -u huponexit disables huponexit"
 else
-    fail_test "set +ohuponexit should disable huponexit, got: '$output'"
+    fail_test "shopt -u huponexit should disable huponexit, got: '$output'"
 fi
 
 echo "Test set -o pipefail"

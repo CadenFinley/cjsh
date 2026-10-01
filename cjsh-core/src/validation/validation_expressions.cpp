@@ -135,7 +135,7 @@ ShellScriptInterpreter::validate_parameter_expansions(const std::vector<std::str
         const QuoteState& state = ctx.state;
         size_t& next_index = ctx.next_index;
 
-        if (config::posix_mode && c == '$' && i + 1 < line.size() && line[i + 1] == '{') {
+        if (config::is_posix_mode() && c == '$' && i + 1 < line.size() && line[i + 1] == '{') {
             const size_t end = find_matching_brace(line, i + 1);
             if (end != std::string::npos &&
                 posix_parameter_name_end(line.substr(i + 2, end - i - 2)) == std::string::npos) {
@@ -304,7 +304,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
             }
 
             if (var_end > 0 && line[var_end - 1] == '=') {
-                if (config::posix_mode) {
+                if (config::is_posix_mode()) {
                     line_errors.push_back(SyntaxError(
                         {display_line, var_end - 1, i + 1, 0}, ErrorSeverity::ERROR,
                         ErrorCategory::SYNTAX, "POSIX005", "Arrays are disabled in POSIX mode",

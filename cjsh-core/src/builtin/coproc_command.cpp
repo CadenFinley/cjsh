@@ -199,7 +199,7 @@ int coproc_command(const std::vector<std::string>& args, Shell* shell) {
                    "The default NAME is COPROC."})) {
         return 0;
     }
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         print_error({ErrorType::INVALID_ARGUMENT,
                      "coproc",
                      "'coproc' is not available in POSIX mode",
@@ -221,7 +221,7 @@ int coproc_command(const std::vector<std::string>& args, Shell* shell) {
 }
 
 int coproc_script_command(const std::string& command_text, Shell* shell) {
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         print_error({ErrorType::INVALID_ARGUMENT,
                      "coproc",
                      "'coproc' is not available in POSIX mode",

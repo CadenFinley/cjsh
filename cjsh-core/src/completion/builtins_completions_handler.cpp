@@ -260,9 +260,9 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
 
         add_doc(
             "cjsh", "POSIX Shell Scripting meets Modern Shell Features",
-            {make_option("-h", "Display help message and exit"),
+            {make_option("-h", "Enable command hashing"),
              make_option("--help", "Display help message and exit"),
-             make_option("-v", "Print version information and exit"),
+             make_option("-v", "Print shell input lines"),
              make_option("--version", "Print version information and exit"),
              make_option("-l", "Start as a login shell"),
              make_option("--login", "Start as a login shell (load ~/.cjprofile)"),
@@ -278,13 +278,16 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                                ValueRequirement::Required, ValueType::Directory, "DIR"),
              make_option("--no-system-paths", "Skip PATH setup from /etc/paths and /etc/paths.d"),
              make_option("--posix", "Enable POSIX mode and reject non-POSIX syntax"),
-             make_option("-m", "Disable cjsh enhancements"),
+             make_option("--bash", "Enable experimental Bash compatibility"),
+             make_value_option("--dialect", {}, "Select cjsh, posix, or bash",
+                               ValueRequirement::Required, ValueType::Text, "DIALECT"),
+             make_option("-m", "Enable job-control monitor mode"),
              make_option("--minimal", "Disable cjsh enhancements"),
-             make_option("-C", "Disable color output"),
+             make_option("-C", "Enable noclobber"),
              make_option("--no-colors", "Disable color output"),
              make_option("-N", "Skip sourcing ~/.cjshrc"),
              make_option("--no-source", "Skip sourcing ~/.cjshrc"),
-             make_option("-O", "Disable tab completions"),
+             make_option("-O", "Enable a shopt option"),
              make_option("--no-completions", "Disable tab completions"),
              make_option("--no-completion-learning", "Disable on-demand completion learning"),
              make_option("--no-script-extension-interpreter",
@@ -296,7 +299,7 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_option("--no-agent", "Disable agent-assisted command writing"),
              make_option("--no-prompt-vars", "Ignore PS1/PS2 prompt variables"),
              make_option("--no-history", "Disable history recording and history expansion"),
-             make_option("-H", "Disable history expansion"),
+             make_option("-H", "Enable history expansion"),
              make_option("--no-history-expansion", "Disable history expansion (!commands)"),
              make_option("-W", "Suppress the sh invocation warning"),
              make_option("--no-sh-warning", "Suppress the sh invocation warning"),
@@ -304,8 +307,15 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_option("--no-titleline", "Disable title line on startup"),
              make_option("-U", "Display startup time"),
              make_option("--show-startup-time", "Display startup time"),
-             make_option("-s", "Secure mode: disable cjshenv/profile/rc/logout files"),
+             make_option("-s", "Read commands from standard input"),
              make_option("--secure", "Secure mode: disable cjshenv/profile/rc/logout files")});
+
+        add_doc(
+            "shopt", "Inspect or change shell language options",
+            {make_option("-s", "Enable named options"), make_option("-u", "Disable named options"),
+             make_option("-q", "Query without output"),
+             make_option("-p", "Print reusable commands"),
+             make_option("-o", "Use the set option namespace")});
 
         add_doc("break", "Exit the innermost enclosing loop", {});
         add_doc("continue", "Advance to the next loop iteration", {});
@@ -621,7 +631,7 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_subcommand("completion-learning", "Toggle completion learning"),
              make_subcommand("exit-confirmation", "Control when exit requires confirmation"),
              make_subcommand("smart-cd", "Toggle smart cd auto-jumps"),
-             make_subcommand("extglob", "Toggle extended glob patterns"),
+             make_subcommand("dialect", "Select cjsh, posix, or bash semantics"),
              make_subcommand("script-extension-interpreter",
                              "Toggle extension-based script runners"),
              make_subcommand("line-numbers", "Configure multiline line numbers"),
@@ -816,10 +826,12 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                 {make_subcommand("on", "Enable smart cd auto-jumps"),
                  make_subcommand("off", "Disable smart cd auto-jumps"),
                  make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-extglob", "",
-                {make_subcommand("on", "Enable extended glob patterns"),
-                 make_subcommand("off", "Disable extended glob patterns"),
-                 make_subcommand("status", "Show current setting")});
+        add_doc("cjshopt-dialect", "Select the shell language dialect",
+                {make_subcommand("cjsh", "Use native cjsh semantics"),
+                 make_subcommand("posix", "Use strict POSIX semantics"),
+                 make_subcommand("bash", "Use experimental Bash compatibility"),
+                 make_subcommand("status", "Print the selected dialect")});
+
         add_doc("cjshopt-script-extension-interpreter", "",
                 {make_subcommand("on", "Enable extension-based script runners"),
                  make_subcommand("off", "Disable extension-based script runners"),

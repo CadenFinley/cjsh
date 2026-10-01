@@ -56,7 +56,7 @@ if [ "$CJSH_CLEANUP_SIGNAL" = KILL ] || [ "$CJSH_CLEANUP_MODE" = loop ]; then
     while :; do :; done
 fi
 if [ "$CJSH_CLEANUP_SIGNAL" = force ]; then
-    set -o huponexit
+    shopt -s huponexit
     sleep 30 &
     echo $! > "$CJSH_CLEANUP_DIR/ready.pid"
     exit --force

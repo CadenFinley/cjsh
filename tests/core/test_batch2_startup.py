@@ -307,7 +307,7 @@ class StartupTests(unittest.TestCase):
                         self.assertEqual(r.stdout, "")
                         self.assertFalse(marker.exists())
                         self.assertEqual(self.read_trace(), [])
-        for flag in ("-m", "-s"):
+        for flag in ("--minimal", "--secure"):
             self.assertEqual(self.run_shell(flag, "-c", "echo executed").stdout, "executed\n")
 
     def test_native_configuration_precedence_and_bypass(self):
@@ -410,6 +410,17 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.read_trace(), ["env", "profile", "rc", "body", "logout"])
 
+    def test_bash_dialect_keeps_native_startup_files(self):
+        self.trace_files(self.home, "native-")
+        for name in (".bashrc", ".bash_profile", ".bash_login", ".bash_logout", "bash-env"):
+            (self.home / name).write_text('echo bash-file >> "$HOME/trace"\n')
+        self.env["BASH_ENV"] = str(self.home / "bash-env")
+        result = self.run_shell("--bash", "-il", "--no-titleline", "--no-history", "-c",
+                                'echo body >> "$HOME/trace"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.read_trace(), ["native-env", "native-profile", "native-rc",
+                                             "body", "native-logout"])
+
     def test_posix_startup_and_env_expansion(self):
         self.trace_files(self.home, "native-")
         (self.home / ".profile").write_text('echo profile >> "$HOME/trace"\n')
@@ -467,8 +478,8 @@ class StartupTests(unittest.TestCase):
             for args in (["--no-system-paths"], ["-l", "--no-system-paths"],
                          ["--no-config"], ["-l", "--no-config"],
                          ["-l", "--secure"], ["--posix"],
-                         ["-m", "--no-system-paths"], ["-l", "-m", "--no-system-paths"],
-                         ["-l", "--minimal", "--no-config"], ["-l", "-m", "--secure"]):
+                         ["--minimal", "--no-system-paths"], ["-l", "--minimal", "--no-system-paths"],
+                         ["-l", "--minimal", "--no-config"], ["-l", "--minimal", "--secure"]):
                 with self.subTest(value=value, args=args):
                     child = self.child_environment(*args)
                     for name in names:
@@ -522,7 +533,7 @@ class StartupTests(unittest.TestCase):
                 for args in ([], ["-l"], ["-i", "--no-titleline", "--no-history"],
                              ["-il", "--no-titleline", "--no-history"],
                              ["--minimal"], ["-l", "--minimal"],
-                             ["-i", "-m", "--no-history"], ["-il", "-m", "--no-history"]):
+                             ["-i", "--minimal", "--no-history"], ["-il", "--minimal", "--no-history"]):
                     with self.subTest(value=value, manpath=manpath, args=args):
                         child = self.child_environment(*args)
                         self.assertTrue(child.get("PATH"))
@@ -546,7 +557,7 @@ class StartupTests(unittest.TestCase):
         for value in (":/custom/bin::/usr/bin:/custom/bin:", ":", "::", " "):
             self.env["PATH"] = value
             for args in ([], ["-i", "--no-titleline", "--no-history"],
-                         ["--minimal"], ["-i", "-m", "--no-history"]):
+                         ["--minimal"], ["-i", "--minimal", "--no-history"]):
                 with self.subTest(value=value, args=args):
                     self.assertEqual(self.child_environment(*args)["PATH"], value)
 

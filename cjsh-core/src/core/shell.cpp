@@ -87,15 +87,20 @@ constexpr std::array<ShellOptionDescriptor, static_cast<size_t>(ShellOption::Cou
                                 {ShellOption::Verbose, 'v', "verbose"},
                                 {ShellOption::Noexec, 'n', "noexec"},
                                 {ShellOption::Noglob, 'f', "noglob"},
-                                {ShellOption::Globstar, 0, "globstar"},
+                                {ShellOption::Globstar, 0, "globstar", true},
                                 {ShellOption::Allexport, 'a', "allexport"},
-                                {ShellOption::Huponexit, 0, "huponexit"},
+                                {ShellOption::Huponexit, 0, "huponexit", true},
                                 {ShellOption::Pipefail, 0, "pipefail"},
                                 {ShellOption::Monitor, 'm', "monitor"},
                                 {ShellOption::Hashall, 'h', "hashall"},
                                 {ShellOption::Notify, 'b', "notify"},
                                 {ShellOption::Ignoreeof, 0, "ignoreeof"},
-                                {ShellOption::Nolog, 0, "nolog"}}};
+                                {ShellOption::Nolog, 0, "nolog"},
+                                {ShellOption::Extglob, 0, "extglob", true},
+                                {ShellOption::ExpandAliases, 0, "expand_aliases", true},
+                                {ShellOption::InheritErrexit, 0, "inherit_errexit", true},
+                                {ShellOption::BraceExpand, 'B', "braceexpand"},
+                                {ShellOption::HistExpand, 'H', "histexpand"}}};
 
 struct ErrexitSeverityDescriptor {
     ErrorSeverity severity;
@@ -140,7 +145,16 @@ get_shell_option_descriptors() {
 
 std::optional<ShellOption> parse_shell_option(const std::string& name) {
     for (const auto& descriptor : kShellOptionDescriptors) {
-        if (name == descriptor.name) {
+        if (!descriptor.shopt && name == descriptor.name) {
+            return descriptor.option;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<ShellOption> parse_shopt_option(const std::string& name) {
+    for (const auto& descriptor : kShellOptionDescriptors) {
+        if (descriptor.shopt && name == descriptor.name) {
             return descriptor.option;
         }
     }
@@ -157,7 +171,6 @@ std::optional<ShellOption> parse_shell_option_short(char short_flag) {
 }
 
 Shell::Shell() {
-    shell_options[to_index(ShellOption::Huponexit)] = config::interactive_mode;
     trap_manager_initialize();
 
     // construct core subsystems before wiring them together
@@ -195,7 +208,10 @@ Shell::~Shell() {
     // on shell destruction, handle any remaining child processes
     if (shell_exec) {
         const int terminating_signal = SignalHandler::termination_signal();
-        if (terminating_signal != 0 || get_shell_option(ShellOption::Huponexit)) {
+        const bool hang_up_on_exit =
+            get_shell_option(ShellOption::Huponexit) &&
+            (!config::is_bash_mode() || (config::interactive_mode && config::login_mode));
+        if (terminating_signal != 0 || hang_up_on_exit) {
             shell_exec->terminate_all_child_process(terminating_signal == SIGTERM ? SIGTERM
                                                                                   : SIGHUP);
         } else {
@@ -242,7 +258,7 @@ void Shell::run_exit_handlers(int status) {
 
     if (auto* interpreter = get_shell_script_interpreter();
         interpreter != nullptr && !config::minimal_mode && !config::secure_mode &&
-        !config::posix_mode && interpreter->has_function("cjshexit")) {
+        !config::is_posix_mode() && interpreter->has_function("cjshexit")) {
         (void)interpreter->invoke_function({"cjshexit"});
     }
 
@@ -286,7 +302,7 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
                                     bool auto_background_on_stop,
                                     bool auto_background_on_stop_silent) {
     const auto& args = command.original_args;
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         for (const auto& [name, value] : command.assignments) {
             if (!readonly_manager_can_assign(name, "assignment")) {
                 return cjsh_env::posix_error_exit(1);
@@ -826,13 +842,23 @@ void Shell::apply_abbreviations_to_line_editor() {
 
 void Shell::apply_startup_options(const std::vector<std::pair<std::string, bool>>& options) {
     for (const auto& [name, enabled] : options) {
-        if (auto option = parse_shell_option(name)) {
+        auto option = parse_shell_option(name);
+        if (!option) {
+            option = parse_shopt_option(name);
+        }
+        if (option) {
             set_shell_option(*option, enabled);
         }
     }
 }
 
 void Shell::set_shell_option(ShellOption option, bool value) {
+    explicit_shell_options[to_index(option)] = true;
+    if (option == ShellOption::Extglob) {
+        config::extglob_enabled = value && !config::is_posix_mode();
+    } else if (option == ShellOption::HistExpand) {
+        config::history_expansion_enabled = value;
+    }
     if (option == ShellOption::Monitor) {
         (void)set_job_control_enabled(value);
         return;
@@ -841,6 +867,31 @@ void Shell::set_shell_option(ShellOption option, bool value) {
 }
 
 bool Shell::get_shell_option(ShellOption option) const {
+    if (option == ShellOption::Extglob) {
+        return config::extglob_enabled;
+    }
+    if (option == ShellOption::HistExpand) {
+        return config::history_expansion_enabled;
+    }
+    if (config::is_posix_mode() &&
+        (option == ShellOption::Globstar || option == ShellOption::BraceExpand)) {
+        return false;
+    }
+    if (!explicit_shell_options[to_index(option)]) {
+        switch (option) {
+            case ShellOption::ExpandAliases:
+                return !config::is_bash_mode() || interactive_mode;
+            case ShellOption::InheritErrexit:
+                return !config::is_bash_mode();
+            case ShellOption::Huponexit:
+                return !config::is_bash_mode() && config::interactive_mode;
+            case ShellOption::BraceExpand:
+            case ShellOption::Hashall:
+                return !config::is_posix_mode();
+            default:
+                break;
+        }
+    }
     return shell_options[to_index(option)];
 }
 
@@ -864,12 +915,16 @@ bool Shell::should_abort_on_nonzero_exit() const {
         return false;
     }
 
-    return errexit_severity_level != ErrorSeverity::CRITICAL;
+    return config::is_bash_mode() || errexit_severity_level != ErrorSeverity::CRITICAL;
 }
 
 bool Shell::should_abort_on_nonzero_exit(int exit_code) const {
     if (!is_errexit_enabled()) {
         return false;
+    }
+
+    if (config::is_bash_mode()) {
+        return exit_code != 0;
     }
 
     ErrorSeverity error_severity = ErrorSeverity::ERROR;  // default

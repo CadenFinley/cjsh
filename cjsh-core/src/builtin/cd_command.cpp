@@ -210,7 +210,7 @@ int change_directory(const std::string& dir, std::string& current_directory,
 
         if (!std::filesystem::exists(dir_path)) {
             if (config::smart_cd_enabled && !config::minimal_mode && !config::secure_mode &&
-                !config::posix_mode) {
+                !config::is_posix_mode()) {
                 auto smart_target = resolve_smart_cd_target(requested_dir, current_directory);
                 if (smart_target.has_value()) {
                     dir_path = *smart_target;
@@ -265,7 +265,7 @@ int change_directory(const std::string& dir, std::string& current_directory,
 
         previous_directory = old_directory;
 
-        if (shell != nullptr && old_directory != current_directory && !config::posix_mode) {
+        if (shell != nullptr && old_directory != current_directory && !config::is_posix_mode()) {
             shell->execute_hooks(HookType::Chpwd);
         }
 

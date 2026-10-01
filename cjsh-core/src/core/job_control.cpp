@@ -722,7 +722,7 @@ void JobManager::notify_job_stopped(const std::shared_ptr<JobControlJob>& job) c
         return;
     }
 
-    if (config::posix_mode && job->background.load(std::memory_order_relaxed) &&
+    if (config::is_posix_mode() && job->background.load(std::memory_order_relaxed) &&
         !allow_deferred_notifications && shell_ref &&
         !shell_ref->get_shell_option(ShellOption::Notify)) {
         return;
@@ -758,7 +758,7 @@ void JobManager::notify_job_finished(const std::shared_ptr<JobControlJob>& job) 
     const bool is_background = job->background.load(std::memory_order_relaxed);
     const bool is_interactive = config::interactive_mode || config::force_interactive;
 
-    if (config::posix_mode && !is_interactive) {
+    if (config::is_posix_mode() && !is_interactive) {
         job->notified = true;
         return;
     }
@@ -774,7 +774,7 @@ void JobManager::notify_job_finished(const std::shared_ptr<JobControlJob>& job) 
     if (state != JobState::DONE && state != JobState::TERMINATED) {
         return;
     }
-    if (config::posix_mode && is_background && !allow_deferred_notifications && shell_ref &&
+    if (config::is_posix_mode() && is_background && !allow_deferred_notifications && shell_ref &&
         !shell_ref->get_shell_option(ShellOption::Notify)) {
         return;
     }

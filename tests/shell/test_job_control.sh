@@ -107,11 +107,11 @@ test_background_persists() {
 }
 
 test_huponexit_kills_jobs() {
-    log "Test: set -o huponexit terminates jobs on exit"
+    log "Test: shopt -s huponexit terminates jobs on exit"
     local pid_file
     pid_file="$(mktemp /tmp/cjsh_job_pid.XXXXXX)"
 
-    "$CJSH_PATH" -c "set -o huponexit; sleep 5 & echo \$! > $pid_file; sleep 0.2" >/dev/null 2>&1
+    "$CJSH_PATH" -c "shopt -s huponexit; sleep 5 & echo \$! > $pid_file; sleep 0.2" >/dev/null 2>&1
 
     local pid
     pid="$(cat "$pid_file" 2>/dev/null)"
@@ -175,7 +175,7 @@ test_disown_pid_and_hup_mark() {
     pid_file="$(mktemp /tmp/cjsh_disown_pid.XXXXXX)"
     log_file="$(mktemp /tmp/cjsh_disown_jobs.XXXXXX)"
 
-    "$CJSH_PATH" -c "set -o huponexit; sleep 5 & p=\$!; echo \$p > $pid_file; disown -h \$p; jobs -l" >"$log_file" 2>&1
+    "$CJSH_PATH" -c "shopt -s huponexit; sleep 5 & p=\$!; echo \$p > $pid_file; disown -h \$p; jobs -l" >"$log_file" 2>&1
 
     local pid
     pid="$(cat "$pid_file" 2>/dev/null)"

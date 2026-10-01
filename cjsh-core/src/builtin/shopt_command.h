@@ -1,5 +1,5 @@
 /*
-  flags.h
+  shopt_command.h
 
   This file is part of cjsh, CJ's Shell
 
@@ -26,36 +26,10 @@
   SOFTWARE.
 */
 
-#ifndef CJSH_CORE_SRC_CORE_FLAGS_H
-#define CJSH_CORE_SRC_CORE_FLAGS_H
-
+#ifndef CJSH_CORE_SRC_BUILTIN_SHOPT_COMMAND_H
+#define CJSH_CORE_SRC_BUILTIN_SHOPT_COMMAND_H
 #include <string>
-#include <utility>
 #include <vector>
-
-namespace flags {
-
-struct ParseResult {
-    std::string script_file;
-    std::vector<std::string> script_args;
-    std::vector<std::pair<std::string, bool>> shell_options;
-    // (shopt namespace, reusable output) for invocation -o/+o/-O/+O without names.
-    std::vector<std::pair<bool, bool>> option_queries;
-    int exit_code = 0;
-    bool should_exit = false;
-};
-
-ParseResult parse_arguments(int argc, char* argv[]);
-bool is_login_shell_invocation();
-void warn_if_invoked_via_sh();
-void save_startup_arguments(int argc, char* argv[]);
-std::vector<std::string>& startup_args();
-
-void set_positional_parameters(const std::vector<std::string>& params);
-int shift_positional_parameters(int count = 1);
-std::vector<std::string> get_positional_parameters();
-size_t get_positional_parameter_count();
-
-}  // namespace flags
-
-#endif  // CJSH_CORE_SRC_CORE_FLAGS_H
+class Shell;
+int shopt_command(const std::vector<std::string>& args, Shell* shell);
+#endif

@@ -35,6 +35,7 @@
 #include <memory>
 #include <string>
 
+#include "builtin.h"
 #include "cjsh_filesystem.h"
 #include "completion_history.h"
 #include "error_out.h"
@@ -98,6 +99,15 @@ void initialize_shell(int argc, char* argv[], const flags::ParseResult& parse_re
     g_shell = std::make_unique<Shell>();
     g_shell->apply_startup_options(parse_result.shell_options);
     g_shell->set_interactive_mode(config::interactive_mode);
+    for (const auto& [shopt, reusable] : parse_result.option_queries) {
+        std::vector<std::string> query{shopt ? "shopt" : "set"};
+        if (!shopt) {
+            query.emplace_back(reusable ? "+o" : "-o");
+        } else if (reusable) {
+            query.emplace_back("-p");
+        }
+        (void)g_shell->get_built_ins()->builtin_command(query);
+    }
     if (config::interactive_mode) {
         g_shell->setup_interactive_handlers();
     }
@@ -146,7 +156,7 @@ void process_startup_files() {
         cjsh_filesystem::process_profile_files();
     }
 
-    if (config::posix_mode && config::interactive_mode && !cjsh_env::exit_requested()) {
+    if (config::is_posix_mode() && config::interactive_mode && !cjsh_env::exit_requested()) {
         cjsh_filesystem::process_posix_env_file();
     }
 }

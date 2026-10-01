@@ -466,7 +466,7 @@ int handle_runtime_exception(const std::string& text, const std::runtime_error& 
         g_parameter_expansion_fatal_error = true;
     }
 
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         (void)cjsh_env::posix_error_exit(2);
     }
 
@@ -698,7 +698,7 @@ int ShellScriptInterpreter::handle_env_assignment(const std::vector<std::string>
         return -1;
     }
 
-    if (config::posix_mode && (parsed.append || parsed.lhs.find('[') != std::string::npos)) {
+    if (config::is_posix_mode() && (parsed.append || parsed.lhs.find('[') != std::string::npos)) {
         print_error({ErrorType::SYNTAX_ERROR,
                      "assignment",
                      parsed.append ? "[POSIX006] += assignments are disabled in POSIX mode"
@@ -772,7 +772,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     }
 
     std::function<int(const std::string&, bool, bool*)> execute_simple_or_pipeline_impl;
-    if (config::posix_mode && g_shell->get_shell_option(ShellOption::Noexec)) {
+    if (config::is_posix_mode() && g_shell->get_shell_option(ShellOption::Noexec)) {
         return 0;
     }
     std::function<int(const std::string&)> execute_simple_or_pipeline;
@@ -980,7 +980,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         std::string arithmetic_command_expression;
         if (parser_parse_arithmetic_command_form(trimmed_text, negate_arithmetic_status,
                                                  arithmetic_command_expression)) {
-            if (config::posix_mode) {
+            if (config::is_posix_mode()) {
                 print_error({ErrorType::SYNTAX_ERROR,
                              "arithmetic",
                              "arithmetic commands are disabled in POSIX mode",
@@ -2026,7 +2026,7 @@ long long ShellScriptInterpreter::evaluate_arithmetic_expression(const std::stri
     };
 
     auto var_writer = [this](const std::string& name, long long value) {
-        if (config::posix_mode && !readonly_manager_can_assign(name, "arithmetic")) {
+        if (config::is_posix_mode() && !readonly_manager_can_assign(name, "arithmetic")) {
             throw std::runtime_error("parameter expansion error: " + name + ": readonly variable");
         }
         std::string value_str = std::to_string(value);
@@ -2062,7 +2062,7 @@ int ShellScriptInterpreter::run_pipeline(const std::vector<Command>& cmds) {
 
 std::string ShellScriptInterpreter::expand_parameter_expression(const std::string& param_expr) {
     auto var_reader = [this](const std::string& name) -> std::string {
-        if (config::posix_mode && name == "-" && shell_parser) {
+        if (config::is_posix_mode() && name == "-" && shell_parser) {
             std::string flags = "$-";
             shell_parser->expand_env_vars(flags);
             return flags;
@@ -2072,7 +2072,7 @@ std::string ShellScriptInterpreter::expand_parameter_expression(const std::strin
 
     auto var_writer = [this](const std::string& name, const std::string& value) {
         if (!readonly_manager_can_assign(name, "parameter expansion")) {
-            if (config::posix_mode) {
+            if (config::is_posix_mode()) {
                 throw std::runtime_error("parameter expansion error: " + name +
                                          ": readonly variable");
             }
@@ -2083,7 +2083,7 @@ std::string ShellScriptInterpreter::expand_parameter_expression(const std::strin
     };
 
     auto var_checker = [this](const std::string& name) -> bool {
-        if (config::posix_mode && name == "-") {
+        if (config::is_posix_mode() && name == "-") {
             return true;
         }
         return variable_manager.variable_is_set(name);

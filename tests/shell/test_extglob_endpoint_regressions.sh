@@ -32,7 +32,7 @@ passed=0
 failed=0
 check() {
     name=$1 expected=$2 script=$3
-    actual=$("$CJSH" --no-config --no-system-paths -c "cjshopt extglob on > /dev/null
+    actual=$("$CJSH" --no-config --no-system-paths -c "shopt -s extglob > /dev/null
 $script")
     status=$?
     if [ "$status" -eq 0 ] && [ "$actual" = "$expected" ]; then
@@ -53,6 +53,6 @@ check 'nested optional groups' 'XXX' 'v=aba; printf "%s" "${v//@(a|?(b))/X}"'
 check 'empty optional match advances' 'XbXbX' 'v=bb; printf "%s" "${v//?(a)/X}"'
 check 'anchored replacement' 'Xc|cX' 'v=abc; w=cab; printf "%s|%s" "${v/#@(a|ab)/X}" "${w/%@(b|ab)/X}"'
 check 'repetition fallback' 'Xc' 'v=abbac; printf "%s" "${v/+(a|b)/X}"'
-check 'disabled extended globs stay literal' 'a|X' 'cjshopt extglob off > /dev/null; v=a; w="@(a|b)"; printf "%s|%s" "${v//@(a|b)/X}" "${w//@(a|b)/X}"'
+check 'disabled extended globs stay literal' 'a|X' 'shopt -u extglob > /dev/null; v=a; w="@(a|b)"; printf "%s|%s" "${v//@(a|b)/X}" "${w//@(a|b)/X}"'
 printf 'Tests passed: %s\nTests failed: %s\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

@@ -73,6 +73,11 @@ enum class ShellOption : std::uint8_t {
     Notify,
     Ignoreeof,
     Nolog,
+    Extglob,
+    ExpandAliases,
+    InheritErrexit,
+    BraceExpand,
+    HistExpand,
     Count
 };
 
@@ -80,11 +85,13 @@ struct ShellOptionDescriptor {
     ShellOption option;
     char short_flag;
     const char* name;
+    bool shopt = false;
 };
 
 const std::array<ShellOptionDescriptor, static_cast<size_t>(ShellOption::Count)>&
 get_shell_option_descriptors();
 std::optional<ShellOption> parse_shell_option(const std::string& name);
+std::optional<ShellOption> parse_shopt_option(const std::string& name);
 std::optional<ShellOption> parse_shell_option_short(char short_flag);
 
 enum class HookType : std::uint8_t {
@@ -195,6 +202,7 @@ class Shell {
     std::unordered_map<std::string, std::string> abbreviations;
     std::unordered_map<std::string, std::string> aliases;
     std::array<bool, static_cast<size_t>(ShellOption::Count)> shell_options{};
+    std::array<bool, static_cast<size_t>(ShellOption::Count)> explicit_shell_options{};
     std::vector<std::string> directory_stack;
     std::string last_interactive_command;
     ErrorSeverity errexit_severity_level = ErrorSeverity::ERROR;

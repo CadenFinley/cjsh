@@ -351,7 +351,7 @@ int test_command(const std::vector<std::string>& args) {
         return 1;
     }
 
-    if (config::posix_mode && test_args.size() == 3 && test_args[1] == "==") {
+    if (config::is_posix_mode() && test_args.size() == 3 && test_args[1] == "==") {
         print_error(
             {ErrorType::SYNTAX_ERROR, command_name, "'==' is disabled in POSIX mode; use '='", {}});
         return 2;

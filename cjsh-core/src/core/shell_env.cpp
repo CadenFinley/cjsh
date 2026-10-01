@@ -81,6 +81,7 @@ bool login_mode = false;
 bool interactive_mode = true;
 bool force_interactive = false;
 bool execute_command = false;
+bool read_stdin = false;
 std::string cmd_to_execute;
 bool no_exec = false;
 bool no_config = false;
@@ -100,7 +101,6 @@ bool show_help = false;
 bool minimal_mode = false;
 bool show_startup_time = false;
 bool secure_mode = false;
-bool posix_mode = false;
 bool show_title_line = true;
 bool history_enabled = true;
 bool history_expansion_enabled = true;
@@ -301,7 +301,7 @@ bool unset_shell_variable_value(const std::string& name) {
 }
 
 bool should_mirror_to_process_env(const std::string& name) {
-    return config::posix_mode || is_process_mirrored_shell_var(name);
+    return config::is_posix_mode() || is_process_mirrored_shell_var(name);
 }
 
 void mark_exported(const std::string& name) {
@@ -332,7 +332,7 @@ std::string quote_shell_value(const std::string& value) {
 }
 
 void mirror_set_to_process_env(const std::string& name, const std::string& value) {
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         if (getenv(name.c_str()) != nullptr || exported_names.count(name) != 0 ||
             (g_shell && g_shell->get_shell_option(ShellOption::Allexport))) {
             exported_names.insert(name);
@@ -347,7 +347,7 @@ void mirror_set_to_process_env(const std::string& name, const std::string& value
 }
 
 void mirror_unset_from_process_env(const std::string& name) {
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         exported_names.erase(name);
         (void)unsetenv(name.c_str());
         return;
@@ -386,8 +386,8 @@ bool unset_shell_or_local_variable_value(Shell* shell, const std::string& name) 
 void setup_path_variables(const std::string& paths_file, const std::string& paths_directory) {
     // Read system paths before native startup files, which may override PATH.
     // Clean invocations preserve PATH exactly, including empty and absent values.
-    if (config::no_system_paths || config::no_config || config::secure_mode || config::posix_mode ||
-        config::no_exec) {
+    if (config::no_system_paths || config::no_config || config::secure_mode ||
+        config::is_posix_mode() || config::no_exec) {
         return;
     }
 
@@ -730,7 +730,7 @@ void clear_exit_request() {
 }
 
 int posix_error_exit(int status) {
-    if (status != 0 && config::posix_mode && !config::interactive_mode) {
+    if (status != 0 && config::is_posix_mode() && !config::interactive_mode) {
         (void)set_shell_variable_value("EXIT_CODE", std::to_string(status));
         request_exit();
     }
@@ -865,7 +865,8 @@ int handle_non_interactive_mode(const std::string& script_file) {
         }
 
         script_content = read_result.value();
-    } else if (config::posix_mode && g_shell) {
+    } else if ((config::is_posix_mode() || config::is_bash_mode() || config::read_stdin) &&
+               g_shell) {
         // Do not buffer past a complete command: read and external commands
         // must be able to consume subsequent bytes from this same descriptor.
         int status = 0;

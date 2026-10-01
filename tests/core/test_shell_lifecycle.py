@@ -253,9 +253,9 @@ class ShellLifecycleTests(unittest.TestCase):
                     self.assertIn("CONT", text)
 
     def test_hup_optout_and_noninteractive_default(self) -> None:
-        for interactive, policy, hup in ((True, "set +o huponexit; ", False),
+        for interactive, policy, hup in ((True, "shopt -u huponexit; ", False),
                                          (False, "", False),
-                                         (False, "set -o huponexit; ", True)):
+                                         (False, "shopt -s huponexit; ", True)):
             with self.subTest(interactive=interactive, policy=policy):
                 path = self.home / f"optout-{interactive}-{hup}"
                 command = (policy + self.probe_command("handle", path) + " >/dev/null 2>&1 & "

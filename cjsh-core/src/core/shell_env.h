@@ -36,6 +36,8 @@
 #include <utility>
 #include <vector>
 
+#include "shell_dialect.h"
+
 struct passwd;
 class Shell;
 
@@ -50,6 +52,7 @@ extern bool login_mode;
 extern bool interactive_mode;
 extern bool force_interactive;
 extern bool execute_command;
+extern bool read_stdin;
 extern std::string cmd_to_execute;
 extern bool no_exec;
 extern bool no_config;
@@ -69,7 +72,6 @@ extern bool show_help;
 extern bool minimal_mode;
 extern bool show_startup_time;
 extern bool secure_mode;
-extern bool posix_mode;
 extern bool show_title_line;
 extern bool history_enabled;
 extern bool history_expansion_enabled;

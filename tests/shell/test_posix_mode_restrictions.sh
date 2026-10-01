@@ -156,9 +156,9 @@ run_expect_fail "local disabled through command builtin" "command local foo=1" \
     "'local' is disabled in POSIX mode"
 run_expect_fail "declare disabled through command builtin" "command declare foo=1" \
     "'declare' is disabled in POSIX mode"
-run_expect_fail "set -o globstar disabled" "set -o globstar" "not available in POSIX mode"
+run_expect_fail "shopt -s globstar disabled" "shopt -s globstar" "not available in POSIX mode"
 run_expect_literal "POSIX.1-2024 pipefail" 'set -o pipefail; false | true; echo "$?"' "1"
-run_expect_fail "set -o huponexit disabled" "set -o huponexit" "not available in POSIX mode"
+run_expect_fail "shopt -s huponexit disabled" "shopt -s huponexit" "not available in POSIX mode"
 run_expect_fail "pushd builtin disabled" "pushd /tmp" "not available in POSIX mode"
 run_expect_fail "popd builtin disabled" "popd" "not available in POSIX mode"
 run_expect_fail "dirs builtin disabled" "dirs" "not available in POSIX mode"

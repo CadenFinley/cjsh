@@ -147,8 +147,9 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
             }
         } else if (first_token == "select" || first_token == "select;") {
             const size_t do_pos = find_inline_do_position(trimmed_line);
-            const auto header = parse_named_loop_header(
-                strip_inline_comment(trimmed_line.substr(0, do_pos)), "select", config::posix_mode);
+            const auto header =
+                parse_named_loop_header(strip_inline_comment(trimmed_line.substr(0, do_pos)),
+                                        "select", config::is_posix_mode());
             if (!header.error.empty()) {
                 line_errors.push_back(SyntaxError(
                     {display_line, 0, 0, 0}, ErrorSeverity::CRITICAL, ErrorCategory::CONTROL_FLOW,

@@ -62,6 +62,15 @@ constexpr int kOptNoAgent = 264;
 constexpr int kOptNoConfig = 265;
 constexpr int kOptConfigDir = 266;
 constexpr int kOptNoSystemPaths = 267;
+constexpr int kOptBash = 268;
+constexpr int kOptDialect = 269;
+constexpr int kOptVersion = 270;
+constexpr int kOptHelp = 271;
+constexpr int kOptNoColors = 272;
+constexpr int kOptNoCompletions = 273;
+constexpr int kOptMinimal = 274;
+constexpr int kOptSecure = 275;
+constexpr int kOptNoHistoryExpansion = 276;
 std::vector<std::string> positional_parameters;
 bool login_shell_invocation = false;
 bool sh_invocation = false;
@@ -109,18 +118,6 @@ void apply_minimal_mode() {
     config::prompt_vars_enabled = false;
 }
 
-void apply_posix_mode_settings() {
-    config::posix_mode = true;
-    config::extglob_enabled = false;
-    config::smart_cd_enabled = false;
-    config::script_extension_interpreter_enabled = false;
-    config::source_enabled = false;
-    config::show_title_line = false;
-    config::error_suggestions_enabled = false;
-    config::history_expansion_enabled = false;
-    (void)setenv("POSIXLY_CORRECT", "1", 1);
-}
-
 }  // namespace
 
 bool is_login_shell_invocation() {
@@ -153,31 +150,8 @@ ParseResult parse_arguments(int argc, char* argv[]) {
     detect_login_mode(argv);
 
     sh_invocation = invoked_via_sh(argc > 0 ? argv[0] : nullptr);
-    bool posix_invocation = sh_invocation;
-    // Decide the dialect before interpreting short flags, including -e --posix.
-    // Skip option operands: a command string containing --posix is just data.
-    for (int i = 1; i < argc; ++i) {
-        std::string_view arg(argv[i]);
-        if (arg == "--" || arg.empty() || (arg[0] != '-' && arg[0] != '+')) {
-            break;
-        }
-        if (arg == "--posix") {
-            posix_invocation = true;
-        }
-        if (arg == "--command" || arg.rfind("--command=", 0) == 0) {
-            break;
-        }
-        if (arg == "--config-dir" || arg == "-o" || arg == "+o") {
-            ++i;
-        } else if (arg.size() > 1 && arg[0] == '-' && arg[1] != '-') {
-            const auto c = arg.find('c', 1);
-            if (c != std::string_view::npos) {
-                break;
-            }
-        }
-    }
-    if (posix_invocation) {
-        apply_posix_mode_settings();
+    if (sh_invocation) {
+        config::set_shell_dialect(config::ShellDialect::Posix);
     }
     bool read_stdin = false;
 
@@ -190,13 +164,15 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         {"config-dir", required_argument, nullptr, kOptConfigDir},
         {"no-system-paths", no_argument, nullptr, kOptNoSystemPaths},
         {"posix", no_argument, nullptr, kOptPosix},
-        {"version", no_argument, nullptr, 'v'},
-        {"help", no_argument, nullptr, 'h'},
-        {"no-colors", no_argument, nullptr, 'C'},
+        {"bash", no_argument, nullptr, kOptBash},
+        {"dialect", required_argument, nullptr, kOptDialect},
+        {"version", no_argument, nullptr, kOptVersion},
+        {"help", no_argument, nullptr, kOptHelp},
+        {"no-colors", no_argument, nullptr, kOptNoColors},
         {"no-titleline", no_argument, nullptr, 'L'},
         {"show-startup-time", no_argument, nullptr, 'U'},
         {"no-source", no_argument, nullptr, 'N'},
-        {"no-completions", no_argument, nullptr, 'O'},
+        {"no-completions", no_argument, nullptr, kOptNoCompletions},
         {"no-completion-learning", no_argument, nullptr, kOptNoCompletionLearning},
         {"no-smart-cd", no_argument, nullptr, kOptNoSmartCd},
         {"no-script-extension-interpreter", no_argument, nullptr, kOptNoScriptExtensionInterpreter},
@@ -205,9 +181,9 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         {"no-prompt-vars", no_argument, nullptr, kOptNoPromptVars},
         {"no-history", no_argument, nullptr, kOptNoHistory},
         {"no-agent", no_argument, nullptr, kOptNoAgent},
-        {"minimal", no_argument, nullptr, 'm'},
-        {"secure", no_argument, nullptr, 's'},
-        {"no-history-expansion", no_argument, nullptr, 'H'},
+        {"minimal", no_argument, nullptr, kOptMinimal},
+        {"secure", no_argument, nullptr, kOptSecure},
+        {"no-history-expansion", no_argument, nullptr, kOptNoHistoryExpansion},
         {"no-sh-warning", no_argument, nullptr, 'W'},
         {nullptr, 0, nullptr, 0}};
 
@@ -218,7 +194,7 @@ ParseResult parse_arguments(int argc, char* argv[]) {
     opterr = 0;
 
     while (true) {
-        if (posix_invocation && optind < argc) {
+        if (optind < argc) {
             const std::string arg(argv[optind]);
             if (arg.size() > 1 && (arg[0] == '+' || (arg[0] == '-' && arg[1] != '-'))) {
                 ++optind;
@@ -228,16 +204,12 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                     const char flag = arg[j];
                     if (flag == 'c') {
                         command_operand = true;
-                    } else if (flag == 'o') {
+                    } else if (flag == 'o' || flag == 'O') {
                         std::string operand = arg.substr(j + 1);
-                        if (operand.empty() && optind >= argc) {
-                            print_error({ErrorType::INVALID_ARGUMENT,
-                                         "startup",
-                                         std::string(1, flag) + " requires an operand",
-                                         {}});
-                            result.should_exit = true;
-                            result.exit_code = 2;
-                            return result;
+                        if (operand.empty() &&
+                            (optind >= argc || argv[optind][0] == '-' || argv[optind][0] == '+')) {
+                            result.option_queries.emplace_back(flag == 'O', !enable);
+                            break;
                         }
                         if (operand.empty() && optind < argc) {
                             operand = argv[optind++];
@@ -251,9 +223,9 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                             result.exit_code = 2;
                             return result;
                         }
-                        if (auto option = parse_shell_option(operand);
-                            option && *option != ShellOption::Globstar &&
-                            *option != ShellOption::Huponexit) {
+                        if (auto option = flag == 'O' ? parse_shopt_option(operand)
+                                                      : parse_shell_option(operand);
+                            option) {
                             result.shell_options.emplace_back(operand, enable);
                             if (*option == ShellOption::Noexec) {
                                 config::no_exec = enable;
@@ -261,7 +233,7 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                         } else {
                             print_error({ErrorType::INVALID_ARGUMENT,
                                          "startup",
-                                         "invalid POSIX option: " + operand,
+                                         "invalid shell option: " + operand,
                                          {}});
                             result.should_exit = true;
                             result.exit_code = 2;
@@ -283,13 +255,24 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                         if (flag == 'n') {
                             config::no_exec = enable;
                         }
+                    } else if (flag == 'L') {
+                        config::show_title_line = !enable;
+                    } else if (flag == 'U') {
+                        config::show_startup_time = enable;
+                    } else if (flag == 'N') {
+                        config::source_enabled = !enable;
+                    } else if (flag == 'S') {
+                        config::syntax_highlighting_enabled = !enable;
+                    } else if (flag == 'W') {
+                        config::suppress_sh_warning = enable;
                     } else {
                         print_error({ErrorType::INVALID_ARGUMENT,
                                      "startup",
-                                     "invalid POSIX option: " + std::string(1, flag),
-                                     {}});
+                                     "invalid option: -" + std::string(1, flag),
+                                     {get_usage()}});
                         result.should_exit = true;
-                        result.exit_code = 2;
+                        result.exit_code =
+                            config::shell_dialect() == config::ShellDialect::Cjsh ? 1 : 2;
                         return result;
                     }
                 }
@@ -297,15 +280,19 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                     if (optind >= argc) {
                         print_error({ErrorType::INVALID_ARGUMENT,
                                      "startup",
-                                     "-c requires a command string",
-                                     {}});
+                                     "option requires an argument: -c",
+                                     {get_usage()}});
                         result.should_exit = true;
-                        result.exit_code = 2;
+                        result.exit_code =
+                            config::shell_dialect() == config::ShellDialect::Cjsh ? 1 : 2;
                         return result;
                     }
                     config::execute_command = true;
                     config::cmd_to_execute = argv[optind++];
                     config::interactive_mode = false;
+                    if (!config::is_bash_mode()) {
+                        config::history_expansion_enabled = false;
+                    }
                     break;
                 }
                 continue;
@@ -328,7 +315,9 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 config::execute_command = true;
                 config::cmd_to_execute = optarg;
                 config::interactive_mode = false;
-                config::history_expansion_enabled = false;
+                if (!config::is_bash_mode()) {
+                    config::history_expansion_enabled = false;
+                }
                 break;
             case 'n':
             case kOptNoExec:
@@ -354,17 +343,34 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 config::no_system_paths = true;
                 break;
             case kOptPosix:
-                apply_posix_mode_settings();
+                config::set_shell_dialect(config::ShellDialect::Posix);
                 break;
-            case 'v':
+            case kOptBash:
+                config::set_shell_dialect(config::ShellDialect::Bash);
+                break;
+            case kOptDialect: {
+                auto dialect = config::parse_shell_dialect(optarg);
+                if (!dialect) {
+                    print_error({ErrorType::INVALID_ARGUMENT,
+                                 "startup",
+                                 "invalid dialect: " + std::string(optarg),
+                                 {"Use cjsh, posix, or bash"}});
+                    result.should_exit = true;
+                    result.exit_code = 2;
+                    return result;
+                }
+                config::set_shell_dialect(*dialect);
+                break;
+            }
+            case kOptVersion:
                 config::show_version = true;
                 config::interactive_mode = false;
                 break;
-            case 'h':
+            case kOptHelp:
                 config::show_help = true;
                 config::interactive_mode = false;
                 break;
-            case 'C':
+            case kOptNoColors:
                 config::colors_enabled = false;
                 break;
             case 'L':
@@ -376,7 +382,7 @@ ParseResult parse_arguments(int argc, char* argv[]) {
             case 'N':
                 config::source_enabled = false;
                 break;
-            case 'O':
+            case kOptNoCompletions:
                 config::completions_enabled = false;
                 break;
             case kOptNoCompletionLearning:
@@ -404,16 +410,16 @@ ParseResult parse_arguments(int argc, char* argv[]) {
             case kOptNoAgent:
                 agent_mode::disable_for_startup();
                 break;
-            case 'm':
+            case kOptMinimal:
                 apply_minimal_mode();
                 break;
-            case 's':
+            case kOptSecure:
                 config::secure_mode = true;
                 config::smart_cd_enabled = false;
                 config::history_enabled = false;
                 config::history_expansion_enabled = false;
                 break;
-            case 'H':
+            case kOptNoHistoryExpansion:
                 config::history_expansion_enabled = false;
                 break;
             case 'W':
@@ -442,11 +448,12 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 result.should_exit = true;
                 return result;
         }
-        if (posix_invocation && config::execute_command) {
+        if (config::execute_command) {
             break;
         }
     }
 
+    config::read_stdin = read_stdin;
     if (read_stdin && !config::execute_command) {
         for (int i = optind; i < argc; ++i) {
             result.script_args.emplace_back(argv[i]);
@@ -469,10 +476,31 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         config::interactive_mode = true;
     }
 
-    // Invoking cjsh as sh is equivalent to --posix.
-    sh_invocation = invoked_via_sh((argc > 0) ? argv[0] : nullptr);
-    if (sh_invocation) {
-        apply_posix_mode_settings();
+    if (config::is_posix_mode()) {
+        for (const auto& [shopt, reusable] : result.option_queries) {
+            (void)reusable;
+            if (shopt) {
+                print_error({ErrorType::INVALID_ARGUMENT,
+                             "startup",
+                             "shopt is not available in POSIX mode",
+                             {}});
+                result.should_exit = true;
+                result.exit_code = 2;
+                return result;
+            }
+        }
+        for (const auto& [name, enabled] : result.shell_options) {
+            (void)enabled;
+            if (parse_shopt_option(name) || name == "braceexpand" || name == "histexpand") {
+                print_error({ErrorType::INVALID_ARGUMENT,
+                             "startup",
+                             "option '" + name + "' is not available in POSIX mode",
+                             {}});
+                result.should_exit = true;
+                result.exit_code = 2;
+                break;
+            }
+        }
     }
 
     return result;

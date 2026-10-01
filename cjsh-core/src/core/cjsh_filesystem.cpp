@@ -1578,7 +1578,7 @@ void process_profile_files() {
         return;
     }
 
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         (void)execute_startup_file_if_present("/etc/profile", true);
         if (!cjsh_env::exit_requested()) {
             (void)execute_startup_file_if_present(g_user_home_path() / ".profile", true);
@@ -1590,7 +1590,7 @@ void process_profile_files() {
 }
 
 void process_env_files() {
-    if (startup_files_disabled() || config::posix_mode) {
+    if (startup_files_disabled() || config::is_posix_mode()) {
         return;
     }
 
@@ -1608,7 +1608,7 @@ void process_env_files() {
 }
 
 void process_posix_env_file() {
-    if (!config::posix_mode || !config::interactive_mode || startup_files_disabled() ||
+    if (!config::is_posix_mode() || !config::interactive_mode || startup_files_disabled() ||
         getuid() != geteuid() || getgid() != getegid()) {
         return;
     }
@@ -1625,7 +1625,7 @@ void process_posix_env_file() {
 }
 
 void process_logout_file() {
-    if (startup_files_disabled() || config::posix_mode) {
+    if (startup_files_disabled() || config::is_posix_mode()) {
         return;
     }
 
@@ -1633,7 +1633,7 @@ void process_logout_file() {
 }
 
 void process_source_files() {
-    if (!config::source_enabled || startup_files_disabled() || config::posix_mode) {
+    if (!config::source_enabled || startup_files_disabled() || config::is_posix_mode()) {
         return;
     }
 

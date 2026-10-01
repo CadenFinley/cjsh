@@ -264,7 +264,7 @@ std::string build_runtime_context() {
         {"kernel_release", have_machine ? machine.release : "unknown"},
         {"architecture", have_machine ? machine.machine : "unknown"},
         {"shell", "cjsh " + get_version()},
-        {"shell_mode", config::posix_mode ? "posix" : "default"},
+        {"shell_mode", config::is_posix_mode() ? "posix" : "default"},
         {"previous_exit_status", previous_status.empty() ? "unknown" : previous_status},
         {"previous_command", previous_command},
     };

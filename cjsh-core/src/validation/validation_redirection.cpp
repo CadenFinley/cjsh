@@ -87,7 +87,7 @@ ShellScriptInterpreter::validate_redirection_syntax(const std::vector<std::strin
                 const std::string redir_op = redirection_utils::operator_spelling(redir_op_kind);
                 next_index = i + parsed->length - 1;
 
-                if (config::posix_mode) {
+                if (config::is_posix_mode()) {
                     if ((redir_op_kind == redirection_utils::RedirectionOperator::Input ||
                          redir_op_kind == redirection_utils::RedirectionOperator::Output) &&
                         next_index + 1 < line.length() && line[next_index + 1] == '(') {

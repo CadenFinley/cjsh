@@ -1,5 +1,5 @@
 /*
-  flags.h
+  shell_dialect.h
 
   This file is part of cjsh, CJ's Shell
 
@@ -26,36 +26,28 @@
   SOFTWARE.
 */
 
-#ifndef CJSH_CORE_SRC_CORE_FLAGS_H
-#define CJSH_CORE_SRC_CORE_FLAGS_H
+#ifndef CJSH_CORE_SRC_CORE_SHELL_DIALECT_H
+#define CJSH_CORE_SRC_CORE_SHELL_DIALECT_H
 
-#include <string>
-#include <utility>
-#include <vector>
+#include <cstdint>
+#include <optional>
+#include <string_view>
 
-namespace flags {
+namespace config {
 
-struct ParseResult {
-    std::string script_file;
-    std::vector<std::string> script_args;
-    std::vector<std::pair<std::string, bool>> shell_options;
-    // (shopt namespace, reusable output) for invocation -o/+o/-O/+O without names.
-    std::vector<std::pair<bool, bool>> option_queries;
-    int exit_code = 0;
-    bool should_exit = false;
+enum class ShellDialect : std::uint8_t {
+    Cjsh,
+    Posix,
+    Bash
 };
 
-ParseResult parse_arguments(int argc, char* argv[]);
-bool is_login_shell_invocation();
-void warn_if_invoked_via_sh();
-void save_startup_arguments(int argc, char* argv[]);
-std::vector<std::string>& startup_args();
+ShellDialect shell_dialect();
+void set_shell_dialect(ShellDialect dialect);
+std::optional<ShellDialect> parse_shell_dialect(std::string_view name);
+const char* shell_dialect_name();
+bool is_posix_mode();
+bool is_bash_mode();
 
-void set_positional_parameters(const std::vector<std::string>& params);
-int shift_positional_parameters(int count = 1);
-std::vector<std::string> get_positional_parameters();
-size_t get_positional_parameter_count();
+}  // namespace config
 
-}  // namespace flags
-
-#endif  // CJSH_CORE_SRC_CORE_FLAGS_H
+#endif

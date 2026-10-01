@@ -370,7 +370,7 @@ std::vector<std::string> ExpansionEngine::expand_braces(const std::string& patte
 
     result.reserve(8);
 
-    if (config::posix_mode) {
+    if (config::is_posix_mode() || (shell && !shell->get_shell_option(ShellOption::BraceExpand))) {
         result.push_back(pattern);
         return result;
     }
@@ -613,8 +613,8 @@ std::vector<std::string> ExpansionEngine::expand_wildcards(const std::string& pa
         return result;
     }
 
-    bool globstar_enabled =
-        shell != nullptr && shell->get_shell_option(ShellOption::Globstar) && !config::posix_mode;
+    bool globstar_enabled = shell != nullptr && shell->get_shell_option(ShellOption::Globstar) &&
+                            !config::is_posix_mode();
     if (globstar_enabled || config::extglob_enabled) {
         ParsedGlobPattern parsed_pattern = parse_glob_pattern(unescaped);
         if ((globstar_enabled && parsed_pattern.contains_globstar) ||

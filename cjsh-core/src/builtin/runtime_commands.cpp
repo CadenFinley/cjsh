@@ -50,7 +50,7 @@ int execute_runtime_command(const std::vector<std::string>& command_args, Shell*
 
     const std::string& command_name = command_args[0];
     if (command_name == "[[") {
-        if (config::posix_mode) {
+        if (config::is_posix_mode()) {
             print_error({ErrorType::INVALID_ARGUMENT, "[[", "'[[' is disabled in POSIX mode", {}});
             return 2;
         }

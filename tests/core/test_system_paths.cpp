@@ -243,8 +243,12 @@ int main() {
     config::minimal_mode = false;
 
     for (bool* bypass : {&config::no_system_paths, &config::no_config, &config::secure_mode,
-                         &config::posix_mode, &config::no_exec}) {
-        *bypass = true;
+                         static_cast<bool*>(nullptr), &config::no_exec}) {
+        if (bypass) {
+            *bypass = true;
+        } else {
+            config::set_shell_dialect(config::ShellDialect::Posix);
+        }
         for (const char* value : {static_cast<const char*>(nullptr), "", ":/custom::/custom:"}) {
             if (value) {
                 (void)setenv("PATH", value, 1);
@@ -254,7 +258,11 @@ int main() {
             setup();
             ok = expect_path(value, "bypass modes must preserve PATH exactly") && ok;
         }
-        *bypass = false;
+        if (bypass) {
+            *bypass = false;
+        } else {
+            config::set_shell_dialect(config::ShellDialect::Cjsh);
+        }
     }
 
     // Missing or unusable inputs must not prevent loading the other source.

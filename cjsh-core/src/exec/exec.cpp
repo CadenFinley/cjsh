@@ -408,7 +408,7 @@ bool replace_first_instance(std::string& target, const std::string& from, const 
 std::atomic<int> g_command_not_found_handler_depth{0};
 
 bool special_handlers_enabled() {
-    return !config::minimal_mode && !config::secure_mode && !config::posix_mode;
+    return !config::minimal_mode && !config::secure_mode && !config::is_posix_mode();
 }
 
 std::vector<std::string> build_command_not_found_suggestions(const std::string& command_name) {
@@ -1097,7 +1097,7 @@ bool configure_stderr_redirects(const Command& cmd, ErrorHandler&& on_error) {
 
 [[noreturn]] void exec_external_child(const std::vector<std::string>& args,
                                       const char* cached_path) {
-    if (config::script_extension_interpreter_enabled && !config::posix_mode) {
+    if (config::script_extension_interpreter_enabled && !config::is_posix_mode()) {
         auto interpreter_args =
             script_dispatch::build_extension_interpreter_args(args, cached_path);
         if (interpreter_args) {
@@ -1556,7 +1556,7 @@ int Exec::execute_prepared_command_async(cjsh_env::PreparedCommand command) {
         JobManager::instance().set_last_background_pid(pid);
 
         if (!job.suppress_notifications &&
-            (!config::posix_mode || config::interactive_mode || config::force_interactive)) {
+            (!config::is_posix_mode() || config::interactive_mode || config::force_interactive)) {
             std::cerr << "[" << job_id << "] " << pid << " " << job.command << '\n';
         }
         last_exit_code = 0;
@@ -1617,7 +1617,7 @@ int Exec::execute_pipeline(const std::vector<Command>& commands) {
         size_t cmd_start_idx = cjsh_env::collect_env_assignments(cmd.args, env_assignments);
         const size_t original_arg_count = cmd.args.size();
 
-        if (config::posix_mode) {
+        if (config::is_posix_mode()) {
             for (const auto& [name, value] : env_assignments) {
                 if (!readonly_manager_can_assign(name, "assignment")) {
                     return finalize_exit(cjsh_env::posix_error_exit(1));
@@ -1626,7 +1626,7 @@ int Exec::execute_pipeline(const std::vector<Command>& commands) {
         }
         if (cmd_start_idx >= original_arg_count) {
             apply_assignments_to_shell_env(env_assignments);
-            if (config::posix_mode) {
+            if (config::is_posix_mode()) {
                 const int status =
                     run_with_command_redirections(cmd, [] { return 0; }, "assignment", false);
                 set_last_pipeline_statuses({status});
@@ -2405,7 +2405,7 @@ int Exec::execute_pipeline(const std::vector<Command>& commands) {
 
     if (job.background) {
         put_job_in_background(job_id, false);
-        if (!config::posix_mode || config::interactive_mode || config::force_interactive) {
+        if (!config::is_posix_mode() || config::interactive_mode || config::force_interactive) {
             std::cerr << "[" << job_id << "] " << pgid << " " << job.command << '\n';
         }
         raw_exit = 0;

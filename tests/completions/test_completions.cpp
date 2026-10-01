@@ -2797,8 +2797,12 @@ static bool test_builtin_docs() {
     EXPECT_TRUE(
         has_entry(cjshopt_doc, "exit-confirmation", builtin_completions::EntryKind::Subcommand),
         test_name, "cjshopt should include exit-confirmation subcommand");
-    EXPECT_TRUE(has_entry(cjshopt_doc, "extglob", builtin_completions::EntryKind::Subcommand),
-                test_name, "cjshopt should include extglob subcommand");
+    EXPECT_TRUE(has_entry(cjshopt_doc, "dialect", builtin_completions::EntryKind::Subcommand),
+                test_name, "cjshopt should include dialect subcommand");
+    EXPECT_TRUE(!has_entry(cjshopt_doc, "extglob", builtin_completions::EntryKind::Subcommand),
+                test_name, "extglob should be configured through shopt");
+    EXPECT_TRUE(builtin_completions::lookup_builtin_command_doc("shopt") != nullptr, test_name,
+                "shopt doc should exist");
     EXPECT_TRUE(
         has_entry(cjshopt_doc, "mouse-clicking", builtin_completions::EntryKind::Subcommand),
         test_name, "cjshopt should include mouse-clicking subcommand");

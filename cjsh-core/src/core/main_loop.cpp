@@ -151,7 +151,7 @@ CommandProcessResult process_command_line(const std::string& command) {
     }
 
     // execute preexec hooks and debug traps
-    if (!config::posix_mode) {
+    if (!config::is_posix_mode()) {
         g_shell->execute_hooks(HookType::Preexec, {expanded_command});
     }
     trap_manager_execute_debug_trap();
@@ -231,7 +231,7 @@ struct ReadlinePromptState {
 };
 
 ReadlinePromptState prepare_readline_prompt() {
-    if (!config::posix_mode) {
+    if (!config::is_posix_mode()) {
         prompt::execute_prompt_command();
         recover_prompt_terminal();
         prompt::apply_terminal_window_title();
@@ -266,7 +266,7 @@ std::optional<std::string> get_next_command() {
     recover_prompt_terminal();
 
     // handle hooks
-    if (!config::posix_mode) {
+    if (!config::is_posix_mode()) {
         g_shell->execute_hooks(HookType::Precmd);
         recover_prompt_terminal();
     }
@@ -285,7 +285,7 @@ std::optional<std::string> get_next_command() {
                                            : prompt_state.inline_right_text.c_str();
 
         long idle_timeout_ms = 0;
-        if (!config::posix_mode && !config::secure_mode && config::idle_timeout_seconds > 0 &&
+        if (!config::is_posix_mode() && !config::secure_mode && config::idle_timeout_seconds > 0 &&
             !g_shell->get_hooks(HookType::Idle).empty()) {
             idle_timeout_ms = config::idle_timeout_seconds * 1000;
         }

@@ -51,7 +51,7 @@ int source_command(const std::vector<std::string>& args) {
         return 0;
     }
 
-    if (config::posix_mode && invoked_as_source) {
+    if (config::is_posix_mode() && invoked_as_source) {
         print_error({ErrorType::INVALID_ARGUMENT,
                      "source",
                      "'source' is disabled in POSIX mode. Use '.' instead.",
@@ -70,7 +70,7 @@ int source_command(const std::vector<std::string>& args) {
 
     std::error_code status_ec;
     std::filesystem::path target_path(args[1]);
-    if (config::posix_mode && args[1].find('/') == std::string::npos) {
+    if (config::is_posix_mode() && args[1].find('/') == std::string::npos) {
         const std::string path = cjsh_env::get_shell_variable_value("PATH");
         size_t start = 0;
         target_path.clear();
@@ -90,7 +90,8 @@ int source_command(const std::vector<std::string>& args) {
             start = end + 1;
         }
     }
-    if (config::posix_mode && (target_path.empty() || access(target_path.c_str(), R_OK) != 0)) {
+    if (config::is_posix_mode() &&
+        (target_path.empty() || access(target_path.c_str(), R_OK) != 0)) {
         print_error({ErrorType::FILE_NOT_FOUND, command_name, "cannot read file: " + args[1], {}});
         return posix_special_builtin_error(1);
     }

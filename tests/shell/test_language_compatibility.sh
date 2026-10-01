@@ -110,31 +110,31 @@ run_expect_output "unset -n removes a nameref without removing its target" \
     'target=value; declare -n ref=target; unset -n ref; printf "%s|%s" "${ref-unset}" "$target"' \
     'unset|value'
 
-run_expect_output "cjshopt extglob enables extended pattern operators" \
-    'cjshopt extglob on >/dev/null; [[ foo == @(foo|bar) ]] && [[ foobar == +(foo|bar) ]] && [[ baz == !(foo|bar) ]]; printf "%s" "$?"' \
+run_expect_output "shopt extglob enables extended pattern operators" \
+    'shopt -s extglob >/dev/null; [[ foo == @(foo|bar) ]] && [[ foobar == +(foo|bar) ]] && [[ baz == !(foo|bar) ]]; printf "%s" "$?"' \
     '0'
 
 run_expect_output "extglob works in case patterns" \
-    'cjshopt extglob on >/dev/null; case foobar in +(foo|bar)) echo matched ;; *) echo missed ;; esac' \
+    'shopt -s extglob >/dev/null; case foobar in +(foo|bar)) echo matched ;; *) echo missed ;; esac' \
     'matched'
 
 run_expect_output "extglob works in parameter replacement" \
-    'cjshopt extglob on >/dev/null; value=foobar; printf "%s|%s" "${value/@(foo|bar)/X}" "${value//+(foo|bar)/X}"' \
+    'shopt -s extglob >/dev/null; value=foobar; printf "%s|%s" "${value/@(foo|bar)/X}" "${value//+(foo|bar)/X}"' \
     'Xbar|X'
 
 run_expect_output "overlapping and empty extglob alternatives retain suffix matching" \
-    'cjshopt extglob on >/dev/null; for value in b aab aaab aaac; do case "$value" in *(a|aa|)b) printf "yes " ;; *) printf "no " ;; esac; done' \
+    'shopt -s extglob >/dev/null; for value in b aab aaab aaac; do case "$value" in *(a|aa|)b) printf "yes " ;; *) printf "no " ;; esac; done' \
     'yes yes yes no '
 
 run_expect_output "extglob frontiers preserve leftmost-longest replacement and trimming" \
-    'cjshopt extglob on >/dev/null; value=aaabaa; printf "%s|%s|%s|%s" "${value//+(a|aa)/X}" "${value##*(a|aa)}" "${value%%+(a|aa)}" "${value/@(*a*a)b/X}"' \
+    'shopt -s extglob >/dev/null; value=aaabaa; printf "%s|%s|%s|%s" "${value//+(a|aa)/X}" "${value##*(a|aa)}" "${value%%+(a|aa)}" "${value/@(*a*a)b/X}"' \
     'XbX|baa|aaab|Xaa'
 
 EXTGLOB_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cjsh-extglob.XXXXXX")
 touch "$EXTGLOB_DIR/one.txt" "$EXTGLOB_DIR/two.txt" "$EXTGLOB_DIR/three.log" \
     "$EXTGLOB_DIR/.hidden.txt"
 run_expect_output "extglob expands pathnames without implicitly matching dotfiles" \
-    "cd '$EXTGLOB_DIR'; cjshopt extglob on >/dev/null; echo @(*.txt)" \
+    "cd '$EXTGLOB_DIR'; shopt -s extglob >/dev/null; echo @(*.txt)" \
     'one.txt two.txt'
 rm -rf "$EXTGLOB_DIR"
 

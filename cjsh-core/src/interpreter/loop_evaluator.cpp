@@ -720,7 +720,7 @@ int handle_for_block(
         }
 
         if (parse_c_style_for_header(normalized_header, c_style_header)) {
-            if (config::posix_mode) {
+            if (config::is_posix_mode()) {
                 (void)cjsh_env::posix_error_exit(2);
                 (void)report_loop_header_error("for", "C-style loops are disabled in POSIX mode");
                 return false;
@@ -734,7 +734,7 @@ int handle_for_block(
             return false;
         }
 
-        const auto parsed = parse_named_loop_header(header, "for", config::posix_mode);
+        const auto parsed = parse_named_loop_header(header, "for", config::is_posix_mode());
         if (!parsed.error.empty()) {
             report_loop_header_error("for", parsed.error);
             return false;
@@ -928,7 +928,7 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
                         const std::function<int(const std::vector<std::string>&)>& execute_block,
                         const std::function<int(const std::string&)>& execute_simple_or_pipeline,
                         Parser* shell_parser, const std::function<bool()>& should_abort_execution) {
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         (void)report_loop_header_error("select", "select is disabled in POSIX mode");
         return cjsh_env::posix_error_exit(2);
     }
@@ -959,7 +959,7 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
     };
 
     auto parse_header = [&](const std::string& header) -> bool {
-        const auto parsed = parse_named_loop_header(header, "select", config::posix_mode);
+        const auto parsed = parse_named_loop_header(header, "select", config::is_posix_mode());
         if (!parsed.error.empty()) {
             report_loop_header_error("select", parsed.error);
             return false;

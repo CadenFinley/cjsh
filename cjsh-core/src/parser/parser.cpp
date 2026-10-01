@@ -179,7 +179,8 @@ bool is_simple_command_candidate(std::string_view cmdline) {
         if (std::isspace(uc) == 0) {
             seen_non_space = true;
         }
-        if (kSpecialChars.find(c) != std::string_view::npos || (config::posix_mode && c == '~')) {
+        if (kSpecialChars.find(c) != std::string_view::npos ||
+            (config::is_posix_mode() && c == '~')) {
             return false;
         }
     }
@@ -562,7 +563,7 @@ const std::vector<std::string>& Parser::prepare_interactive_input(const std::str
 
 std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
     std::string rewritten =
-        config::posix_mode && source.find("$'") != std::string::npos ? source : "";
+        config::is_posix_mode() && source.find("$'") != std::string::npos ? source : "";
     const std::string& script = rewritten.empty() ? source : rewritten;
     if (prepared_input) {
         auto prepared = std::move(*prepared_input);
@@ -1107,12 +1108,15 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
         (void)args.emplace_back(cmdline);
     } else {
         try {
-            if (command_tokens_extglob != config::extglob_enabled) {
+            if (command_tokens_extglob != config::extglob_enabled ||
+                command_tokens_dialect != static_cast<int>(config::shell_dialect())) {
                 command_tokens.clear();
                 command_tokens_extglob = config::extglob_enabled;
+                command_tokens_dialect = static_cast<int>(config::shell_dialect());
             }
             const auto cached = command_tokens.find(cmdline);
-            const bool dynamic_tilde = config::posix_mode && cmdline.find('~') != std::string::npos;
+            const bool dynamic_tilde =
+                config::is_posix_mode() && cmdline.find('~') != std::string::npos;
             if (cached != command_tokens.end() && !dynamic_tilde) {
                 args = cached->second;
             } else {
@@ -1163,7 +1167,8 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
 
     if (!args.empty()) {
         auto alias_it = aliases.find(args[0]);
-        if (alias_it != aliases.end()) {
+        if (alias_it != aliases.end() &&
+            (!shell || shell->get_shell_option(ShellOption::ExpandAliases))) {
             std::vector<std::string> alias_args;
             alias_args.reserve(8);
 
@@ -1202,7 +1207,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
 
     auto report_environment_expansion_error = [&](const std::runtime_error& error) {
         const std::string message = error.what();
-        if (config::posix_mode) {
+        if (config::is_posix_mode()) {
             (void)cjsh_env::posix_error_exit(2);
         }
         if (shell != nullptr && shell->get_shell_option(ShellOption::Nounset) &&
@@ -1215,7 +1220,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
                           "expansion."}});
             return true;
         }
-        if (config::posix_mode) {
+        if (config::is_posix_mode()) {
             print_error({ErrorType::RUNTIME_ERROR, "parser", message, {}});
             return true;
         }
@@ -1262,7 +1267,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
         try {
             variableExpander->expand_env_vars_selective(value_to_expand);
         } catch (const std::runtime_error& e) {
-            if (config::posix_mode) {
+            if (config::is_posix_mode()) {
                 (void)cjsh_env::posix_error_exit(2);
                 throw;
             }
@@ -1725,7 +1730,8 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
         if (!filtered_args.empty()) {
             const std::string& alias_candidate = QuoteInfo(filtered_args[0]).value;
             auto alias_it = aliases.find(alias_candidate);
-            if (alias_it != aliases.end()) {
+            if (alias_it != aliases.end() &&
+                (!shell || shell->get_shell_option(ShellOption::ExpandAliases))) {
                 try {
                     std::vector<std::string> alias_args =
                         Tokenizer::tokenize_command(alias_it->second);
@@ -1789,7 +1795,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                         variableExpander->expand_env_vars(val);
                     }
                 } catch (const std::runtime_error&) {
-                    if (config::posix_mode) {
+                    if (config::is_posix_mode()) {
                         (void)cjsh_env::posix_error_exit(2);
                         throw;
                     }

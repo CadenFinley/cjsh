@@ -592,33 +592,22 @@ int smart_cd_command(const std::vector<std::string>& args) {
     return handle_toggle_command(config, args);
 }
 
-int extglob_command(const std::vector<std::string>& args) {
-    static const std::vector<std::string> usage_lines = {
-        "Usage: extglob <on|off|status>",
-        "Examples:", "  extglob on      Enable ?(), *(), +(), @(), and !() patterns",
-        "  extglob off     Treat extended glob operators literally",
-        "  extglob status  Show the current setting"};
-
-    static const ToggleCommandConfig config{
-        "extglob",
-        usage_lines,
-        [] { return config::extglob_enabled; },
-        [](bool enable) { config::extglob_enabled = enable && !config::posix_mode; },
-        "Extended glob patterns",
-        true,
-        "Add `cjshopt {command} {state}` to your ~/.cjshrc to persist this change.\n",
-        {},
-        {}};
-
-    if (config::posix_mode && args.size() > 1 && args[1] != "off" && args[1] != "status" &&
-        args[1] != "--status") {
-        print_error({ErrorType::INVALID_ARGUMENT,
-                     "extglob",
-                     "extended glob patterns are not available in POSIX mode",
-                     {}});
-        return 1;
+int dialect_command(const std::vector<std::string>& args) {
+    if (args.size() == 1 || (args.size() == 2 && (args[1] == "status" || args[1] == "--status"))) {
+        std::cout << config::shell_dialect_name() << '\n';
+        return 0;
     }
-    return handle_toggle_command(config, args);
+    if (args.size() == 2) {
+        if (auto dialect = config::parse_shell_dialect(args[1])) {
+            config::set_shell_dialect(*dialect);
+            return 0;
+        }
+    }
+    print_error({ErrorType::INVALID_ARGUMENT,
+                 "cjshopt dialect",
+                 "invalid dialect",
+                 {"Usage: cjshopt dialect <cjsh|posix|bash|status>"}});
+    return 2;
 }
 
 int script_extension_interpreter_command(const std::vector<std::string>& args) {

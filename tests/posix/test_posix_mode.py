@@ -207,7 +207,7 @@ RESTRICTIONS = [Case(name, code, status=None, diagnostic="POSIX") for name, code
     ("builtin", 'builtin echo hi'),
     ("pushd", 'pushd .'),
     ("cjshopt", 'cjshopt'),
-    ("globstar option", 'set -o globstar'),
+    ("globstar option", 'shopt -s globstar'),
     ("severity option", 'set -o errexit_severity warning'),
     ("severity long option", 'set --errexit-severity=warning'),
     ("read option", 'read -n 1 x < input'),

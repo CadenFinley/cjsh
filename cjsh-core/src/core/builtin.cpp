@@ -71,6 +71,7 @@
 #include "set_command.h"
 #include "shell.h"
 #include "shell_env.h"
+#include "shopt_command.h"
 #include "source_command.h"
 #include "suggestion_utils.h"
 #include "test_command.h"
@@ -103,7 +104,7 @@ bool is_posix_restricted_builtin(const std::string& name) {
            name == "help" || name == "version" || name == "history" || name == "restart" ||
            name == "which" || name == "jobname" || name == "disown" ||
            name == "generate-completions" || name == "firstboot" || name == "hook" ||
-           name == "cjsh-widget" || name == "cjshopt" || name == "builtin" || name == "quit" ||
+           name == "cjsh-widget" || name == "shopt" || name == "builtin" || name == "quit" ||
            name == "bye" || name == "suspend" || name == "[[";
 }
 
@@ -138,6 +139,7 @@ bool is_posix_special_builtin(const std::string& name) {
 
 Built_ins::Built_ins() : shell(nullptr) {
     builtins = {
+        {"shopt", [this](const std::vector<std::string>& args) { return ::shopt_command(args, shell); }},
         {"echo", [](const std::vector<std::string>& args) { return ::echo_command(args); }},
         {"printf", [](const std::vector<std::string>& args) { return ::printf_command(args); }},
         {"pwd", [](const std::vector<std::string>& args) { return ::pwd_command(args); }},
@@ -302,7 +304,7 @@ Built_ins::Built_ins() : shell(nullptr) {
                  return 2;
              }
 
-             if (config::posix_mode && is_posix_restricted_builtin(target_command)) {
+             if (config::is_posix_mode() && is_posix_restricted_builtin(target_command)) {
                  return reject_posix_restricted_builtin(target_command);
              }
 
@@ -387,7 +389,11 @@ int Built_ins::builtin_command(const std::vector<std::string>& args) {
 
     auto it = builtins.find(args[0]);
     if (it != builtins.end()) {
-        if (config::posix_mode && is_posix_restricted_builtin(args[0])) {
+        if (config::is_posix_mode() && args[0] == "cjshopt" &&
+            (args.size() < 2 || args[1] != "dialect")) {
+            return reject_posix_restricted_builtin(args[0]);
+        }
+        if (config::is_posix_mode() && is_posix_restricted_builtin(args[0])) {
             return reject_posix_restricted_builtin(args[0]);
         }
         const bool special = is_posix_special_builtin(args[0]) && regular_builtin != args[0];

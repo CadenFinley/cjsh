@@ -82,7 +82,7 @@ else
   exit 1
 fi
 
-OUT=$("$CJSH_PATH" -c "cd '$GLOB_TMP/root'; set -o globstar; printf '%s' **/deep.txt" 2>/dev/null)
+OUT=$("$CJSH_PATH" -c "cd '$GLOB_TMP/root'; shopt -s globstar; printf '%s' **/deep.txt" 2>/dev/null)
 if [ "$OUT" = "a/b/deep.txt" ]; then
   pass_test "globstar matches nested files"
 else
@@ -91,7 +91,7 @@ else
   exit 1
 fi
 
-OUT=$("$CJSH_PATH" -c "cd '$GLOB_TMP/root'; set -o globstar; printf '%s' **/root.txt" 2>/dev/null)
+OUT=$("$CJSH_PATH" -c "cd '$GLOB_TMP/root'; shopt -s globstar; printf '%s' **/root.txt" 2>/dev/null)
 if [ "$OUT" = "root.txt" ]; then
   pass_test "globstar zero-depth match"
 else
@@ -100,7 +100,7 @@ else
   exit 1
 fi
 
-DIRS=$("$CJSH_PATH" -c "cd '$GLOB_TMP/root'; set -o globstar; printf '%s ' **/" 2>/dev/null)
+DIRS=$("$CJSH_PATH" -c "cd '$GLOB_TMP/root'; shopt -s globstar; printf '%s ' **/" 2>/dev/null)
 if printf '%s' "$DIRS" | tr ' ' '\n' | grep -q "a/b/"; then
   pass_test "globstar directory-only expansion"
 else

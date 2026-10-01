@@ -127,7 +127,7 @@ int export_command(const std::vector<std::string>& args, Shell* shell) {
     }
 
     if (start_index >= args.size()) {
-        if (config::posix_mode) {
+        if (config::is_posix_mode()) {
             for (const auto& name : cjsh_env::exported_variable_names()) {
                 if (!cjsh_env::is_valid_env_name(name)) {
                     continue;
@@ -166,7 +166,7 @@ int export_command(const std::vector<std::string>& args, Shell* shell) {
             continue;
         }
 
-        if (config::posix_mode) {
+        if (config::is_posix_mode()) {
             cjsh_env::mark_exported(name);
             if (!operand.has_assignment && !cjsh_env::shell_variable_is_set(name)) {
                 continue;

@@ -66,7 +66,7 @@ std::string ParameterExpansionEvaluator::expand(const std::string& param_expr) {
         return "";
     }
 
-    if (config::posix_mode) {
+    if (config::is_posix_mode()) {
         const size_t end = posix_parameter_name_end(param_expr);
         if (end == std::string::npos) {
             throw std::runtime_error("parameter expansion error: ${" + param_expr +
@@ -220,7 +220,7 @@ std::string ParameterExpansionEvaluator::expand(const std::string& param_expr) {
     std::string var_value = read_variable(var_name);
 
     if (op_pos == std::string::npos) {
-        if (config::posix_mode && g_shell && g_shell->get_shell_option(ShellOption::Nounset) &&
+        if (config::is_posix_mode() && g_shell && g_shell->get_shell_option(ShellOption::Nounset) &&
             var_name != "@" && var_name != "*" && !is_variable_set(var_name)) {
             throw std::runtime_error("parameter expansion error: " + var_name +
                                      ": parameter not set");
