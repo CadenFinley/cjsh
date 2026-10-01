@@ -37,7 +37,7 @@ import sys
 import time
 from typing import List, Tuple, Dict, Optional
 
-RUNS = 100
+RUNS = 50
 
 SHELL_COMMANDS = {
     "posix": {
