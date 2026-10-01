@@ -50,6 +50,18 @@ Explicit shell-option choices survive dialect changes. Unspecified defaults foll
 the dialect. Leaving POSIX mode restores the native feature settings that it disabled.
 `cjshopt dialect` is available in POSIX mode so the selection remains reversible.
 
+Files with a Bash shebang, such as `#!/bin/bash` or `#!/usr/bin/env bash`, automatically
+use the Bash dialect when cjsh reads or sources them. The previous dialect is restored
+when the file finishes, including after `return` or a syntax error. Bash scripts dispatched
+as external commands run in a separate cjsh process, preserving their arguments,
+redirections, and exit status. `#!/usr/bin/env -S bash` is also recognized; interpreter
+options such as `-e` are passed to cjsh for executable scripts. This behavior does not
+depend on extension-based interpreter selection.
+
+POSIX mode never switches dialect based on a shebang. Files read by `cjsh --posix` or
+`.` retain POSIX syntax and restrictions. Executable commands continue to use their
+shebang interpreter through normal external execution.
+
 ## Options and flag migration
 
 Short flags now have consistent meanings in every dialect:

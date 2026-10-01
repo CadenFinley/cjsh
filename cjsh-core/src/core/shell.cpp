@@ -68,6 +68,7 @@
 #include "pipeline_status_utils.h"
 #include "prompt.h"
 #include "readonly_command.h"
+#include "script_dispatch.h"
 #include "shell_env.h"
 #include "signal_handler.h"
 #include "string_utils.h"
@@ -455,6 +456,7 @@ int Shell::execute_script_content(const std::string& content, const std::string&
     if (!shell_script_interpreter) {
         print_error({ErrorType::FATAL_ERROR, "", "shell not initialized properly", {}});
     }
+    const script_dispatch::BashScriptDialectScope dialect_scope(content);
     auto parsed_lines = shell_script_interpreter->parse_into_lines(content);
     if (parsed_lines.empty()) {
         return 0;

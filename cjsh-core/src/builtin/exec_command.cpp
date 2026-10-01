@@ -44,6 +44,7 @@
 
 #include "cjsh_filesystem.h"
 #include "error_out.h"
+#include "script_dispatch.h"
 #include "shell.h"
 #include "shell_env.h"
 #include "signal_handler.h"
@@ -147,12 +148,16 @@ FdOpOutcome try_apply_fd_operation(const std::vector<std::string>& args, size_t&
 }
 
 int exec_replacing_shell(const std::vector<std::string>& exec_args) {
-    auto c_args = cjsh_env::build_exec_argv(exec_args);
+    const auto cached_path = cjsh_filesystem::resolve_executable_for_execution(exec_args[0]);
+    const auto interpreter_args =
+        script_dispatch::build_bash_shebang_interpreter_args(exec_args, cached_path.c_str());
+    const auto& replacement_args = interpreter_args ? *interpreter_args : exec_args;
+    auto c_args = cjsh_env::build_exec_argv(replacement_args);
     int saved_errno;
     {
         cjsh_env::ReplacementShellLevel level;
         ExecSignalGuard signals;
-        (void)execvp(exec_args[0].c_str(), c_args.data());
+        (void)execvp(replacement_args[0].c_str(), c_args.data());
         saved_errno = errno;
     }
     print_exec_runtime_error(exec_args[0] + ": " + std::strerror(saved_errno));

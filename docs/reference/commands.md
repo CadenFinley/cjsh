@@ -201,6 +201,11 @@ When you execute a script file directly (for example, `./script.sh`) CJSH can in
 from the file extension if the file has no shebang. Toggle this with
 `cjshopt script-extension-interpreter` or `--no-script-extension-interpreter`.
 
+Bash shebangs select cjsh's [Bash dialect](bash-mode.md) for that file and restore
+the previous dialect afterward. External Bash script commands run in a separate cjsh process;
+sourced files run in the current shell. POSIX mode does not automatically change dialect
+and continues to dispatch executable scripts to their shebang interpreter.
+
 ### eval
 Evaluate a string as shell code.
 

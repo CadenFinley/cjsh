@@ -71,6 +71,7 @@ extern "C" char** environ;
 #include "parser_utils.h"
 #include "pipeline_status_utils.h"
 #include "prompt.h"
+#include "script_dispatch.h"
 #include "shell.h"
 #include "signal_handler.h"
 #include "string_utils.h"
@@ -936,6 +937,8 @@ int handle_non_interactive_mode(const std::string& script_file) {
     }
 
     if (!script_content.empty()) {
+        const script_dispatch::BashScriptDialectScope dialect_scope(
+            script_file.empty() ? std::string_view{} : std::string_view(script_content));
         int code = g_shell ? g_shell->execute(script_content) : 1;
         return read_exit_code_or(code);
     }

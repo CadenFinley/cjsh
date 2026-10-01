@@ -185,6 +185,10 @@ cjsh_add_test(NAME parser_dispatch_tests COMMAND parser_dispatch_tests)
 cjsh_add_test(NAME pattern_endpoint_tests COMMAND pattern_endpoint_tests)
 
 if(Python3_Interpreter_FOUND)
+    cjsh_add_test(NAME bash.shebang
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/bash/test_bash_shebang.py"
+                $<TARGET_FILE:cjsh>)
+    set_tests_properties(bash.shebang PROPERTIES LABELS "bash")
     foreach(category native differential)
         cjsh_add_test(NAME bash.${category}
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/bash/test_bash_mode.py"

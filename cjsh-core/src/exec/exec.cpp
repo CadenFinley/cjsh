@@ -1097,6 +1097,13 @@ bool configure_stderr_redirects(const Command& cmd, ErrorHandler&& on_error) {
 
 [[noreturn]] void exec_external_child(const std::vector<std::string>& args,
                                       const char* cached_path) {
+    if (auto interpreter_args =
+            script_dispatch::build_bash_shebang_interpreter_args(args, cached_path)) {
+        auto c_interp_args = cjsh_env::build_exec_argv(*interpreter_args);
+        (void)execv((*interpreter_args)[0].c_str(), c_interp_args.data());
+        int saved_errno = errno;
+        report_exec_failure(*interpreter_args, saved_errno);
+    }
     if (config::script_extension_interpreter_enabled && !config::is_posix_mode() &&
         !config::is_bash_mode()) {
         auto interpreter_args =
