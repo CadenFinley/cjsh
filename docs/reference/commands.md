@@ -271,22 +271,40 @@ Mark variables as read-only.
 readonly [-pf] name[=value] [name[=value]...]
 ```
 
+### shopt
+
+Inspect or change shell language options. Supported options are `extglob`, `globstar`,
+`huponexit`, `expand_aliases`, and `inherit_errexit`.
+
+```sh
+shopt -s extglob globstar
+shopt -u huponexit
+shopt -p extglob
+shopt -q globstar
+```
+
+`-s` enables, `-u` disables, `-p` prints reusable commands, `-q` queries without output,
+and `-o` selects the `set` option namespace. See [Bash dialect](bash-mode.md) for defaults,
+compatibility boundaries, and migration from the previous option interfaces.
+
+- Native interactive shells enable `huponexit` by default, including `-i -c` invocations.
+  Native noninteractive shells default to off. When enabled, normal exit sends SIGHUP to
+  managed jobs. Use `shopt -u huponexit` to keep jobs running, or `disown`/`disown -h`
+  to exempt individual jobs.
+- Bash mode defaults `huponexit` to off and applies it only to interactive login shells.
+- HUP cleanup resumes stopped jobs so they can handle the signal. Jobs that handle or ignore
+  HUP may survive; cjsh does not escalate to SIGKILL and waits at most 100 ms for child cleanup.
+
 ### set
+
 Adjust shell options or positional parameters.
 
 ```bash
 set [options] [args...]
 ```
 
-- `huponexit` is enabled by default for interactive shells (including `-i -c`) and disabled
-  by default for noninteractive shells. When enabled, normal exit sends SIGHUP to managed jobs.
-  Use `set +o huponexit` to keep the previous interactive default, or `disown`/`disown -h`
-  to exempt individual jobs. Add the opt-out to your interactive rc file if you depended on
-  background helpers surviving shell exit. `set -o huponexit` explicitly enables it in scripts.
-- HUP cleanup resumes stopped jobs so they can handle the signal. Jobs that handle or ignore
-  HUP may survive; cjsh does not escalate to SIGKILL and waits at most 100 ms for child cleanup.
-- `set -m` enables monitor mode and per-job process groups; `set +m` disables it. Interactive
-  shells start with monitor mode enabled.
+`set -m` enables monitor mode and per-job process groups; `set +m` disables it. Interactive
+shells start with monitor mode enabled.
 
 ### coproc
 
@@ -497,7 +515,7 @@ disown [-arh] [job_spec|pid...]
 - `-a/--all` selects every tracked job; `-r/--running` restricts the selection to running jobs
 - `-h` leaves selected jobs in the table but excludes them from SIGHUP propagation
 - Job specs include `%N`, `%+`, `%-`, `%prefix`, and `%?substring`; a tracked PID is also accepted
-- Disowned jobs continue running even if `set -o huponexit` is enabled later in the session
+- Disowned jobs continue running even if `shopt -s huponexit` is enabled later in the session
 
 ### suspend
 Suspend the current interactive shell until its parent resumes it with `fg`.
@@ -776,7 +794,7 @@ Available subcommands:
 - `completion-learning` - Toggle automatic completion learning from man pages
 - `exit-confirmation` - Configure when `exit`, `quit`, and `bye` require confirmation
 - `smart-cd` - Toggle fuzzy auto-jumps for `cd`
-- `extglob` - Toggle Bash-style extended glob patterns (`?()`, `*()`, `+()`, `@()`, `!()`)
+- `dialect cjsh|posix|bash|status` - Select or inspect the shell language dialect
 - `script-extension-interpreter` - Toggle extension-based script runners
 - `line-numbers` - Configure line numbers in multiline input (on/off/relative/absolute)
 - `line-numbers-continuation` - Keep line numbers when a continuation prompt is set

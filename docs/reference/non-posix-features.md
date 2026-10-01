@@ -78,7 +78,7 @@ See [Prompt Markup and Styling](../themes/thedetails.md) for the full markup ref
 - **Arrays and namerefs** – `declare -a`, `declare -A`, and `declare -n` provide indexed arrays,
   associative arrays, and reference variables.
 - **Extended globs** – `?()`, `*()`, `+()`, `@()`, and `!()` work in pathname expansion,
-  `[[ … ]]`, `case`, and parameter patterns after `cjshopt extglob on`.
+  `[[ … ]]`, `case`, and parameter patterns after `shopt -s extglob`.
 - **Case pattern continuation** – `;;&` resumes pattern testing at the following clause.
   `;&` executes the following clause body and is standard in POSIX.1-2024.
 - **Coprocesses** – `coproc command` and `coproc NAME { command; }` expose two-way descriptors in

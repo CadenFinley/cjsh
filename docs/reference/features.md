@@ -42,12 +42,12 @@ POSIX, Bash, or Zsh behavior is not identical.
 - **POSIX+ extensions** – `[[ … ]]`, arithmetic contexts, indexed and associative arrays,
     namerefs, coprocesses, brace expansion (including strides), case fall-through, here-strings,
     and process substitution are supported. Extended globs are enabled with
-    `cjshopt extglob on`. History expansion stays interactive-only by default.
+    `shopt -s extglob`. History expansion stays interactive-only by default.
 - **Job control** – Background jobs, `fg`, `bg`, `jobs`, `wait`, `disown`, and `trap` integrate with
     terminal process groups so `SIGTTIN`/`SIGTTOU` retain their normal kernel semantics. Monitor
     mode is enabled for interactive shells and toggled with `set -m` / `set +m`. Append `&^` to a command
     to auto-background it on `Ctrl+Z`, or `&^!` to auto-background and discard stdout/stderr after
-    the suspend. `set -o huponexit` controls whether exiting shells hang up or leave running jobs
+    the suspend. `shopt -s huponexit` controls whether exiting shells hang up or leave running jobs
     alone (default: off, so long-lived helpers keep running until you explicitly stop them).
 
 ## Interactive Layer
@@ -131,8 +131,8 @@ for full details.
      - `cjshopt agent-mode …` for user-provided command-writing executors
      - `cjshopt keybind …` and `cjshopt keybind ext …` for keymap management
     - `cjshopt set-history-max` to adjust persistent history size (0 or more entries; no upper limit)
-    - `set -o huponexit` mirrors bash's option for sending SIGHUP to background jobs when the
-        shell exits (off by default so long-running helpers stick around)
+    - `shopt -s huponexit` sends SIGHUP to background jobs on exit. Native interactive shells
+        enable it by default; Bash mode defaults to off and applies it only to interactive login shells.
 - **Generated config skeletons** – `cjshopt generate-env`, `cjshopt generate-profile`,
     `cjshopt generate-rc`, and `cjshopt generate-logout` create `~/.cjshenv`, `~/.cjprofile`,
     `~/.cjshrc`, and `~/.cjlogout` (or alternate locations under `~/.config/cjsh/`) with
@@ -154,26 +154,35 @@ Persistent caches (history, generated completions, etc.) live under `~/.cache/cj
 
 ## Command-line Flags
 
-`cjsh` accepts these switches (short/long forms shown where available):
+`cjsh` uses the same short-option meanings in every dialect. `-v` is verbose,
+`-h` is hashall, `-C` is noclobber, `-m` is monitor, `-s` reads stdin, `-H`
+enables history expansion, and `-O NAME` enables a `shopt` option. Use the long
+options for the former native shortcuts (help, version, colors, minimal mode,
+secure mode, completions, and disabling history expansion).
 
-- `-h, --help` – usage information
-- `-v, --version` – print the version banner and exit
+- `--dialect cjsh|posix|bash` selects the language dialect; `--bash` selects the
+  experimental [Bash dialect](bash-mode.md). `cjshopt dialect` changes it at runtime.
+
+Other switches:
+
+- `--help` – usage information
+- `--version` – print the version banner and exit
 - `-l, --login` – treat the shell as a login shell (source `~/.cjprofile`)
 - `-i, --interactive` – force interactive behavior even if stdin is not a tty
 - `-c, --command <string>` – execute a single command and exit (disables history expansion)
 - `--no-exec` – read commands but do not execute them
 - `--no-system-paths` – skip automatic PATH setup from `/etc/paths` and `/etc/paths.d`
-- `--posix` – select [POSIX.1-2024 mode](posix-mode.md), including `sh` short-option
+- `--posix` – select [POSIX.1-2024 mode](posix-mode.md), with strict extension restrictions. All dialects use standard short-option
   meanings (`-v` verbose, `-C` noclobber, `-m` monitor, `-s` stdin, `-h` hashall)
-- `-m, --minimal` – disable colors, completions and completion learning, syntax
+- `--minimal` – disable colors, completions and completion learning, syntax
   highlighting, rc sourcing, smart cd, the title line, history expansion, the status line,
   multiline line numbers, the startup time banner, error suggestions, prompt vars, and special
   lifecycle handlers; normal PATH setup and native env/profile loading still apply
-- `-C, --no-colors`
+- `--no-colors`
 - `-L, --no-titleline`
 - `-U, --show-startup-time`
 - `-N, --no-source`
-- `-O, --no-completions`
+- `--no-completions`
 - `--no-script-extension-interpreter`
 - `--no-smart-cd`
 - `--no-completion-learning` – keep completions enabled but skip on-demand man-page scraping
@@ -182,10 +191,10 @@ Persistent caches (history, generated completions, etc.) live under `~/.cache/cj
 - `--no-agent` – disable agent-assisted command writing, including configured activation keys,
   trigger prefixes, and its command-palette entry
 - `--no-prompt-vars`
-- `-H, --no-history-expansion`
+- `--no-history-expansion`
 - `--no-history` – disable history recording (also disables history expansion)
 - `-W, --no-sh-warning` – suppress the reminder shown when cjsh is invoked via `sh`
-- `-s, --secure` – skip `~/.cjshenv`, `~/.cjprofile`, `~/.cjshrc`, and `~/.cjlogout`, disable
+- `--secure` – skip `~/.cjshenv`, `~/.cjprofile`, `~/.cjshrc`, and `~/.cjlogout`, disable
   history persistence and smart cd, and ignore special lifecycle handlers
 
 ## Built-in Tooling Highlights
