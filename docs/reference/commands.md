@@ -278,10 +278,11 @@ readonly [-pf] name[=value] [name[=value]...]
 
 ### shopt
 
-Inspect or change shell language options. Supported options are `extglob`, `globstar`,
+Inspect or change shell language options. Supported options are `autocd`, `extglob`, `globstar`,
 `huponexit`, `expand_aliases`, and `inherit_errexit`.
 
 ```sh
+shopt -s autocd
 shopt -s extglob globstar
 shopt -u huponexit
 shopt -p extglob
@@ -292,6 +293,8 @@ shopt -q globstar
 and `-o` selects the `set` option namespace. See [Bash dialect](bash-mode.md) for defaults,
 compatibility boundaries, and migration from the previous option interfaces.
 
+- `autocd` treats directory names as implicit `cd` commands in interactive shells. It defaults
+  to on in the native dialect and off in Bash mode; `shopt -s autocd` enables it explicitly.
 - Native interactive shells enable `huponexit` by default, including `-i -c` invocations.
   Native noninteractive shells default to off. When enabled, normal exit sends SIGHUP to
   managed jobs. Use `shopt -u huponexit` to keep jobs running, or `disown`/`disown -h`

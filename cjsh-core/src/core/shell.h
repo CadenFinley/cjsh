@@ -78,6 +78,7 @@ enum class ShellOption : std::uint8_t {
     InheritErrexit,
     BraceExpand,
     HistExpand,
+    Autocd,
     Count
 };
 
@@ -147,6 +148,7 @@ class Shell {
         interactive_input_started = true;
     }
     bool get_interactive_mode() const;
+    bool is_interactive_process() const;
     void set_abbreviations(const std::unordered_map<std::string, std::string>& new_abbreviations);
     std::unordered_map<std::string, std::string>& get_abbreviations();
     void set_aliases(const std::unordered_map<std::string, std::string>& new_aliases);
@@ -183,6 +185,7 @@ class Shell {
 
    private:
     bool interactive_mode = false;
+    pid_t shell_pid;
     bool interactive_input_started = false;
     bool exit_handlers_invoked = false;
     int shell_terminal = -1;

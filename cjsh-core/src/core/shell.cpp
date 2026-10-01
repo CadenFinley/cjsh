@@ -101,7 +101,8 @@ constexpr std::array<ShellOptionDescriptor, static_cast<size_t>(ShellOption::Cou
                                 {ShellOption::ExpandAliases, 0, "expand_aliases", true},
                                 {ShellOption::InheritErrexit, 0, "inherit_errexit", true},
                                 {ShellOption::BraceExpand, 'B', "braceexpand"},
-                                {ShellOption::HistExpand, 'H', "histexpand"}}};
+                                {ShellOption::HistExpand, 'H', "histexpand"},
+                                {ShellOption::Autocd, 0, "autocd", true}}};
 
 struct ErrexitSeverityDescriptor {
     ErrorSeverity severity;
@@ -171,7 +172,7 @@ std::optional<ShellOption> parse_shell_option_short(char short_flag) {
     return std::nullopt;
 }
 
-Shell::Shell() {
+Shell::Shell() : shell_pid(getpid()) {
     trap_manager_initialize();
 
     // construct core subsystems before wiring them together
@@ -359,6 +360,19 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
     const bool assignments_persist =
         has_temporary_env && !run_in_background && is_posix_special_builtin(command_args[0]);
 
+    bool automatic_cd = false;
+    if (!run_in_background && config::is_bash_mode() && is_interactive_process() &&
+        get_shell_option(ShellOption::Autocd)) {
+        cjsh_env::TemporaryEnvAssignmentScope assignments(this, env_assignments,
+                                                          assignments_persist);
+        automatic_cd = command_lookup::expand_bash_auto_cd(command.args, this);
+    }
+    if (automatic_cd && shell_script_interpreter && shell_script_interpreter->has_function("cd")) {
+        cjsh_env::TemporaryEnvAssignmentScope assignments(this, env_assignments,
+                                                          assignments_persist);
+        return shell_script_interpreter->invoke_function(command_args);
+    }
+
     const bool is_direct_command =
         !command_args.empty() && (built_ins->is_builtin_or_runtime_command(command_args[0]) != 0);
 
@@ -372,7 +386,8 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
     }
 
     // not a builtin check for other things
-    if (interactive_mode && !run_in_background && command_args.size() == 1 && built_ins) {
+    if (!config::is_bash_mode() && interactive_mode && !run_in_background &&
+        command_args.size() == 1 && built_ins) {
         const std::string& candidate = command_args[0];
 
         if (command_lookup::should_auto_cd_token(candidate, this)) {
@@ -794,6 +809,10 @@ bool Shell::get_interactive_mode() const {
     return interactive_mode;
 }
 
+bool Shell::is_interactive_process() const {
+    return interactive_mode && getpid() == shell_pid;
+}
+
 void Shell::set_abbreviations(
     const std::unordered_map<std::string, std::string>& new_abbreviations) {
     abbreviations = new_abbreviations;
@@ -876,11 +895,14 @@ bool Shell::get_shell_option(ShellOption option) const {
         return config::history_expansion_enabled;
     }
     if (config::is_posix_mode() &&
-        (option == ShellOption::Globstar || option == ShellOption::BraceExpand)) {
+        (option == ShellOption::Globstar || option == ShellOption::BraceExpand ||
+         option == ShellOption::Autocd)) {
         return false;
     }
     if (!explicit_shell_options[to_index(option)]) {
         switch (option) {
+            case ShellOption::Autocd:
+                return !config::is_bash_mode() && !config::is_posix_mode();
             case ShellOption::ExpandAliases:
                 return !config::is_bash_mode() || interactive_mode;
             case ShellOption::InheritErrexit:

@@ -1572,7 +1572,16 @@ int Exec::execute_prepared_command_async(cjsh_env::PreparedCommand command) {
     }
 }
 
-int Exec::execute_pipeline(const std::vector<Command>& commands) {
+int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
+    std::vector<Command> autocd_commands;
+    if (config::is_bash_mode() && g_shell && g_shell->is_interactive_process() &&
+        g_shell->get_shell_option(ShellOption::Autocd)) {
+        autocd_commands = input_commands;
+        for (auto& command : autocd_commands) {
+            (void)command_lookup::expand_bash_auto_cd(command.args, g_shell.get());
+        }
+    }
+    const auto& commands = autocd_commands.empty() ? input_commands : autocd_commands;
     const bool pipeline_negated = (!commands.empty() && commands[0].negate_pipeline);
     if (g_shell) {
         g_shell->mark_terminal_dirty();

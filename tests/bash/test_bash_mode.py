@@ -72,10 +72,33 @@ CASES = [
     Case("shopt unknown", 'shopt -s unknown_cjsh_option', "invalid shell option name"),
     Case("shopt conflicting flags", 'shopt -su extglob', "cannot set and unset"),
     Case("shopt display", 'shopt extglob'),
+    Case("autocd default", 'shopt -p autocd'),
+    Case("autocd set and print", 'shopt -s autocd; shopt -p autocd; shopt -q autocd'),
+    Case("autocd unset", 'shopt -s autocd; shopt -u autocd; shopt -q autocd'),
+    Case("autocd stays noninteractive", 'shopt -s autocd; nested; printf "%s\\n" "$?"', "command not found"),
     Case("globstar", 'shopt -s globstar; printf "%s\\n" **/fixture.txt'),
     Case("extglob", 'shopt -s extglob\nprintf "%s\\n" @(one|two).txt'),
     Case("brace option", 'set +B; printf "%s\\n" {a,b}; set -B; printf "%s\\n" {a,b}'),
     Case("filesystem effects", 'printf before > artifact; printf after >> artifact; cat artifact'),
+]
+
+
+INTERACTIVE_CASES = [
+    Case("autocd directory", 'shopt -s autocd; nested; printf "%s\\n" "${PWD##*/}"'),
+    Case("autocd relative path", 'shopt -s autocd; ./nested; printf "%s\\n" "${PWD##*/}"'),
+    Case("autocd quoted path", 'mkdir "two words"; shopt -s autocd; "two words"; printf "%s\\n" "${PWD##*/}"'),
+    Case("autocd disabled", 'shopt -s autocd; shopt -u autocd; nested; printf "%s\\n" "$?"', "command not found"),
+    Case("autocd extra arguments", 'shopt -s autocd; nested extra; printf "%s\\n" "$?"', "too many arguments"),
+    Case("autocd builtin precedence", 'mkdir echo; shopt -s autocd; echo command'),
+    Case("autocd function precedence", 'nested() { echo function; }; shopt -s autocd; nested'),
+    Case("autocd alias precedence", 'shopt -s autocd\nalias nested="echo alias"\nnested'),
+    Case("autocd executable precedence", 'mkdir bin; printf "#!/bin/sh\\necho executable\\n" >bin/nested; chmod +x bin/nested; export PATH="$PWD/bin:$PATH"; shopt -s autocd; nested'),
+    Case("autocd temporary PATH precedence", 'mkdir bin; printf "#!/bin/sh\\necho executable\\n" >bin/nested; chmod +x bin/nested; shopt -s autocd; PATH="$PWD/bin:$PATH" nested'),
+    Case("autocd cd function", 'cd() { printf "<%s>\\n" "$@"; }; shopt -s autocd; nested'),
+    Case("autocd redirections", 'shopt -s autocd; ./nested >artifact 2>&1; printf "%s\\n" "${PWD##*/}"'),
+    Case("autocd pipeline", 'start=$PWD; shopt -s autocd; nested | cat; test "$PWD" = "$start"; echo "$?"'),
+    Case("autocd subshell", 'shopt -s autocd; (nested); printf "%s\\n" "$?"', "command not found"),
+    Case("autocd substitution", 'shopt -s autocd; value=$(nested); printf "%s\\n" "$?"', "command not found"),
 ]
 
 
@@ -149,6 +172,21 @@ def main():
                           (reference[0], reference[1], case.diagnostic in reference[2], reference[3]))
                 else:
                     check(case.name + "/" + source, actual, reference)
+        for case in INTERACTIVE_CASES:
+            for source in ("command", "eval"):
+                reference = run(args.bash, ["--noprofile", "--norc"], case.script, source, ("-i",))
+                actual = run(cjsh, ["--no-config", "--bash"], case.script, source, ("-i",))
+                # Bash warns when -i is used without a controlling terminal.
+                stderr = "".join(line for line in reference[2].splitlines(keepends=True)
+                                 if "cannot set terminal process group" not in line
+                                 and "no job control in this shell" not in line)
+                reference = (*reference[:2], stderr, reference[3])
+                if case.diagnostic:
+                    check(case.name + "/" + source,
+                          (actual[0], actual[1], case.diagnostic in actual[2], actual[3]),
+                          (reference[0], reference[1], case.diagnostic in reference[2], reference[3]))
+                else:
+                    check(case.name + "/" + source, actual, reference)
     else:
         def native(name, script, stdout, status=0, flags=()):
             result = run(cjsh, ["--no-config", *flags], script)
@@ -174,6 +212,16 @@ def main():
         native("posix runtime restores variable", 'POSIXLY_CORRECT=original; cjshopt dialect posix; echo "$POSIXLY_CORRECT"; cjshopt dialect cjsh; echo "$POSIXLY_CORRECT"', "1\noriginal\n")
         native("posix rejects shopt listing flag", ':', "", 2, flags=("--posix", "-O"))
         native("explicit shopt persists", 'shopt -s expand_aliases; cjshopt dialect bash; shopt -q expand_aliases', "")
+        native("native autocd default", 'shopt -q autocd', "")
+        native("bash autocd default", 'shopt -q autocd', "", 1, flags=("--bash",))
+        native("autocd defaults follow dialect", 'shopt -q autocd; echo "$?"; cjshopt dialect bash; shopt -q autocd; echo "$?"; cjshopt dialect cjsh; shopt -q autocd', "0\n1\n")
+        native("explicit autocd survives dialect changes", 'shopt -u autocd; cjshopt dialect bash; cjshopt dialect cjsh; shopt -q autocd', "", 1)
+        native("posix suppresses explicit autocd", 'shopt -s autocd; cjshopt dialect posix; nested; printf "%s\\n" "$?"; cjshopt dialect bash; shopt -q autocd', "127\n")
+        native("startup enables autocd", 'shopt -p autocd', "shopt -s autocd\n", flags=("--bash", "-O", "autocd"))
+        native("startup disables native autocd", 'shopt -p autocd', "shopt -u autocd\n", 1, flags=("+O", "autocd"))
+        native("native interactive autocd", 'nested; printf "%s\\n" "${PWD##*/}"', "nested\n", flags=("-i",))
+        native("native autocd can be disabled", 'shopt -u autocd; nested; printf "%s\\n" "$?"', "127\n", flags=("-i",))
+        native("bash startup autocd executes", 'nested; printf "%s\\n" "${PWD##*/}"', "nested\n", flags=("--bash", "-i", "-O", "autocd"))
         native("moved extglob interface", 'cjshopt extglob on', "", 1)
         native("moved globstar interface", 'set -o globstar', "", 1)
         native("moved huponexit interface", 'set -o huponexit', "", 1)

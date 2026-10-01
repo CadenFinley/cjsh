@@ -86,7 +86,7 @@ shopt -p extglob
 shopt -q globstar
 ```
 
-The initial `shopt` registry contains `extglob`, `globstar`, `huponexit`,
+The `shopt` registry contains `autocd`, `extglob`, `globstar`, `huponexit`,
 `expand_aliases`, and `inherit_errexit`. `-s`, `-u`, `-p`, `-q`, and `-o` are supported;
 `shopt -o` selects the `set` option namespace. Unknown options fail. `shopt` is
 available in the cjsh and Bash dialects and rejected in strict POSIX mode.
@@ -94,6 +94,13 @@ available in the cjsh and Bash dialects and rejected in strict POSIX mode.
 Replace `cjshopt extglob on|off|status` with `shopt -s|-u|-p extglob`, and replace
 `set -o/+o globstar` and `set -o/+o huponexit` with `shopt -s/-u`. Editor and UI
 configuration continues to use `cjshopt`.
+
+`shopt -s autocd` lets an interactive shell treat a directory name as an implicit
+`cd` command. It defaults to off in Bash mode and on in the native dialect;
+`shopt -u autocd` disables it. Bash mode also accepts explicit relative directory
+paths such as `./projects`. Builtins, functions, aliases, and executable commands
+take precedence over a directory with the same name. Enabling the option in a
+noninteractive shell does not make directory names executable.
 
 ## Initial behavior differences
 
@@ -106,7 +113,8 @@ Only the Bash dialect enables the following compatibility changes:
 - `[[ value =~ expression ]]` uses POSIX extended regular expressions and publishes
   captures in `BASH_REMATCH`. Invalid expressions return status 2.
 - Native errexit severity settings do not change Bash-mode exit decisions.
-- Automatic directory changes and extension-based interpreter selection are disabled.
+- Automatic directory changes default to off; `shopt -s autocd` enables them interactively.
+- Extension-based interpreter selection is disabled.
 - `huponexit` defaults to off.
 
 The native dialect retains its previous defaults and language behavior. The flag
