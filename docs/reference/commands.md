@@ -828,7 +828,7 @@ Available subcommands:
 - `auto-tab` - Configure automatic tab completion
 - `prompt-newline` - Force a blank line after each command
 - `right-prompt-follow-cursor` - Keep the inline right prompt aligned with the active cursor row
-- `agent-mode` - Configure user-provided executors for agent-assisted command writing
+- `agent-mode` - Configure user-provided executors for agent assistance
 - `keybind` - Inspect or modify key bindings (changes apply immediately; add to `~/.cjshrc` to persist)
 - `generate-env` - Create or overwrite ~/.cjshenv (use `--alt` for `~/.config/cjsh/.cjshenv`)
 - `generate-profile` - Create or overwrite ~/.cjprofile (use `--alt` for `~/.config/cjsh/.cjprofile`)

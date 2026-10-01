@@ -44,6 +44,23 @@ struct Suggestion {
     std::string description;
 };
 
+enum class ResponseType {
+    Suggestions,
+    Text,
+    Error
+};
+
+struct Response {
+    ResponseType type{ResponseType::Suggestions};
+    std::vector<Suggestion> suggestions;
+    std::string message;
+};
+
+// Parse command suggestions, {"text":"..."} answers, or {"error":"..."} errors.
+// Prose and Markdown fences may appear around the JSON response.
+bool parse_response(const std::string& output, Response* response,
+                    std::string* error_message = nullptr);
+
 // Parse the executor protocol: a JSON array of objects containing a non-empty
 // `command` and an optional `description`. Prose and Markdown fences may appear
 // around the array.
@@ -63,7 +80,7 @@ void apply_key_bindings();
 // Handle an isocline runoff key. Returns true only when the feature consumed it.
 bool handle_runoff_key(ic_keycode_t key);
 
-// Run agent-assisted command writing from the command palette.
+// Run agent assistance from the command palette.
 bool handle_palette_entry();
 
 // Whether a command-palette entry should currently be advertised.

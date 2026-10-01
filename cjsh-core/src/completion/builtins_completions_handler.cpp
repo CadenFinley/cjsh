@@ -296,7 +296,7 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_option("-S", "Disable syntax highlighting"),
              make_option("--no-syntax-highlighting", "Disable syntax highlighting"),
              make_option("--no-error-suggestions", "Disable error suggestions"),
-             make_option("--no-agent", "Disable agent-assisted command writing"),
+             make_option("--no-agent", "Disable agent assistance"),
              make_option("--no-prompt-vars", "Ignore PS1/PS2 prompt variables"),
              make_option("--no-history", "Disable history recording and history expansion"),
              make_option("-H", "Enable history expansion"),
@@ -676,7 +676,7 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_subcommand("auto-tab", "Toggle automatic tab completion"),
              make_subcommand("prompt-newline", "Toggle newline after command execution"),
              make_subcommand("right-prompt-follow-cursor", "Move the right prompt with the cursor"),
-             make_subcommand("agent-mode", "Configure agent-assisted command writing"),
+             make_subcommand("agent-mode", "Configure agent assistance"),
              make_subcommand("keybind", "Inspect or modify key bindings"),
              make_subcommand("generate-profile", "Generate ~/.cjprofile"),
              make_subcommand("generate-env", "Generate ~/.cjshenv"),
@@ -731,12 +731,12 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                  make_subcommand("profile", "Manage key binding profiles"),
                  make_subcommand("ext", "Manage command key bindings")});
 
-        add_doc("cjshopt-agent-mode", "Configure agent-assisted command writing",
+        add_doc("cjshopt-agent-mode", "Configure agent assistance",
                 {make_subcommand("set", "Add or replace an agent executor"),
                  make_subcommand("list", "Show configured executors"),
                  make_subcommand("status", "Show agent-mode status"),
-                 make_subcommand("on", "Enable agent command writing"),
-                 make_subcommand("off", "Disable agent command writing"),
+                 make_subcommand("on", "Enable agent assistance"),
+                 make_subcommand("off", "Disable agent assistance"),
                  make_subcommand("key", "Configure the activation key"),
                  make_subcommand("clear", "Remove executor configuration"),
                  make_subcommand("reset", "Restore agent-mode defaults")});

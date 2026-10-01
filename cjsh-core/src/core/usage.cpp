@@ -75,7 +75,7 @@ std::string get_usage() {
         << "      --no-script-extension-interpreter Disable extension-based script runners\n"
         << "  -S, --no-syntax-highlighting Disable syntax highlighting\n"
         << "      --no-error-suggestions Disable error suggestions\n"
-        << "      --no-agent            Disable agent-assisted command writing\n"
+        << "      --no-agent            Disable agent assistance\n"
         << "      --no-history-expansion Disable history expansion (!commands)\n"
         << "      --no-history           Disable history recording (also disables history "
            "expansion)\n"

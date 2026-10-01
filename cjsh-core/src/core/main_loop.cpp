@@ -497,9 +497,10 @@ void refresh_command_palette_entries() {
 
     if (show_agent_entry) {
         (void)ids.emplace_back("agent-mode");
-        (void)names.emplace_back("Write command with agent");
-        (void)descriptions.emplace_back("Convert the current request into a CJSH command");
-        (void)keywords.emplace_back("agent ai assistant natural language command writing");
+        (void)names.emplace_back("Ask agent");
+        (void)descriptions.emplace_back("Answer a question or write a CJSH command");
+        (void)keywords.emplace_back(
+            "agent ai assistant natural language command writing question answer help");
     }
 
     (void)ids.emplace_back("browser");

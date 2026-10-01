@@ -159,6 +159,7 @@ struct CommandOutput {
     std::string output;
     int exit_code;
     bool success;
+    std::string error_output{};
 };
 
 CommandOutput execute_with_stdout_capture(const std::function<int()>& child_executor,
@@ -168,6 +169,7 @@ CommandOutput execute_command_for_output(const std::string& command);
 
 CommandOutput execute_command_vector_for_output(const std::vector<std::string>& args);
 
+// Capture stderr separately so diagnostics do not become part of the stdout protocol.
 CommandOutput execute_command_vector_for_output_with_progress(
     const std::vector<std::string>& args, const std::function<void()>& progress_callback,
     unsigned int progress_interval_ms = 250,

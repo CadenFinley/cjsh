@@ -2742,7 +2742,8 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
                                                bool capture_stderr, bool suppress_stderr,
                                                const std::function<void()>& progress_callback,
                                                unsigned int progress_interval_ms,
-                                               const std::function<bool()>& cancellation_callback) {
+                                               const std::function<bool()>& cancellation_callback,
+                                               bool separate_stderr = false) {
     if (g_shell) {
         g_shell->mark_terminal_dirty();
     }
@@ -2757,17 +2758,24 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
     if (pipe_result.is_error()) {
         return result;
     }
+    int stderr_pipefd[2] = {-1, -1};
+    if (separate_stderr && cjsh_filesystem::create_pipe_cloexec(stderr_pipefd).is_error()) {
+        cjsh_filesystem::close_pipe(pipefd);
+        return result;
+    }
 
     flush_standard_streams_before_fork();
 
     pid_t pid = fork();
     if (pid == -1) {
         cjsh_filesystem::close_pipe(pipefd);
+        cjsh_filesystem::close_pipe(stderr_pipefd);
         return result;
     }
 
     if (pid == 0) {
         cjsh_filesystem::safe_close(pipefd[0]);
+        cjsh_filesystem::safe_close(stderr_pipefd[0]);
         (void)setpgid(0, 0);
         if (g_shell) {
             // Captured commands must keep descendants in this private group so
@@ -2780,8 +2788,9 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
             _exit(127);
         }
 
-        if (capture_stderr) {
-            auto stderr_dup_result = cjsh_filesystem::safe_dup2(pipefd[1], STDERR_FILENO);
+        if (capture_stderr || separate_stderr) {
+            auto stderr_dup_result = cjsh_filesystem::safe_dup2(
+                separate_stderr ? stderr_pipefd[1] : pipefd[1], STDERR_FILENO);
             if (stderr_dup_result.is_error()) {
                 _exit(127);
             }
@@ -2794,6 +2803,7 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
         }
 
         cjsh_filesystem::safe_close(pipefd[1]);
+        cjsh_filesystem::safe_close(stderr_pipefd[1]);
 
         int exit_code = child_executor();
         _exit(exit_code);
@@ -2803,12 +2813,13 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
     // cancellation cannot leave grandchildren holding the capture pipe open.
     (void)setpgid(pid, pid);
     cjsh_filesystem::safe_close(pipefd[1]);
+    cjsh_filesystem::safe_close(stderr_pipefd[1]);
 
     int status = 0;
     const bool startup_cancellable = config::interactive_mode && cjsh_env::startup_active() &&
                                      !SignalHandler::is_forked_child() &&
                                      !SignalHandler::executing_trap();
-    if (!progress_callback && !startup_cancellable) {
+    if (!progress_callback && !startup_cancellable && !separate_stderr) {
         char buffer[4096];
         ssize_t bytes_read;
         while ((bytes_read = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
@@ -2824,12 +2835,13 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
                 ? static_cast<int>(std::max(1U, std::min(progress_interval_ms, 60000U)))
                 : 20;
         auto last_progress = std::chrono::steady_clock::now();
-        bool pipe_open = true;
+        const short events = POLLIN | POLLHUP | POLLERR;
+        std::array<pollfd, 2> descriptors{{{pipefd[0], events, 0}, {stderr_pipefd[0], events, 0}}};
         bool child_reaped = false;
         bool io_failed = false;
         bool cancellation_requested = false;
 
-        while (pipe_open || !child_reaped) {
+        while (descriptors[0].fd >= 0 || descriptors[1].fd >= 0 || !child_reaped) {
             if ((!child_reaped && cancellation_callback && cancellation_callback()) ||
                 (!cancellation_requested && startup_cancellable &&
                  SignalHandler::startup_interrupted())) {
@@ -2839,31 +2851,38 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
                 }
             }
 
-            pollfd descriptor{pipefd[0], static_cast<short>(POLLIN | POLLHUP | POLLERR), 0};
-            int poll_result =
-                poll(pipe_open ? &descriptor : nullptr, pipe_open ? 1 : 0, interval_ms);
+            int poll_result = poll(descriptors.data(), descriptors.size(), interval_ms);
             if (poll_result < 0 && errno != EINTR) {
                 io_failed = true;
                 break;
             }
-            if (pipe_open && poll_result > 0 && (descriptor.revents & POLLNVAL) != 0) {
-                io_failed = true;
-                break;
-            }
-
-            if (pipe_open && poll_result > 0 &&
-                (descriptor.revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
+            for (size_t index = 0; index < descriptors.size() && poll_result > 0; ++index) {
+                auto& descriptor = descriptors[index];
+                if (descriptor.fd < 0) {
+                    continue;
+                }
+                if ((descriptor.revents & POLLNVAL) != 0) {
+                    io_failed = true;
+                    break;
+                }
+                if ((descriptor.revents & events) == 0) {
+                    continue;
+                }
                 char buffer[4096];
-                ssize_t bytes_read = read(pipefd[0], buffer, sizeof(buffer));
+                ssize_t bytes_read = read(descriptor.fd, buffer, sizeof(buffer));
                 if (bytes_read > 0) {
-                    result.output.append(buffer, static_cast<size_t>(bytes_read));
+                    std::string& destination = index == 0 ? result.output : result.error_output;
+                    destination.append(buffer, static_cast<size_t>(bytes_read));
                 } else if (bytes_read == 0) {
-                    cjsh_filesystem::safe_close(pipefd[0]);
-                    pipe_open = false;
+                    cjsh_filesystem::safe_close(descriptor.fd);
+                    descriptor.fd = -1;
                 } else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
                     io_failed = true;
                     break;
                 }
+            }
+            if (io_failed) {
+                break;
             }
 
             if (!child_reaped) {
@@ -2887,8 +2906,8 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
             }
         }
 
-        if (pipe_open) {
-            cjsh_filesystem::safe_close(pipefd[0]);
+        for (const auto& descriptor : descriptors) {
+            cjsh_filesystem::safe_close(descriptor.fd);
         }
         if (!child_reaped) {
             while (waitpid(pid, &status, 0) < 0) {
@@ -2908,9 +2927,11 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
     return result;
 }
 
-CommandOutput execute_args_for_output_impl(
-    const std::vector<std::string>& args, const std::function<void()>& progress_callback,
-    unsigned int progress_interval_ms, const std::function<bool()>& cancellation_callback = {}) {
+CommandOutput execute_args_for_output_impl(const std::vector<std::string>& args,
+                                           const std::function<void()>& progress_callback,
+                                           unsigned int progress_interval_ms,
+                                           const std::function<bool()>& cancellation_callback = {},
+                                           bool separate_stderr = false) {
     if (args.empty()) {
         return {"", -1, false};
     }
@@ -2923,7 +2944,8 @@ CommandOutput execute_args_for_output_impl(
             exec_external_child(args, exec_override);
             return 127;
         },
-        false, true, progress_callback, progress_interval_ms, cancellation_callback);
+        false, true, progress_callback, progress_interval_ms, cancellation_callback,
+        separate_stderr);
 }
 
 }  // namespace
@@ -2947,7 +2969,7 @@ CommandOutput execute_command_vector_for_output_with_progress(
     const std::vector<std::string>& args, const std::function<void()>& progress_callback,
     unsigned int progress_interval_ms, const std::function<bool()>& cancellation_callback) {
     return execute_args_for_output_impl(args, progress_callback, progress_interval_ms,
-                                        cancellation_callback);
+                                        cancellation_callback, true);
 }
 
 }  // namespace exec_utils

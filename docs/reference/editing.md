@@ -641,7 +641,8 @@ History search results are sorted newest-first by default. Press `Alt+S` inside 
 ## Agent-Assisted Command Writing
 
 CJSH can pass the current editor buffer to any command-line AI executor and present the returned
-commands in an isocline selection menu. CJSH does not choose a provider or store API keys. Press
+commands in an isocline selection menu, or print an informational answer to a general question
+directly to stdout. CJSH does not choose a provider or store API keys. Press
 `Tab` to place the chosen command in a fresh editor buffer for inspection, or `Enter` to submit it
 immediately. In either case, the original natural-language request remains visible on the preceding
 prompt line. If `PS1_FINAL` or `RPS1_FINAL` is configured, those final-prompt values restyle the
@@ -657,9 +658,11 @@ cjshopt agent-mode set \
 ```
 
 With that example, type `: describe what the command should do` and press `Enter`. The trigger
-prefix is removed before the request is sent. While an enabled trigger prefix matches, the syntax
-highlighter styles the prefix and the remaining natural-language request with `agent-prefix` and
-`agent-request`; it does not interpret request punctuation as shell syntax. Both styles can be
+prefix is removed before the request is sent. You can also ask a general question, such as
+`: what is the difference between a process and a thread?`. Text answers appear below the request,
+followed by a fresh, empty prompt, without opening a command menu. While an enabled trigger prefix
+matches, the syntax highlighter styles the prefix and the remaining natural-language request with
+`agent-prefix` and `agent-request`; it does not interpret request punctuation as shell syntax. Both styles can be
 changed with `cjshopt style_def`. A transient `Running [0s]: <configured command>` status
 shows the selected executor's configured command and arguments, with elapsed seconds updating
 while it runs. A soft, left-to-right text shimmer animates the entire status line, including the
@@ -676,12 +679,12 @@ submits an empty editor buffer and immediately advances to a fresh prompt.
 The executor command is parsed into an executable and arguments; shell operators are not evaluated.
 CJSH appends one final argument containing its embedded protocol and safety prompt, runtime context,
 the optional user-configured system prompt as additional instructions, and the current input as the
-command request. Runtime context is generated for each request and includes local and UTC time,
+user request. Runtime context is generated for each request and includes local and UTC time,
 working directory, hostname, operating system and kernel, architecture, CJSH version and mode, and
 the previous command's exit status. CJSH does not copy arbitrary environment variables or credentials
-into the prompt. The embedded prompt always takes precedence and requires one to three command
-suggestions. The executor must print a JSON array, although the parser tolerates surrounding
-explanatory text or a Markdown fence:
+into the prompt. The embedded prompt always takes precedence and requires one JSON response.
+For command requests, the executor prints an array of one to three suggestions. The parser tolerates
+surrounding explanatory text or a Markdown fence:
 
 ```json
 [
@@ -690,10 +693,29 @@ explanatory text or a Markdown fence:
 ]
 ```
 
+For general questions and informational replies, the executor prints a JSON object with a non-empty
+`text` string. CJSH writes its decoded contents to stdout, preserving newlines and indentation:
+
+```json
+{"text": "A process has its own address space. Threads within a process share that address space."}
+```
+
+If the agent encounters an error, it prints a JSON object with a non-empty `error` string:
+
+```json
+{"error": "The provider is unavailable. Please try again later."}
+```
+
+CJSH reports these errors, executor failures, and invalid responses through `error_out` on stderr,
+including the usual error formatting and `CJSH_ERROR_LOG` support. Executor stderr is captured
+separately from its JSON response and included in failure diagnostics. The request remains visible
+above a fresh prompt; no error menu needs to be dismissed. An object must contain exactly one
+`text` or `error` field. Answers and error messages are never inserted or executed as shell commands.
+
 Omit `--trigger-prefix` to configure the fallback executor. Multiple prefix executors are supported;
-the longest matching prefix wins. Press `Alt+A` to invoke agent writing on any current buffer (using
-the matching prefix, then the fallback, then the first configured executor), or choose **Write
-command with agent** from the command palette. Change the key with
+the longest matching prefix wins. Press `Alt+A` to invoke the agent on any current buffer (using
+the matching prefix, then the fallback, then the first configured executor), or choose **Ask agent**
+from the command palette. Change the key with
 `cjshopt agent-mode key <key>`, for example `cjshopt agent-mode key F3`.
 An explicit `cjshopt keybind ext` command on the same key takes precedence.
 
@@ -812,7 +834,7 @@ action.
 - `Enter`: Execute command
 - `F1`: Show help / key binding cheat sheet
 - `F2`: Toggle mouse clicking for the current prompt
-- `Alt+A`: Invoke agent-assisted command writing (when enabled)
+- `Alt+A`: Invoke agent assistance (when enabled)
 - `Alt+O`: Search the buffer on the web or open its URL in the browser
 - `Esc`: Cancel an open menu or search; at the main prompt, clear non-empty input
 

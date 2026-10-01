@@ -316,7 +316,7 @@ const std::vector<std::string>& cjshopt_usage_lines() {
         "  idle-timeout <seconds|off|status>",
         "    Run inactivity hooks after the specified delay (default: off).",
         "  agent-mode <subcommand> [...]",
-        "    Configure agent-assisted command writing.",
+        "    Configure agent assistance.",
         "",
         "Startup files:",
         "  generate-env [-f|--force] [--alt]",

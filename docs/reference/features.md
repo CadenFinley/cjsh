@@ -73,9 +73,10 @@ Powered by the embedded [isocline](https://github.com/cadenfinley/isocline) edit
 - **Custom key bindings** – An Emacs-inspired default profile, an optional `vim` profile that adds
     `Alt+H/J/K/L/W` navigation, and fine-grained overrides via `cjshopt keybind` (including
     command-driven bindings through `cjsh-widget`). The `vim` profile is not a modal Vi/Vim mode.
-- **Agent-assisted command writing** – Route editor text to user-configured AI executors through
+- **Agent assistance** – Route editor text to user-configured AI executors through
     `cjshopt agent-mode`, select their JSON command suggestions in an isocline menu, and review the
-    result before execution. CJSH does not manage provider credentials.
+    result before execution. General questions receive text answers on stdout; errors use CJSH's
+    standard error reporting on stderr. CJSH does not manage provider credentials.
 - **Browser shortcut** – Press `Alt+O` to search the current buffer on the web or open its URL,
     using `$BROWSER` or the system launcher, then continue at a fresh, empty prompt.
 - **Mouse-aware editing** – Configure capture with `cjshopt mouse-clicking`: `all-off` disables it
@@ -188,7 +189,7 @@ Other switches:
 - `--no-completion-learning` – keep completions enabled but skip on-demand man-page scraping
 - `-S, --no-syntax-highlighting`
 - `--no-error-suggestions`
-- `--no-agent` – disable agent-assisted command writing, including configured activation keys,
+- `--no-agent` – disable agent assistance, including configured activation keys,
   trigger prefixes, and its command-palette entry
 - `--no-prompt-vars`
 - `--no-history-expansion`

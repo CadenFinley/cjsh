@@ -37,6 +37,7 @@
 
 #include "agent_mode.h"
 #include "cjshopt_command.h"
+#include "exec.h"
 #include "isocline.h"
 #include "keybindings.h"
 #include "keycodes.h"
@@ -189,6 +190,102 @@ bool test_parser_edge_cases() {
                   "excessively nested executor JSON should be rejected");
 }
 
+bool test_response_types() {
+    agent_mode::Response response;
+    std::string error = "previous error";
+    if (!expect(agent_mode::parse_response(
+                    "Answer:\n```json\n{\"text\":\"  First line\\n  Second line \\u2713\\n\","
+                    "\"metadata\":{\"sources\":[1,true]}}\n```",
+                    &response, &error),
+                "a framed informational response should parse") ||
+        !expect(response.type == agent_mode::ResponseType::Text && response.suggestions.empty(),
+                "informational responses must not become command suggestions") ||
+        !expect(response.message == "  First line\n  Second line ✓\n",
+                "answers should preserve indentation, newlines, and Unicode") ||
+        !expect(error.empty(), "a successful response should clear previous errors")) {
+        return false;
+    }
+    if (!expect(agent_mode::parse_response(R"({"error":"Unable to reach the provider."})",
+                                           &response, &error),
+                "an agent-reported error should parse") ||
+        !expect(response.type == agent_mode::ResponseType::Error &&
+                    response.message == "Unable to reach the provider.",
+                "agent errors should retain their message and type")) {
+        return false;
+    }
+    return expect(agent_mode::parse_response(R"([{"command":"pwd","description":"Location"}])",
+                                             &response, &error),
+                  "existing command arrays should still parse as responses") &&
+           expect(response.type == agent_mode::ResponseType::Suggestions &&
+                      response.suggestions.size() == 1 && response.message.empty(),
+                  "command responses should clear earlier text and errors");
+}
+
+bool test_rejects_invalid_responses() {
+    agent_mode::Response response;
+    std::string error;
+    if (!expect(!agent_mode::parse_response("{}", nullptr, &error) && !error.empty(),
+                "a null response destination should report an error")) {
+        return false;
+    }
+    const std::vector<std::string> invalid = {
+        "",
+        "unframed answer",
+        "{}",
+        "[]",
+        R"({"text":""})",
+        R"({"error":" \n\t"})",
+        R"({"text":42})",
+        R"({"error":null})",
+        R"({"text":"answer","error":"failure"})",
+        R"({"text":"first","text":"second"})",
+        R"({"text":"answer","command":"pwd"})",
+        R"({"text":"answer",})",
+        R"({"text":"answer",)",
+        R"({"text":"\uD800"})",
+        R"({"error":"unterminated})",
+        R"({"metadata":{"text":"nested"}})",
+    };
+    for (const auto& output : invalid) {
+        response = {agent_mode::ResponseType::Text, {{"old", "old"}}, "old"};
+        if (!expect(!agent_mode::parse_response(output, &response, &error) && !error.empty(),
+                    "malformed, empty, or ambiguous responses should report errors") ||
+            !expect(response.message.empty() && response.suggestions.empty(),
+                    "failed parses must not leave stale or partial responses")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool test_executor_stream_capture() {
+    // Both streams exceed a pipe buffer. Reading one to completion before the
+    // other would deadlock, and mixing them would corrupt the response protocol.
+    const auto failed = exec_utils::execute_command_vector_for_output_with_progress(
+        {"/bin/sh", "-c",
+         "i=0; while [ \"$i\" -lt 4096 ]; do "
+         "printf 'oooooooooooooooooooooooooooooooo'; "
+         "printf 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' >&2; i=$((i+1)); done; exit 7"},
+        {});
+    if (!expect(!failed.success && failed.exit_code == 7,
+                "capture should retain executor failure") ||
+        !expect(failed.output == std::string(4096 * 32, 'o'),
+                "stdout should be drained without stderr contamination") ||
+        !expect(failed.error_output == std::string(4096 * 32, 'e'),
+                "stderr diagnostics should be drained and retained separately")) {
+        return false;
+    }
+    const auto succeeded = exec_utils::execute_command_vector_for_output_with_progress(
+        {"/bin/sh", "-c", "printf '%s' '{\"text\":\"answer\"}'; printf '[diagnostic]' >&2"}, [] {});
+    agent_mode::Response response;
+    return expect(succeeded.success && succeeded.exit_code == 0,
+                  "stderr output alone should not mark a successful executor as failed") &&
+           expect(agent_mode::parse_response(succeeded.output, &response) &&
+                      response.type == agent_mode::ResponseType::Text &&
+                      response.message == "answer",
+                  "successful responses should parse independently of stderr diagnostics");
+}
+
 bool test_configuration_validation_and_state() {
     bool ok = true;
     ok &= expect_command({"agent-mode", "reset"}, 0, "reset should restore defaults");
@@ -228,7 +325,7 @@ bool test_configuration_validation_and_state() {
     int status = -1;
     const std::string status_output = capture_command_output({"agent-mode", "status"}, &status);
     ok &= expect(status == 0, "status should succeed");
-    ok &= expect(status_output.find("Agent-assisted command writing: enabled") != std::string::npos,
+    ok &= expect(status_output.find("Agent assistance: enabled") != std::string::npos,
                  "status should report enabled state");
     ok &= expect(status_output.find("default") != std::string::npos,
                  "status should list the fallback executor");
@@ -389,6 +486,9 @@ int main() {
         {"reject malformed output", test_rejects_malformed_or_unframed_output},
         {"limit suggestions", test_limits_suggestions_to_three},
         {"parser edge cases", test_parser_edge_cases},
+        {"response types", test_response_types},
+        {"invalid responses", test_rejects_invalid_responses},
+        {"executor stream capture", test_executor_stream_capture},
         {"configuration validation and state", test_configuration_validation_and_state},
         {"key configuration and precedence", test_key_configuration_and_precedence},
         {"clear selectors", test_clear_selectors},

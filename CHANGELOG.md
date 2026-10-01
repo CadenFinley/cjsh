@@ -11,6 +11,10 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+### Added
+
+- Agent mode can answer general questions with `{"text":"..."}` responses printed to stdout. Executors can return `{"error":"..."}` to report a problem through `error_out`; executor failures and malformed responses also use standard stderr diagnostics instead of an error menu.
+
 ### Fixed
 
 - Reject `in` as a likely mistyped `for` or `select` loop variable in normal mode while preserving POSIX-mode compatibility. Diagnose unexpected `then` keywords at the malformed conditional header, including an `f`-instead-of-`if` hint, before reporting a later unmatched `fi`.
