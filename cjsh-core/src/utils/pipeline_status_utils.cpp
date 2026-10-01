@@ -35,8 +35,6 @@
 #include <vector>
 
 #include "exec.h"
-#include "interpreter.h"
-#include "shell.h"
 #include "shell_env.h"
 
 namespace {
@@ -90,23 +88,6 @@ void apply_pipeline_status_env(Exec* exec_ptr,
     }
 
     const auto& pipeline_statuses = exec_ptr->get_last_pipeline_statuses();
-    static thread_local bool published_bash_array = false;
-    if (g_shell && g_shell->get_shell_script_interpreter()) {
-        auto& manager = g_shell->get_shell_script_interpreter()->get_variable_manager();
-        if (config::is_bash_mode()) {
-            std::vector<std::string> values;
-            for (int status : pipeline_statuses) {
-                values.push_back(std::to_string(status));
-            }
-            manager.set_global_array_values("PIPESTATUS", values);
-            published_bash_array = true;
-            return;
-        }
-        if (published_bash_array) {
-            (void)manager.unset_variable("PIPESTATUS");
-            published_bash_array = false;
-        }
-    }
     if (pipeline_statuses.empty()) {
         (void)cjsh_env::unset_shell_variable_value("PIPESTATUS");
         if (on_unset_callback) {

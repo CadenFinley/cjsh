@@ -54,9 +54,6 @@ ShellDialect shell_dialect() {
 bool is_posix_mode() {
     return current_dialect == ShellDialect::Posix;
 }
-bool is_bash_mode() {
-    return current_dialect == ShellDialect::Bash;
-}
 
 std::optional<ShellDialect> parse_shell_dialect(std::string_view name) {
     if (name == "cjsh") {
@@ -64,9 +61,6 @@ std::optional<ShellDialect> parse_shell_dialect(std::string_view name) {
     }
     if (name == "posix") {
         return ShellDialect::Posix;
-    }
-    if (name == "bash") {
-        return ShellDialect::Bash;
     }
     return std::nullopt;
 }
@@ -77,8 +71,6 @@ const char* shell_dialect_name() {
             return "cjsh";
         case ShellDialect::Posix:
             return "posix";
-        case ShellDialect::Bash:
-            return "bash";
     }
     return "cjsh";
 }

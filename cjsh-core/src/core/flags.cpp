@@ -62,7 +62,6 @@ constexpr int kOptNoAgent = 264;
 constexpr int kOptNoConfig = 265;
 constexpr int kOptConfigDir = 266;
 constexpr int kOptNoSystemPaths = 267;
-constexpr int kOptBash = 268;
 constexpr int kOptDialect = 269;
 constexpr int kOptVersion = 270;
 constexpr int kOptHelp = 271;
@@ -164,7 +163,6 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         {"config-dir", required_argument, nullptr, kOptConfigDir},
         {"no-system-paths", no_argument, nullptr, kOptNoSystemPaths},
         {"posix", no_argument, nullptr, kOptPosix},
-        {"bash", no_argument, nullptr, kOptBash},
         {"dialect", required_argument, nullptr, kOptDialect},
         {"version", no_argument, nullptr, kOptVersion},
         {"help", no_argument, nullptr, kOptHelp},
@@ -290,9 +288,7 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                     config::execute_command = true;
                     config::cmd_to_execute = argv[optind++];
                     config::interactive_mode = false;
-                    if (!config::is_bash_mode()) {
-                        config::history_expansion_enabled = false;
-                    }
+                    config::history_expansion_enabled = false;
                     break;
                 }
                 continue;
@@ -315,9 +311,7 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 config::execute_command = true;
                 config::cmd_to_execute = optarg;
                 config::interactive_mode = false;
-                if (!config::is_bash_mode()) {
-                    config::history_expansion_enabled = false;
-                }
+                config::history_expansion_enabled = false;
                 break;
             case 'n':
             case kOptNoExec:
@@ -345,16 +339,13 @@ ParseResult parse_arguments(int argc, char* argv[]) {
             case kOptPosix:
                 config::set_shell_dialect(config::ShellDialect::Posix);
                 break;
-            case kOptBash:
-                config::set_shell_dialect(config::ShellDialect::Bash);
-                break;
             case kOptDialect: {
                 auto dialect = config::parse_shell_dialect(optarg);
                 if (!dialect) {
                     print_error({ErrorType::INVALID_ARGUMENT,
                                  "startup",
                                  "invalid dialect: " + std::string(optarg),
-                                 {"Use cjsh, posix, or bash"}});
+                                 {"Use cjsh or posix"}});
                     result.should_exit = true;
                     result.exit_code = 2;
                     return result;

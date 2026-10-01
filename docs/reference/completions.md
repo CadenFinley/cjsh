@@ -154,7 +154,7 @@ Dynamic providers are registered in-process with `register_dynamic_completion_pr
 `completion_spec.h`. The request includes the command path, arguments, cursor argument, current
 value, working directory, and declared value metadata. Providers return value/description pairs.
 Complete in-memory specifications can similarly be installed with `register_command_doc()`. These
-are the extension points intended for future Bash and Zsh compatibility workers.
+are the extension points for custom completion integrations.
 
 ## Authoring or overriding completions manually
 

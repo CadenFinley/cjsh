@@ -68,7 +68,6 @@
 #include "pipeline_status_utils.h"
 #include "prompt.h"
 #include "readonly_command.h"
-#include "script_dispatch.h"
 #include "shell_env.h"
 #include "signal_handler.h"
 #include "string_utils.h"
@@ -99,7 +98,6 @@ constexpr std::array<ShellOptionDescriptor, static_cast<size_t>(ShellOption::Cou
                                 {ShellOption::Nolog, 0, "nolog"},
                                 {ShellOption::Extglob, 0, "extglob", true},
                                 {ShellOption::ExpandAliases, 0, "expand_aliases", true},
-                                {ShellOption::InheritErrexit, 0, "inherit_errexit", true},
                                 {ShellOption::BraceExpand, 'B', "braceexpand"},
                                 {ShellOption::HistExpand, 'H', "histexpand"},
                                 {ShellOption::Autocd, 0, "autocd", true}}};
@@ -210,9 +208,7 @@ Shell::~Shell() {
     // on shell destruction, handle any remaining child processes
     if (shell_exec) {
         const int terminating_signal = SignalHandler::termination_signal();
-        const bool hang_up_on_exit =
-            get_shell_option(ShellOption::Huponexit) &&
-            (!config::is_bash_mode() || (config::interactive_mode && config::login_mode));
+        const bool hang_up_on_exit = get_shell_option(ShellOption::Huponexit);
         if (terminating_signal != 0 || hang_up_on_exit) {
             shell_exec->terminate_all_child_process(terminating_signal == SIGTERM ? SIGTERM
                                                                                   : SIGHUP);
@@ -360,19 +356,6 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
     const bool assignments_persist =
         has_temporary_env && !run_in_background && is_posix_special_builtin(command_args[0]);
 
-    bool automatic_cd = false;
-    if (!run_in_background && config::is_bash_mode() && is_interactive_process() &&
-        get_shell_option(ShellOption::Autocd)) {
-        cjsh_env::TemporaryEnvAssignmentScope assignments(this, env_assignments,
-                                                          assignments_persist);
-        automatic_cd = command_lookup::expand_bash_auto_cd(command.args, this);
-    }
-    if (automatic_cd && shell_script_interpreter && shell_script_interpreter->has_function("cd")) {
-        cjsh_env::TemporaryEnvAssignmentScope assignments(this, env_assignments,
-                                                          assignments_persist);
-        return shell_script_interpreter->invoke_function(command_args);
-    }
-
     const bool is_direct_command =
         !command_args.empty() && (built_ins->is_builtin_or_runtime_command(command_args[0]) != 0);
 
@@ -386,8 +369,7 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
     }
 
     // not a builtin check for other things
-    if (!config::is_bash_mode() && interactive_mode && !run_in_background &&
-        command_args.size() == 1 && built_ins) {
+    if (interactive_mode && !run_in_background && command_args.size() == 1 && built_ins) {
         const std::string& candidate = command_args[0];
 
         if (command_lookup::should_auto_cd_token(candidate, this)) {
@@ -471,7 +453,6 @@ int Shell::execute_script_content(const std::string& content, const std::string&
     if (!shell_script_interpreter) {
         print_error({ErrorType::FATAL_ERROR, "", "shell not initialized properly", {}});
     }
-    const script_dispatch::BashScriptDialectScope dialect_scope(content);
     auto parsed_lines = shell_script_interpreter->parse_into_lines(content);
     if (parsed_lines.empty()) {
         return 0;
@@ -902,13 +883,11 @@ bool Shell::get_shell_option(ShellOption option) const {
     if (!explicit_shell_options[to_index(option)]) {
         switch (option) {
             case ShellOption::Autocd:
-                return !config::is_bash_mode() && !config::is_posix_mode();
+                return !config::is_posix_mode();
             case ShellOption::ExpandAliases:
-                return !config::is_bash_mode() || interactive_mode;
-            case ShellOption::InheritErrexit:
-                return !config::is_bash_mode();
+                return true;
             case ShellOption::Huponexit:
-                return !config::is_bash_mode() && config::interactive_mode;
+                return config::interactive_mode;
             case ShellOption::BraceExpand:
             case ShellOption::Hashall:
                 return !config::is_posix_mode();
@@ -939,16 +918,12 @@ bool Shell::should_abort_on_nonzero_exit() const {
         return false;
     }
 
-    return config::is_bash_mode() || errexit_severity_level != ErrorSeverity::CRITICAL;
+    return errexit_severity_level != ErrorSeverity::CRITICAL;
 }
 
 bool Shell::should_abort_on_nonzero_exit(int exit_code) const {
     if (!is_errexit_enabled()) {
         return false;
-    }
-
-    if (config::is_bash_mode()) {
-        return exit_code != 0;
     }
 
     ErrorSeverity error_severity = ErrorSeverity::ERROR;  // default

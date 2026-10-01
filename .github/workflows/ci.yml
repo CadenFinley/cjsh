@@ -142,20 +142,6 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Build pinned Bash reference
-        if: matrix.target == 'linux-gnu-x86_64'
-        run: |
-          set -euo pipefail
-          curl --fail --location --retry 3 https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz \
-            --output "$RUNNER_TEMP/bash-5.3.tar.gz"
-          tar -xzf "$RUNNER_TEMP/bash-5.3.tar.gz" -C "$RUNNER_TEMP"
-          cd "$RUNNER_TEMP/bash-5.3"
-          ./configure --prefix="$RUNNER_TEMP/bash-reference" --without-bash-malloc
-          make --jobs=2
-          make install
-          printf 'CJSH_BASH_REFERENCE=%s/bash-reference/bin/bash\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-          printf 'CJSH_BASH_VERSION=5.3.0\n' >> "$GITHUB_ENV"
-
       - name: Configure
         run: cmake --preset release-artifact
 

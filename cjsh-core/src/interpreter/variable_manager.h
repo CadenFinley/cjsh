@@ -68,8 +68,6 @@ class VariableManager {
                               bool append = false);
     bool assign_global_array_literal(const std::string& name, const std::vector<std::string>& words,
                                      bool append = false);
-    // Publish runtime-owned arrays without interpreting their values as assignment syntax.
-    void set_global_array_values(const std::string& name, const std::vector<std::string>& values);
     bool assign_associative_literal(const std::string& name, const std::vector<std::string>& words,
                                     bool append = false);
     bool assign_global_associative_literal(const std::string& name,

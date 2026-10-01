@@ -190,18 +190,6 @@ bool VariableManager::assign_global_array_literal(const std::string& name,
     return assign_array_literal_impl(name, words, append, true);
 }
 
-void VariableManager::set_global_array_values(const std::string& name,
-                                              const std::vector<std::string>& values) {
-    remove_global_scalar_binding(name);
-    global_associative_array_variables.erase(name);
-    global_nameref_variables.erase(name);
-    auto& array = global_array_variables[name];
-    array.clear();
-    for (size_t i = 0; i < values.size(); ++i) {
-        array.emplace(static_cast<long long>(i), values[i]);
-    }
-}
-
 bool VariableManager::assign_array_literal_impl(const std::string& name,
                                                 const std::vector<std::string>& words, bool append,
                                                 bool force_global) {

@@ -28,8 +28,8 @@
 
 # Language Compatibility Inventory
 
-CJSH is a POSIX-focused shell with selected Bash and Zsh conveniences. It does not claim formal
-POSIX certification, complete Bash compatibility, or complete Zsh compatibility. This inventory
+CJSH is a POSIX-focused shell with native extensions. It does not claim formal
+POSIX certification or Bash/Zsh emulation. This inventory
 is the source of truth for the extensions that are intentionally supported.
 
 ## Current support
@@ -74,7 +74,9 @@ Language options use `shopt`; editor configuration and dialect selection use `cj
 shopt -s extglob
 shopt -u extglob
 shopt -p extglob
-cjshopt dialect bash
+cjshopt dialect posix
+cjshopt dialect status
+cjshopt dialect cjsh
 ```
 
 Add the desired command to `~/.cjshrc` to apply it to future interactive sessions.
@@ -86,9 +88,9 @@ Add the desired command to `~/.cjshrc` to apply it to future interactive session
   coprocess closes the parent's previous coprocess descriptors.
 - Associative-array enumeration is deterministic and key-sorted in CJSH. Scripts should not depend
   on Bash or Zsh producing the same enumeration order.
-- The experimental [Bash dialect](bash-mode.md) implements a tested subset of Bash 5.3
-  behavior. The initial `shopt` registry is deliberately limited; unknown options fail.
+- cjsh supports its native dialect and strict POSIX mode. It does not provide a Bash
+  compatibility mode. The `shopt` registry is deliberately limited; unknown options fail.
 - Zsh-only parameter modifiers, glob qualifiers, option dialect, modules, and completion language
-  are outside the Bash-style compatibility surface listed above.
+  are outside the supported extensions listed above.
 
 For maximally portable scripts, continue to target POSIX `sh` syntax and test with `cjsh --posix`.

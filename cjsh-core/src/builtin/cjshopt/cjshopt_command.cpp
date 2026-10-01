@@ -306,7 +306,7 @@ const std::vector<std::string>& cjshopt_usage_lines() {
         "Shell behavior and agent mode:",
         "  smart-cd <on|off|status>",
         "    Enable smart cd auto-jumps (default: on).",
-        "  dialect <cjsh|posix|bash|status>",
+        "  dialect <cjsh|posix|status>",
         "    Select the language dialect for subsequent commands.",
         "    Configure language options with shopt (for example, shopt -s extglob).",
         "  script-extension-interpreter <on|off|status>",

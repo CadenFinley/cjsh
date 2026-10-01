@@ -185,16 +185,9 @@ cjsh_add_test(NAME parser_dispatch_tests COMMAND parser_dispatch_tests)
 cjsh_add_test(NAME pattern_endpoint_tests COMMAND pattern_endpoint_tests)
 
 if(Python3_Interpreter_FOUND)
-    cjsh_add_test(NAME bash.shebang
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/bash/test_bash_shebang.py"
+    cjsh_add_test(NAME shell_dialect_tests
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/core/test_shell_dialect.py"
                 $<TARGET_FILE:cjsh>)
-    set_tests_properties(bash.shebang PROPERTIES LABELS "bash")
-    foreach(category native differential)
-        cjsh_add_test(NAME bash.${category}
-            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/bash/test_bash_mode.py"
-                    $<TARGET_FILE:cjsh> "${category}")
-        set_tests_properties(bash.${category} PROPERTIES LABELS "bash" SKIP_RETURN_CODE 77)
-    endforeach()
     foreach(category core expansion errors restrictions builtins invocation)
         cjsh_add_test(NAME posix.${category}
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/posix/test_posix_mode.py"

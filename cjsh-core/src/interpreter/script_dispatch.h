@@ -31,26 +31,9 @@
 
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
-#include "shell_dialect.h"
-
 namespace script_dispatch {
-
-class BashScriptDialectScope {
-   public:
-    explicit BashScriptDialectScope(std::string_view content);
-    ~BashScriptDialectScope();
-    BashScriptDialectScope(const BashScriptDialectScope&) = delete;
-    BashScriptDialectScope& operator=(const BashScriptDialectScope&) = delete;
-
-   private:
-    std::optional<config::ShellDialect> previous_dialect_;
-};
-
-std::optional<std::vector<std::string>> build_bash_shebang_interpreter_args(
-    const std::vector<std::string>& args, const char* cached_path);
 
 std::optional<std::vector<std::string>> build_extension_interpreter_args(
     const std::vector<std::string>& args, const char* cached_path);

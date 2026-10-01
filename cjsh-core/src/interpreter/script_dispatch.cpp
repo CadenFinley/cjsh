@@ -28,55 +28,18 @@
 
 #include "script_dispatch.h"
 
-#include <unistd.h>
 #include <filesystem>
 #include <fstream>
 #include <optional>
-#include <sstream>
 #include <string>
-#include <string_view>
 #include <system_error>
 #include <vector>
 
-#include "cjsh_filesystem.h"
 #include "string_utils.h"
 
 namespace script_dispatch {
 
 namespace {
-
-std::optional<std::vector<std::string>> bash_shebang_options(std::string_view content) {
-    if (content.substr(0, 2) != "#!") {
-        return std::nullopt;
-    }
-
-    content.remove_prefix(2);
-    std::istringstream line{std::string(content.substr(0, content.find('\n')))};
-    std::string interpreter;
-    if (!(line >> interpreter)) {
-        return std::nullopt;
-    }
-    if (std::filesystem::path(interpreter).filename() == "env") {
-        if (!(line >> interpreter)) {
-            return std::nullopt;
-        }
-        if (interpreter == "-S" || interpreter == "--split-string") {
-            if (!(line >> interpreter)) {
-                return std::nullopt;
-            }
-        }
-    }
-    if (std::filesystem::path(interpreter).filename() != "bash") {
-        return std::nullopt;
-    }
-
-    std::vector<std::string> options;
-    std::string option;
-    while (line >> option) {
-        options.push_back(option);
-    }
-    return options;
-}
 
 std::optional<std::string> interpreter_for_script_extension(const std::filesystem::path& path) {
     std::string extension = string_utils::to_lower_copy(path.extension().string());
@@ -120,57 +83,6 @@ std::optional<std::string> resolve_script_path(const std::vector<std::string>& a
 }
 
 }  // namespace
-
-BashScriptDialectScope::BashScriptDialectScope(std::string_view content) {
-    if (!config::is_posix_mode() && bash_shebang_options(content)) {
-        previous_dialect_ = config::shell_dialect();
-        config::set_shell_dialect(config::ShellDialect::Bash);
-    }
-}
-
-BashScriptDialectScope::~BashScriptDialectScope() {
-    if (previous_dialect_) {
-        config::set_shell_dialect(*previous_dialect_);
-    }
-}
-
-std::optional<std::vector<std::string>> build_bash_shebang_interpreter_args(
-    const std::vector<std::string>& args, const char* cached_path) {
-    if (config::is_posix_mode()) {
-        return std::nullopt;
-    }
-    auto script_path = resolve_script_path(args, cached_path);
-    if (!script_path || access(script_path->c_str(), X_OK) != 0) {
-        return std::nullopt;
-    }
-    std::error_code ec;
-    if (!std::filesystem::is_regular_file(*script_path, ec) || ec) {
-        return std::nullopt;
-    }
-
-    std::ifstream file(*script_path);
-    // Avoid reading a whole first line from an executable binary.
-    if (!file || file.get() != '#' || file.get() != '!') {
-        return std::nullopt;
-    }
-    std::string first_line;
-    (void)std::getline(file, first_line);
-    auto options = bash_shebang_options("#!" + first_line);
-    if (!options) {
-        return std::nullopt;
-    }
-    auto executable = cjsh_filesystem::resolve_cjsh_executable_path();
-    if (executable.empty()) {
-        return std::nullopt;
-    }
-
-    std::vector<std::string> interpreter_args{executable, "--no-config", "--bash"};
-    (void)interpreter_args.insert(interpreter_args.end(), options->begin(), options->end());
-    interpreter_args.push_back("--");
-    interpreter_args.push_back(*script_path);
-    (void)interpreter_args.insert(interpreter_args.end(), args.begin() + 1, args.end());
-    return interpreter_args;
-}
 
 std::optional<std::vector<std::string>> build_extension_interpreter_args(
     const std::vector<std::string>& args, const char* cached_path) {

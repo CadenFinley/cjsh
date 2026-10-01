@@ -1097,15 +1097,7 @@ bool configure_stderr_redirects(const Command& cmd, ErrorHandler&& on_error) {
 
 [[noreturn]] void exec_external_child(const std::vector<std::string>& args,
                                       const char* cached_path) {
-    if (auto interpreter_args =
-            script_dispatch::build_bash_shebang_interpreter_args(args, cached_path)) {
-        auto c_interp_args = cjsh_env::build_exec_argv(*interpreter_args);
-        (void)execv((*interpreter_args)[0].c_str(), c_interp_args.data());
-        int saved_errno = errno;
-        report_exec_failure(*interpreter_args, saved_errno);
-    }
-    if (config::script_extension_interpreter_enabled && !config::is_posix_mode() &&
-        !config::is_bash_mode()) {
+    if (config::script_extension_interpreter_enabled && !config::is_posix_mode()) {
         auto interpreter_args =
             script_dispatch::build_extension_interpreter_args(args, cached_path);
         if (interpreter_args) {
@@ -1573,15 +1565,7 @@ int Exec::execute_prepared_command_async(cjsh_env::PreparedCommand command) {
 }
 
 int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
-    std::vector<Command> autocd_commands;
-    if (config::is_bash_mode() && g_shell && g_shell->is_interactive_process() &&
-        g_shell->get_shell_option(ShellOption::Autocd)) {
-        autocd_commands = input_commands;
-        for (auto& command : autocd_commands) {
-            (void)command_lookup::expand_bash_auto_cd(command.args, g_shell.get());
-        }
-    }
-    const auto& commands = autocd_commands.empty() ? input_commands : autocd_commands;
+    const auto& commands = input_commands;
     const bool pipeline_negated = (!commands.empty() && commands[0].negate_pipeline);
     if (g_shell) {
         g_shell->mark_terminal_dirty();

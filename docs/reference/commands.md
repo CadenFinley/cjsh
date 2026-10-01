@@ -201,10 +201,8 @@ When you execute a script file directly (for example, `./script.sh`) CJSH can in
 from the file extension if the file has no shebang. Toggle this with
 `cjshopt script-extension-interpreter` or `--no-script-extension-interpreter`.
 
-Bash shebangs select cjsh's [Bash dialect](bash-mode.md) for that file and restore
-the previous dialect afterward. External Bash script commands run in a separate cjsh process;
-sourced files run in the current shell. POSIX mode does not automatically change dialect
-and continues to dispatch executable scripts to their shebang interpreter.
+Executable scripts with a shebang run through their specified interpreter. Files read directly
+by cjsh or sourced with `source` or `.` use the current cjsh dialect; shebangs do not change it.
 
 ### eval
 Evaluate a string as shell code.
@@ -279,7 +277,7 @@ readonly [-pf] name[=value] [name[=value]...]
 ### shopt
 
 Inspect or change shell language options. Supported options are `autocd`, `extglob`, `globstar`,
-`huponexit`, `expand_aliases`, and `inherit_errexit`.
+`huponexit`, and `expand_aliases`.
 
 ```sh
 shopt -s autocd
@@ -290,16 +288,16 @@ shopt -q globstar
 ```
 
 `-s` enables, `-u` disables, `-p` prints reusable commands, `-q` queries without output,
-and `-o` selects the `set` option namespace. See [Bash dialect](bash-mode.md) for defaults,
-compatibility boundaries, and migration from the previous option interfaces.
+and `-o` selects the `set` option namespace. Unknown options fail. `shopt` is rejected
+in strict POSIX mode.
 
 - `autocd` treats directory names as implicit `cd` commands in interactive shells. It defaults
-  to on in the native dialect and off in Bash mode; `shopt -s autocd` enables it explicitly.
+  to on in the native dialect; `shopt -u autocd` disables it.
+- `expand_aliases` enables alias expansion and defaults to on.
 - Native interactive shells enable `huponexit` by default, including `-i -c` invocations.
   Native noninteractive shells default to off. When enabled, normal exit sends SIGHUP to
   managed jobs. Use `shopt -u huponexit` to keep jobs running, or `disown`/`disown -h`
   to exempt individual jobs.
-- Bash mode defaults `huponexit` to off and applies it only to interactive login shells.
 - HUP cleanup resumes stopped jobs so they can handle the signal. Jobs that handle or ignore
   HUP may survive; cjsh does not escalate to SIGKILL and waits at most 100 ms for child cleanup.
 
@@ -802,7 +800,7 @@ Available subcommands:
 - `completion-learning` - Toggle automatic completion learning from man pages
 - `exit-confirmation` - Configure when `exit`, `quit`, and `bye` require confirmation
 - `smart-cd` - Toggle fuzzy auto-jumps for `cd`
-- `dialect cjsh|posix|bash|status` - Select or inspect the shell language dialect
+- `dialect cjsh|posix|status` - Select or inspect the shell language dialect
 - `script-extension-interpreter` - Toggle extension-based script runners
 - `line-numbers` - Configure line numbers in multiline input (on/off/relative/absolute)
 - `line-numbers-continuation` - Keep line numbers when a continuation prompt is set

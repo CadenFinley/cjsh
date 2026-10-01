@@ -27,16 +27,13 @@
 */
 
 #include "command_lookup.h"
-#include <iostream>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "builtin.h"
 #include "cjsh_filesystem.h"
 #include "interpreter.h"
 #include "shell.h"
-#include "shell_env.h"
 #include "token_constants.h"
 
 namespace command_lookup {
@@ -101,13 +98,12 @@ bool should_auto_cd_token(const std::string& token, Shell* shell, bool* director
     if (directory_result != nullptr) {
         *directory_result = false;
     }
-    if (shell == nullptr || token.empty() || !shell->get_shell_option(ShellOption::Autocd) ||
-        (config::is_bash_mode() && !shell->is_interactive_process())) {
+    if (shell == nullptr || token.empty() || !shell->get_shell_option(ShellOption::Autocd)) {
         return false;
     }
 
-    // The native dialect treats "./" as explicit execution; Bash autocd accepts it.
-    if (!config::is_bash_mode() && token.rfind("./", 0) == 0) {
+    // Treat "./" as explicit execution.
+    if (token.rfind("./", 0) == 0) {
         return false;
     }
 
@@ -119,9 +115,7 @@ bool should_auto_cd_token(const std::string& token, Shell* shell, bool* director
     const std::string cwd = built_ins->get_current_directory();
     const std::string previous_directory = shell->get_previous_directory();
     const bool is_directory =
-        config::is_bash_mode()
-            ? cjsh_filesystem::path_is_directory_candidate(token, cwd)
-            : cjsh_filesystem::is_auto_cd_directory_token(token, cwd, previous_directory);
+        cjsh_filesystem::is_auto_cd_directory_token(token, cwd, previous_directory);
     if (directory_result != nullptr) {
         *directory_result = is_directory;
     }
@@ -135,33 +129,6 @@ bool should_auto_cd_token(const std::string& token, Shell* shell, bool* director
     }
 
     return !cjsh_filesystem::resolves_to_executable(token, cwd);
-}
-
-bool expand_bash_auto_cd(std::vector<std::string>& args, Shell* shell) {
-    if (!config::is_bash_mode() || shell == nullptr || !shell->is_interactive_process() ||
-        !shell->get_shell_option(ShellOption::Autocd) || args.empty() ||
-        shell->get_shell_option(ShellOption::Noexec)) {
-        return false;
-    }
-    std::vector<std::pair<std::string, std::string>> assignments;
-    const size_t first = cjsh_env::collect_env_assignments(args, assignments);
-    const cjsh_env::TemporaryEnvAssignmentScope assignment_scope(shell, assignments);
-    if (first >= args.size() || !should_auto_cd_token(args[first], shell)) {
-        return false;
-    }
-
-    // Bash reports the implicit command before applying its redirections.
-    std::cerr << "cd --";
-    for (size_t i = first; i < args.size(); ++i) {
-        const auto& arg = args[i];
-        const bool quote =
-            arg.empty() || arg.find_first_of(" \t\r\n\\\"'`$&;|<>()[]{}*?!#~") != std::string::npos;
-        std::cerr << ' ' << (quote ? cjsh_env::quote_shell_value(arg) : arg);
-    }
-    std::cerr << '\n';
-    args.insert(args.begin() + static_cast<std::vector<std::string>::difference_type>(first),
-                {"cd", "--"});
-    return true;
 }
 
 CommandResolution resolve_command(const std::string& token, Shell* shell, bool include_path) {

@@ -606,7 +606,7 @@ int dialect_command(const std::vector<std::string>& args) {
     print_error({ErrorType::INVALID_ARGUMENT,
                  "cjshopt dialect",
                  "invalid dialect",
-                 {"Usage: cjshopt dialect <cjsh|posix|bash|status>"}});
+                 {"Usage: cjshopt dialect <cjsh|posix|status>"}});
     return 2;
 }
 

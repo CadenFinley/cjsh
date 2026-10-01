@@ -311,7 +311,7 @@ History requires a writable parent directory for its lock and atomic replacement
 later history write failures disable further writes for the session after one diagnostic.
 
 
-### POSIX & Bash Compatibility
+### POSIX Compatibility and Extensions
 cjsh targets broad POSIX compatibility for scripting while providing POSIX+ extensions such as `[[ ... ]]`, arrays, namerefs, coprocesses, extended globs, brace expansion, here-strings, process substitution, and rich redirection semantics. This is not a formal conformance or complete Bash/Zsh-emulation claim; consult the [Language Compatibility Inventory](../reference/language-compatibility.md) for precise support. Syntax extensions are available in scripts and interactive sessions; interactive-only features like history expansion, completions, and prompt styling disable themselves automatically when stdin is not a tty. Use `--minimal` or `--secure` when you want fewer extras in interactive shells.
 
 ### Completion Learning Paths

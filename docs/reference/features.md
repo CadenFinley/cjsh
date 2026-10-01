@@ -133,7 +133,7 @@ for full details.
      - `cjshopt keybind …` and `cjshopt keybind ext …` for keymap management
     - `cjshopt set-history-max` to adjust persistent history size (0 or more entries; no upper limit)
     - `shopt -s huponexit` sends SIGHUP to background jobs on exit. Native interactive shells
-        enable it by default; Bash mode defaults to off and applies it only to interactive login shells.
+        enable it by default; noninteractive shells default to off.
 - **Generated config skeletons** – `cjshopt generate-env`, `cjshopt generate-profile`,
     `cjshopt generate-rc`, and `cjshopt generate-logout` create `~/.cjshenv`, `~/.cjprofile`,
     `~/.cjshrc`, and `~/.cjlogout` (or alternate locations under `~/.config/cjsh/`) with
@@ -161,8 +161,7 @@ enables history expansion, and `-O NAME` enables a `shopt` option. Use the long
 options for the former native shortcuts (help, version, colors, minimal mode,
 secure mode, completions, and disabling history expansion).
 
-- `--dialect cjsh|posix|bash` selects the language dialect; `--bash` selects the
-  experimental [Bash dialect](bash-mode.md). `cjshopt dialect` changes it at runtime.
+- `--dialect cjsh|posix` selects the language dialect. `cjshopt dialect` changes it at runtime.
 
 Other switches:
 

@@ -37,8 +37,7 @@ namespace config {
 
 enum class ShellDialect : std::uint8_t {
     Cjsh,
-    Posix,
-    Bash
+    Posix
 };
 
 ShellDialect shell_dialect();
@@ -46,7 +45,6 @@ void set_shell_dialect(ShellDialect dialect);
 std::optional<ShellDialect> parse_shell_dialect(std::string_view name);
 const char* shell_dialect_name();
 bool is_posix_mode();
-bool is_bash_mode();
 
 }  // namespace config
 

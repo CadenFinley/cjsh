@@ -78,7 +78,6 @@
 #include "quote_info.h"
 #include "readonly_command.h"
 #include "redirection_utils.h"
-#include "script_dispatch.h"
 #include "shell.h"
 #include "shell_env.h"
 #include "signal_handler.h"
@@ -847,7 +846,6 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 std::stringstream buffer;
                 buffer << f.rdbuf();
                 const auto content = buffer.str();
-                const script_dispatch::BashScriptDialectScope dialect_scope(content);
                 auto nested_lines = shell_parser->parse_into_lines(content);
                 return execute_block(nested_lines);
             }
@@ -1114,7 +1112,6 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         std::stringstream buffer;
                         buffer << f.rdbuf();
                         const auto content = buffer.str();
-                        const script_dispatch::BashScriptDialectScope dialect_scope(content);
                         auto nested_lines = shell_parser->parse_into_lines(content);
                         return execute_block(nested_lines);
                     }
@@ -2453,13 +2450,6 @@ std::string ShellScriptInterpreter::expand_all_substitutions(
 
                 if (found) {
                     std::string param_expr = result.substr(i + 2, j - (i + 2));
-                    // Bash expansion belongs to the word-expansion stage. Keep quotes and
-                    // array field boundaries intact instead of injecting values into source.
-                    if (config::is_bash_mode()) {
-                        out.append(result, i, j - i + 1);
-                        i = j;
-                        continue;
-                    }
                     std::string expanded_result = expand_parameter_expression(param_expr);
 
                     if (expanded_result.find('$') != std::string::npos) {

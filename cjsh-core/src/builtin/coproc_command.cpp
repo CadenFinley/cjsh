@@ -203,7 +203,7 @@ int coproc_command(const std::vector<std::string>& args, Shell* shell) {
         print_error({ErrorType::INVALID_ARGUMENT,
                      "coproc",
                      "'coproc' is not available in POSIX mode",
-                     {"Run without --posix to use Bash-compatible coprocesses"}});
+                     {"Run without --posix to use coprocesses"}});
         return 1;
     }
     if (shell == nullptr || shell->get_shell_script_interpreter() == nullptr) {
@@ -225,7 +225,7 @@ int coproc_script_command(const std::string& command_text, Shell* shell) {
         print_error({ErrorType::INVALID_ARGUMENT,
                      "coproc",
                      "'coproc' is not available in POSIX mode",
-                     {"Run without --posix to use Bash-compatible coprocesses"}});
+                     {"Run without --posix to use coprocesses"}});
         return 1;
     }
     if (shell == nullptr || shell->get_shell_script_interpreter() == nullptr) {

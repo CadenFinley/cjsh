@@ -410,17 +410,6 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.read_trace(), ["env", "profile", "rc", "body", "logout"])
 
-    def test_bash_dialect_keeps_native_startup_files(self):
-        self.trace_files(self.home, "native-")
-        for name in (".bashrc", ".bash_profile", ".bash_login", ".bash_logout", "bash-env"):
-            (self.home / name).write_text('echo bash-file >> "$HOME/trace"\n')
-        self.env["BASH_ENV"] = str(self.home / "bash-env")
-        result = self.run_shell("--bash", "-il", "--no-titleline", "--no-history", "-c",
-                                'echo body >> "$HOME/trace"')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.read_trace(), ["native-env", "native-profile", "native-rc",
-                                             "body", "native-logout"])
-
     def test_posix_startup_and_env_expansion(self):
         self.trace_files(self.home, "native-")
         (self.home / ".profile").write_text('echo profile >> "$HOME/trace"\n')

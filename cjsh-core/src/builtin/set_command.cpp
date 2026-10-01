@@ -72,7 +72,7 @@ void print_option_status(Shell* shell, bool reusable = false) {
         std::cout << pad_option_name(opt.name) << '\t'
                   << (shell->get_shell_option(opt.option) ? "on" : "off") << '\n';
     }
-    if (!config::is_posix_mode() && !config::is_bash_mode() && !reusable) {
+    if (!config::is_posix_mode() && !reusable) {
         std::cout << pad_option_name("errexit_severity") << '\t' << shell->get_errexit_severity()
                   << '\n';
     }
@@ -97,9 +97,6 @@ std::string normalize_option_key(std::string key) {
         return key;
     }
 
-    if (config::is_bash_mode()) {
-        return key;
-    }
     size_t first_non_dash = key.find_first_not_of('-');
     if (first_non_dash == std::string::npos) {
         key.clear();
@@ -214,7 +211,7 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
     }
     if (shell == nullptr) {
         print_error({ErrorType::FATAL_ERROR, "set", "shell not initialized properly", {}});
-        return config::is_bash_mode() ? 2 : 1;
+        return 1;
     }
 
     if (args.size() == 1) {
@@ -253,13 +250,11 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
                 continue;
             }
 
-            if ((config::is_posix_mode() || config::is_bash_mode()) &&
-                (arg.rfind("--errexit-severity", 0) == 0 ||
-                 arg.rfind("--errexit_severity", 0) == 0)) {
+            if (config::is_posix_mode() && (arg.rfind("--errexit-severity", 0) == 0 ||
+                                            arg.rfind("--errexit_severity", 0) == 0)) {
                 print_error({ErrorType::INVALID_ARGUMENT,
                              "set",
-                             config::is_posix_mode() ? "errexit severity is disabled in POSIX mode"
-                                                     : "errexit severity is disabled in Bash mode",
+                             "errexit severity is disabled in POSIX mode",
                              {}});
                 return 2;
             }
@@ -269,7 +264,7 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
 
             if (arg.rfind("--", 0) == 0) {
                 report_invalid_option(arg);
-                return config::is_bash_mode() ? 2 : 1;
+                return 1;
             }
 
             if (arg.size() > 1 && (arg[0] == '-' || arg[0] == '+')) {
@@ -279,9 +274,7 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
 
                     if (arg.size() == 2) {
                         if (i + 1 >= args.size()) {
-                            print_option_status(
-                                shell, (config::is_posix_mode() || config::is_bash_mode()) &&
-                                           !enable_option);
+                            print_option_status(shell, config::is_posix_mode() && !enable_option);
                             return 0;
                         }
                         option_name = args[++i];
@@ -291,31 +284,29 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
 
                     if (option_name.empty()) {
                         report_invalid_option(arg);
-                        return config::is_bash_mode() ? 2 : 1;
+                        return 1;
                     }
 
                     std::string normalized_key = normalize_option_key(option_name);
                     bool inline_value = option_name.find('=') != std::string::npos;
 
-                    if (config::is_posix_mode() || config::is_bash_mode()) {
+                    if (config::is_posix_mode()) {
                         if (normalized_key.rfind("errexit_severity", 0) == 0) {
                             print_error({ErrorType::INVALID_ARGUMENT,
                                          "set",
-                                         config::is_posix_mode()
-                                             ? "errexit severity is disabled in POSIX mode"
-                                             : "errexit severity is disabled in Bash mode",
+                                         "errexit severity is disabled in POSIX mode",
                                          {}});
                             return 2;
                         }
                         auto requested_option = parse_shell_option(normalized_key);
-                        if (config::is_posix_mode() && requested_option.has_value() &&
+                        if (requested_option.has_value() &&
                             option_is_non_posix(*requested_option)) {
                             print_error(
                                 {ErrorType::INVALID_ARGUMENT,
                                  "set",
                                  "option '" + option_name + "' is not available in POSIX mode",
                                  {"Use POSIX options only or run without --posix"}});
-                            return config::is_bash_mode() ? 2 : 1;
+                            return 1;
                         }
                     }
 
@@ -330,7 +321,7 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
 
                     if (!handle_named_option(option_name, enable_option, shell)) {
                         report_invalid_option(option_name);
-                        return config::is_bash_mode() ? 2 : 1;
+                        return 1;
                     }
                     continue;
                 } else {
@@ -345,7 +336,7 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
                         }
                     }
                     if (!ok) {
-                        return config::is_bash_mode() ? 2 : 1;
+                        return 1;
                     }
                     continue;
                 }

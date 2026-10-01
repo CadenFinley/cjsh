@@ -75,7 +75,6 @@ enum class ShellOption : std::uint8_t {
     Nolog,
     Extglob,
     ExpandAliases,
-    InheritErrexit,
     BraceExpand,
     HistExpand,
     Autocd,

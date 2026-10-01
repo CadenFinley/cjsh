@@ -278,9 +278,8 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                                ValueRequirement::Required, ValueType::Directory, "DIR"),
              make_option("--no-system-paths", "Skip PATH setup from /etc/paths and /etc/paths.d"),
              make_option("--posix", "Enable POSIX mode and reject non-POSIX syntax"),
-             make_option("--bash", "Enable experimental Bash compatibility"),
-             make_value_option("--dialect", {}, "Select cjsh, posix, or bash",
-                               ValueRequirement::Required, ValueType::Text, "DIALECT"),
+             make_value_option("--dialect", {}, "Select cjsh or posix", ValueRequirement::Required,
+                               ValueType::Text, "DIALECT"),
              make_option("-m", "Enable job-control monitor mode"),
              make_option("--minimal", "Disable cjsh enhancements"),
              make_option("-C", "Enable noclobber"),
@@ -631,7 +630,7 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_subcommand("completion-learning", "Toggle completion learning"),
              make_subcommand("exit-confirmation", "Control when exit requires confirmation"),
              make_subcommand("smart-cd", "Toggle smart cd auto-jumps"),
-             make_subcommand("dialect", "Select cjsh, posix, or bash semantics"),
+             make_subcommand("dialect", "Select cjsh or posix semantics"),
              make_subcommand("script-extension-interpreter",
                              "Toggle extension-based script runners"),
              make_subcommand("line-numbers", "Configure multiline line numbers"),
@@ -829,7 +828,6 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
         add_doc("cjshopt-dialect", "Select the shell language dialect",
                 {make_subcommand("cjsh", "Use native cjsh semantics"),
                  make_subcommand("posix", "Use strict POSIX semantics"),
-                 make_subcommand("bash", "Use experimental Bash compatibility"),
                  make_subcommand("status", "Print the selected dialect")});
 
         add_doc("cjshopt-script-extension-interpreter", "",

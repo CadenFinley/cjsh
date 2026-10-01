@@ -119,7 +119,7 @@ EOF
     SCRIPT_SHEBANG="$TMP_DIR/test_shebang.sh"
     cat <<'EOF' > "$SCRIPT_SHEBANG"
 #!/usr/bin/env bash
-if [[ 2 -eq 2 ]]; then
+if [[ 2 -eq 2 ]] && [ -n "$BASH_VERSION" ]; then
     echo "shebang ok"
 fi
 EOF
@@ -131,6 +131,22 @@ EOF
         exit 1
     else
         echo "PASS: shebang takes precedence"
+    fi
+
+    OUT=$("$CJSH_PATH" -c "exec \"$SCRIPT_SHEBANG\"")
+    if [ "$OUT" != "shebang ok" ]; then
+        echo "FAIL: exec uses the shebang interpreter (got '$OUT')"
+        exit 1
+    else
+        echo "PASS: exec uses the shebang interpreter"
+    fi
+
+    OUT=$("$CJSH_PATH" -c "\"$SCRIPT_SHEBANG\" | cat")
+    if [ "$OUT" != "shebang ok" ]; then
+        echo "FAIL: pipeline uses the shebang interpreter (got '$OUT')"
+        exit 1
+    else
+        echo "PASS: pipeline uses the shebang interpreter"
     fi
 else
     echo "SKIP: bash not found"

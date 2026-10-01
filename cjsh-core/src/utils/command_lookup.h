@@ -67,7 +67,6 @@ bool token_allows_split_command_merge(const std::string& token);
 bool lookup_shell_alias(const std::string& token, Shell* shell, std::string& alias_value);
 bool has_shell_function(const std::string& token, Shell* shell);
 bool should_auto_cd_token(const std::string& token, Shell* shell, bool* directory_result = nullptr);
-bool expand_bash_auto_cd(std::vector<std::string>& args, Shell* shell);
 CommandResolution resolve_command(const std::string& token, Shell* shell, bool include_path = true);
 std::vector<CommandResolutionEntry> list_resolution_entries(const std::string& token, Shell* shell,
                                                             bool include_path = true);
