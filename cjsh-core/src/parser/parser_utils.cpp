@@ -531,6 +531,45 @@ size_t parser_find_block_end(const std::string& text, const std::vector<std::str
     return std::string::npos;
 }
 
+bool parser_find_matching_parameter_expansion_end(std::string_view text, size_t opening,
+                                                  size_t& end_out) {
+    if (opening >= text.size() || text[opening] != '{') {
+        return false;
+    }
+    int depth = 1;
+    char quote = '\0';
+    for (size_t i = opening + 1; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (ch == '\\' && quote != '\'') {
+            ++i;
+            continue;
+        }
+        if (quote != '\'' && ch == '$' && i + 1 < text.size() && text[i + 1] == '{') {
+            size_t nested;
+            if (!parser_find_matching_parameter_expansion_end(text, i + 1, nested)) {
+                return false;
+            }
+            i = nested;
+            continue;
+        }
+        if ((ch == '\'' || ch == '"') && (quote == '\0' || quote == ch)) {
+            quote = quote == '\0' ? ch : '\0';
+            continue;
+        }
+        if (quote != '\0') {
+            continue;
+        }
+        if (ch == '{') {
+            ++depth;
+        }
+        if (ch == '}' && --depth == 0) {
+            end_out = i;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool parser_find_matching_command_substitution_end(const std::string& text, size_t start_index,
                                                    size_t& end_out) {
     if (start_index == 0 || start_index > text.size()) {
@@ -539,6 +578,12 @@ bool parser_find_matching_command_substitution_end(const std::string& text, size
 
     int depth = 1;
     utils::QuoteState quote_state;
+    struct CaseState {
+        int depth;
+        int phase;
+    };
+    std::vector<CaseState> cases;
+    bool command_start = true;
 
     for (size_t i = start_index; i < text.size(); ++i) {
         char ch = text[i];
@@ -549,6 +594,47 @@ bool parser_find_matching_command_substitution_end(const std::string& text, size
 
         if (quote_state.inside_quotes()) {
             continue;
+        }
+
+        if (std::isalpha(static_cast<unsigned char>(ch)) || ch == '_') {
+            size_t end = i + 1;
+            while (end < text.size() &&
+                   (std::isalnum(static_cast<unsigned char>(text[end])) || text[end] == '_')) {
+                ++end;
+            }
+            const std::string word = text.substr(i, end - i);
+            if (command_start && word == "case") {
+                cases.push_back({depth, 0});
+            } else if (!cases.empty() && cases.back().depth == depth) {
+                if (cases.back().phase == 0 && word == "in") {
+                    cases.back().phase = 1;
+                } else if (word == "esac" && (command_start || cases.back().phase == 1)) {
+                    cases.pop_back();
+                }
+            }
+            command_start = word == "then" || word == "else" || word == "elif" || word == "do" ||
+                            word == "if" || word == "while" || word == "until";
+            i = end - 1;
+            continue;
+        }
+        if (ch == ';' && i + 1 < text.size() && text[i + 1] == ';' && !cases.empty() &&
+            cases.back().depth == depth) {
+            cases.back().phase = 1;
+            ++i;
+            command_start = true;
+            continue;
+        }
+        if (!cases.empty() && cases.back().depth == depth && cases.back().phase == 1) {
+            if (ch == ')') {
+                cases.back().phase = 2;
+                command_start = true;
+            }
+            continue;
+        }
+        if (ch == ';' || ch == '\n' || ch == '|' || ch == '&') {
+            command_start = true;
+        } else if (!std::isspace(static_cast<unsigned char>(ch)) && ch != '(' && ch != ')') {
+            command_start = false;
         }
 
         if (ch == '(') {
@@ -970,25 +1056,40 @@ bool parse_here_doc_header(std::string_view text, size_t operator_pos, HereDocHe
     }
 
     size_t delim_end = delim_start;
-    while (delim_end < text.size() &&
-           (std::isspace(static_cast<unsigned char>(text[delim_end])) == 0)) {
-        ++delim_end;
+    char quote = '\0';
+    for (; delim_end < text.size(); ++delim_end) {
+        const char ch = text[delim_end];
+        if (ch == '\\' && quote != '\'') {
+            parsed.expand = false;
+            if (delim_end + 1 < text.size()) {
+                parsed.delimiter += text[++delim_end];
+            }
+            continue;
+        }
+        if (quote != '\0') {
+            if (ch == quote) {
+                quote = '\0';
+            } else {
+                parsed.delimiter += ch;
+            }
+            continue;
+        }
+        if (ch == '\'' || ch == '"') {
+            quote = ch;
+            parsed.expand = false;
+            continue;
+        }
+        if (std::isspace(static_cast<unsigned char>(ch)) ||
+            std::string_view(";&|()<>").find(ch) != std::string_view::npos) {
+            break;
+        }
+        parsed.delimiter += ch;
     }
-
-    if (delim_start == delim_end) {
+    if (delim_start == delim_end || quote != '\0') {
         return false;
     }
-
     parsed.delimiter_start = delim_start;
     parsed.delimiter_end = delim_end;
-    parsed.delimiter = std::string(text.substr(delim_start, delim_end - delim_start));
-
-    if (parsed.delimiter.size() >= 2 &&
-        ((parsed.delimiter.front() == '"' && parsed.delimiter.back() == '"') ||
-         (parsed.delimiter.front() == '\'' && parsed.delimiter.back() == '\''))) {
-        parsed.expand = false;
-        parsed.delimiter = parsed.delimiter.substr(1, parsed.delimiter.size() - 2);
-    }
 
     header_out = std::move(parsed);
     return true;
@@ -1141,7 +1242,7 @@ std::vector<std::string> merge_command_group_lines(const std::vector<std::string
                 if (lead == std::string::npos) {
                     continue;
                 }
-                if (next_line[lead] != '{' && next_line[lead] != '(') {
+                if (!function_evaluator::parse_function_header(source + '\n' + next_line)) {
                     next = result.size();
                 }
                 break;
@@ -1166,6 +1267,9 @@ std::vector<std::string> merge_command_group_lines(const std::vector<std::string
             continue;
         }
         auto find_close = [&] {
+            if (header && header->opening != '\0') {
+                return function_evaluator::find_function_body_end(source, *header);
+            }
             return opening == '{' ? find_matching_brace(source, body_start)
                                   : find_matching_paren(source, body_start);
         };

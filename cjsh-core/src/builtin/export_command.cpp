@@ -219,7 +219,7 @@ int export_command(const std::vector<std::string>& args, Shell* shell) {
 }
 
 int unset_command(const std::vector<std::string>& args, Shell* shell) {
-    if (builtin_handle_help(args, {"Usage: unset [-n|-v] NAME [NAME ...]",
+    if (builtin_handle_help(args, {"Usage: unset [-n|-v|-f] NAME [NAME ...]",
                                    "Remove variables from the environment and shell state.",
                                    "-n unsets the nameref attribute; -v selects variables."})) {
         return 0;
@@ -233,16 +233,32 @@ int unset_command(const std::vector<std::string>& args, Shell* shell) {
     auto& env_vars = cjsh_env::env_vars();
     auto* script_interpreter = shell->get_shell_script_interpreter();
     bool nameref_only = false;
+    bool functions_only = false;
     size_t operand_start = 1;
     if (args.size() > 1 && args[1] == "-n") {
         nameref_only = true;
         operand_start = 2;
     } else if (args.size() > 1 && (args[1] == "-v" || args[1] == "--")) {
         operand_start = 2;
+    } else if (args.size() > 1 && args[1] == "-f") {
+        functions_only = true;
+        operand_start = 2;
+    }
+    if (operand_start < args.size() && args[operand_start] == "--") {
+        ++operand_start;
     }
 
     for (size_t i = operand_start; i < args.size(); ++i) {
         const std::string& name = args[i];
+        if (functions_only) {
+            if (!cjsh_env::is_valid_env_name(name)) {
+                print_error({ErrorType::INVALID_ARGUMENT, "unset", "invalid name: " + name, {}});
+                success = false;
+            } else if (script_interpreter && !script_interpreter->unset_function(name)) {
+                success = false;
+            }
+            continue;
+        }
         std::string base_name;
         bool has_index = false;
 

@@ -41,7 +41,8 @@ class Tokenizer {
     static std::vector<std::string> tokenize_command(const std::string& cmdline);
 
     std::vector<std::string> split_by_ifs(const std::string& input);
-    std::vector<std::string> split_by_ifs(const std::string& input, const std::string& ifs);
+    std::vector<std::string> split_by_ifs(const std::string& input, const std::string& ifs,
+                                          const std::vector<bool>* expanded_bytes = nullptr);
 
    private:
     static std::vector<std::string> merge_redirection_tokens(

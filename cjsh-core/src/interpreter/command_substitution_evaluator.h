@@ -52,6 +52,8 @@ class CommandSubstitutionEvaluator {
 
     static CommandExecutor create_command_executor(
         cjsh::FunctionRef<int(const std::string&)> executor);
+    static void append_substitution_result(const std::string& content, bool in_double_quotes,
+                                           std::string& output);
 
    private:
     bool find_matching_delimiter(const std::string& text, size_t start, char open_char,
@@ -70,9 +72,6 @@ class CommandSubstitutionEvaluator {
                                         std::string& output_text);
 
     size_t find_closing_backtick(const std::string& input, size_t start);
-
-    void append_substitution_result(const std::string& content, bool in_double_quotes,
-                                    std::string& output);
 
     bool handle_escape_sequence(char c, bool& escaped, std::string& output);
 

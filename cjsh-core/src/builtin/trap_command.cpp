@@ -31,6 +31,8 @@
 
 #include "builtin_help.h"
 
+#include <algorithm>
+#include <cctype>
 #include <csignal>
 #include <cstddef>
 #include <iostream>
@@ -40,6 +42,7 @@
 #include <vector>
 #include "error_out.h"
 #include "shell.h"
+#include "shell_env.h"
 #include "signal_handler.h"
 
 namespace {
@@ -181,8 +184,8 @@ std::string signal_number_to_name(int signal_number) {
 
 void print_trap_list(const std::vector<std::pair<int, std::string>>& traps) {
     for (const auto& pair : traps) {
-        std::cout << "trap -- '" << pair.second << "' " << signal_number_to_name(pair.first)
-                  << '\n';
+        std::cout << "trap -- " << cjsh_env::quote_shell_value(pair.second) << " "
+                  << signal_number_to_name(pair.first) << '\n';
     }
 }
 
@@ -215,30 +218,70 @@ int trap_command(const std::vector<std::string>& args) {
         return 0;
     }
 
-    if (args.size() >= 2 && args[1] == "-p") {
-        if (args.size() != 2) {
-            print_error(
-                {ErrorType::INVALID_ARGUMENT, "trap", "-p accepts no operands", help_lines});
-            return 2;
-        }
-        auto traps = trap_manager_list_traps();
-        print_trap_list(traps);
-        return 0;
+    size_t operand = 1;
+    const bool print = args[operand] == "-p";
+    if (print) {
+        ++operand;
     }
-
-    if (args.size() >= 2 && args[1].size() > 1 && args[1][0] == '-') {
+    if (operand < args.size() && args[operand] == "--") {
+        ++operand;
+    } else if (!print && operand < args.size() && args[operand].size() > 1 &&
+               args[operand][0] == '-') {
         print_error(
-            {ErrorType::INVALID_ARGUMENT, "trap", "invalid option: " + args[1], help_lines});
+            {ErrorType::INVALID_ARGUMENT, "trap", "invalid option: " + args[operand], help_lines});
         return 2;
     }
 
-    if (args.size() < 3) {
+    const auto active = trap_manager_list_traps();
+    auto print_condition = [&](int condition) {
+        const auto it = std::find_if(active.begin(), active.end(), [condition](const auto& trap) {
+            return trap.first == condition;
+        });
+        if (it != active.end()) {
+            print_trap_list({*it});
+        } else {
+            std::cout << "trap -- - " << signal_number_to_name(condition) << '\n';
+        }
+    };
+    if (print) {
+        if (operand == args.size()) {
+            if (config::is_posix_mode()) {
+                print_condition(0);
+                for (const auto& signal : SignalHandler::trap_signal_names()) {
+                    print_condition(signal.first);
+                }
+            } else {
+                print_trap_list(active);
+            }
+        } else {
+            for (; operand < args.size(); ++operand) {
+                const int condition = signal_name_to_number(args[operand]);
+                if (condition == -1) {
+                    print_error({ErrorType::INVALID_ARGUMENT,
+                                 "trap",
+                                 args[operand] + ": invalid signal specification",
+                                 {}});
+                    return 1;
+                }
+                print_condition(condition);
+            }
+        }
+        return 0;
+    }
+    if (operand == args.size()) {
+        print_trap_list(active);
+        return 0;
+    }
+    const bool numeric_reset =
+        !args[operand].empty() && std::all_of(args[operand].begin(), args[operand].end(),
+                                              [](unsigned char c) { return std::isdigit(c) != 0; });
+    const std::string command = numeric_reset ? "-" : args[operand++];
+    if (operand == args.size()) {
         print_error({ErrorType::INVALID_ARGUMENT, "trap", "missing signal operand", help_lines});
         return 2;
     }
 
-    const std::string& command = args[1];
-    for (size_t i = 2; i < args.size(); ++i) {
+    for (size_t i = operand; i < args.size(); ++i) {
         int signal_num = signal_name_to_number(args[i]);
         if (signal_num == -1) {
             print_error({ErrorType::INVALID_ARGUMENT,

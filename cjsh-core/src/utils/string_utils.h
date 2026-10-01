@@ -31,11 +31,27 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cwchar>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace string_utils {
+
+inline std::vector<size_t> character_offsets(std::string_view text) {
+    std::vector<size_t> offsets{0};
+    std::mbstate_t state{};
+    for (size_t pos = 0; pos < text.size();) {
+        size_t length = std::mbrlen(text.data() + pos, text.size() - pos, &state);
+        if (length == static_cast<size_t>(-1) || length == static_cast<size_t>(-2) || length == 0) {
+            state = {};
+            length = 1;
+        }
+        pos += length;
+        offsets.push_back(pos);
+    }
+    return offsets;
+}
 
 inline std::string to_lower_copy(std::string value) {
     (void)std::transform(value.begin(), value.end(), value.begin(),

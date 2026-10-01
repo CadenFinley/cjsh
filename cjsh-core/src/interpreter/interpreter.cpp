@@ -532,7 +532,8 @@ VariableManager& ShellScriptInterpreter::get_variable_manager() {
     return variable_manager;
 }
 
-int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content) {
+int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content,
+                                             bool preexpanded) {
     pid_t pid = fork();
     if (pid == 0) {
         if (setpgid(0, 0) < 0) {
@@ -540,7 +541,8 @@ int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content
                 {ErrorType::RUNTIME_ERROR, "subshell", "setpgid failed in subshell child", {}});
         }
 
-        int exit_code = g_shell->execute(subshell_content, true);
+        int exit_code =
+            execute_block(shell_parser->parse_into_lines(subshell_content), true, preexpanded);
         exit_code = read_exit_code_or(exit_code);
 
         int child_status = 0;
@@ -551,6 +553,7 @@ int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content
         // the inherited shell cleanup callback, which then accesses freed state.
         // Run shell hooks explicitly and leave C++ teardown to the parent.
         g_shell->run_exit_handlers(exit_code);
+        exit_code = read_exit_code_or(exit_code);
         (void)std::cout.flush();
         (void)std::cerr.flush();
         (void)std::clog.flush();
@@ -581,7 +584,7 @@ int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>
         return set_last_status(127);
     }
 
-    const function_evaluator::FunctionDefinition& function_definition = function_it->second;
+    const function_evaluator::FunctionDefinition function_definition = function_it->second;
 
     push_function_scope();
 
@@ -593,13 +596,6 @@ int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>
     }
     flags::set_positional_parameters(func_params);
 
-    std::vector<std::string> param_names;
-    for (size_t pi = 1; pi < expanded_args.size() && pi <= 9; ++pi) {
-        std::string name = std::to_string(pi);
-        param_names.push_back(name);
-        (void)setenv(name.c_str(), expanded_args[pi].c_str(), 1);
-    }
-
     int exit_code = 0;
     if (function_definition.uses_subshell_body) {
         std::ostringstream body_stream;
@@ -610,9 +606,9 @@ int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>
             }
             body_stream << function_definition.body_lines[body_line_index];
         }
-        exit_code = execute_subshell(body_stream.str());
+        exit_code = execute_subshell(body_stream.str(), config::is_posix_mode());
     } else {
-        exit_code = execute_block(function_definition.body_lines);
+        exit_code = execute_block(function_definition.body_lines, false, config::is_posix_mode());
     }
 
     if ((exit_code == exit_return) && cjsh_env::shell_variable_is_set("CJSH_RETURN_CODE")) {
@@ -626,10 +622,6 @@ int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>
     }
 
     flags::set_positional_parameters(saved_params);
-
-    for (const auto& n : param_names) {
-        (void)unsetenv(n.c_str());
-    }
 
     pop_function_scope();
 
@@ -689,44 +681,55 @@ int ShellScriptInterpreter::handle_env_assignment(const std::vector<std::string>
         return assignment_success_status();
     }
 
-    if (expanded_args.size() != 1) {
-        return -1;
+    std::vector<ParsedAssignmentToken> assignments;
+    for (const auto& arg : expanded_args) {
+        ParsedAssignmentToken parsed;
+        if (!parse_assignment_token(arg, parsed)) {
+            return -1;
+        }
+        assignments.push_back(std::move(parsed));
     }
+    for (const auto& parsed : assignments) {
+        if (config::is_posix_mode() &&
+            (parsed.append || parsed.lhs.find('[') != std::string::npos)) {
+            print_error({ErrorType::SYNTAX_ERROR,
+                         "assignment",
+                         parsed.append ? "[POSIX006] += assignments are disabled in POSIX mode"
+                                       : "[POSIX005] Arrays are disabled in POSIX mode",
+                         {}});
+            return cjsh_env::posix_error_exit(2);
+        }
 
-    ParsedAssignmentToken parsed;
-    if (!parse_assignment_token(expanded_args[0], parsed)) {
-        return -1;
+        std::string base_name = assignment_base_name(parsed.lhs);
+        if (!readonly_manager_can_assign(base_name, "assignment")) {
+            clear_assignment_status();
+            return cjsh_env::posix_error_exit(1);
+        }
+
+        if (!variable_manager.assign_variable(parsed.lhs, parsed.rhs, parsed.append)) {
+            print_error({ErrorType::INVALID_ARGUMENT,
+                         "assignment",
+                         "invalid assignment target: " + parsed.lhs,
+                         {}});
+            clear_assignment_status();
+            return 1;
+        }
     }
-
-    if (config::is_posix_mode() && (parsed.append || parsed.lhs.find('[') != std::string::npos)) {
-        print_error({ErrorType::SYNTAX_ERROR,
-                     "assignment",
-                     parsed.append ? "[POSIX006] += assignments are disabled in POSIX mode"
-                                   : "[POSIX005] Arrays are disabled in POSIX mode",
-                     {}});
-        return cjsh_env::posix_error_exit(2);
-    }
-
-    std::string base_name = assignment_base_name(parsed.lhs);
-    if (!readonly_manager_can_assign(base_name, "assignment")) {
-        clear_assignment_status();
-        return cjsh_env::posix_error_exit(1);
-    }
-
-    if (!variable_manager.assign_variable(parsed.lhs, parsed.rhs, parsed.append)) {
-        print_error({ErrorType::INVALID_ARGUMENT,
-                     "assignment",
-                     "invalid assignment target: " + parsed.lhs,
-                     {}});
-        clear_assignment_status();
-        return 1;
-    }
-
     return assignment_success_status();
 }
 
 int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
-                                          bool skip_validation) {
+                                          bool skip_validation, std::optional<bool> preexpanded) {
+    struct AliasScope {
+        bool& value;
+        bool previous;
+        ~AliasScope() {
+            value = previous;
+        }
+    } alias_scope{aliases_preexpanded, aliases_preexpanded};
+    if (preexpanded) {
+        aliases_preexpanded = *preexpanded;
+    }
     struct ValidationScope {
         ShellScriptInterpreter* self;
         bool previous;
@@ -786,6 +789,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     };
 
     evaluate_logical_condition = [&](const std::string& condition) -> int {
+        Shell::ErrexitScope scope(g_shell.get());
         // conditions from if and elif headers are normalized through this shared path
         return evaluate_logical_condition_internal(condition, execute_simple_or_pipeline);
     };
@@ -921,6 +925,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
                     last_executed_index = idx;
                     executed_command = true;
+                    Shell::ErrexitScope scope(g_shell.get(), idx + 1 < logical_cmds.size());
                     logical_status =
                         execute_simple_or_pipeline_impl(logical_cmds[idx].command, true, nullptr);
 
@@ -1077,6 +1082,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
                 if (c.negate_pipeline) {
                     has_redir_or_pipe = true;
+                    last_result_errexit_exempt = true;
                 }
             }
 
@@ -1487,6 +1493,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
         const auto& raw_line = lines[line_index];
         std::string line = trim(strip_inline_comment(raw_line));
+        if (config::is_posix_mode() && !aliases_preexpanded) {
+            line = shell_parser->expand_aliases(line);
+        }
 
         if (line.empty()) {
             continue;
@@ -1833,6 +1842,12 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     int code = 0;
                     bool is_function_call = false;
                     try {
+                        Shell::ErrexitScope scope(
+                            g_shell.get(),
+                            !lc.op.empty() ||
+                                (!cmd_text.empty() && cmd_text[0] == '!' &&
+                                 (cmd_text.size() == 1 ||
+                                  std::isspace(static_cast<unsigned char>(cmd_text[1])))));
                         code = execute_simple_or_pipeline_impl(cmd_text, true, &is_function_call);
                     } catch (const std::runtime_error&) {
                         code = 1;
@@ -1856,7 +1871,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
                     const bool is_nonfinal_logical_command = !lc.op.empty();
                     if (g_shell && g_shell->should_abort_on_nonzero_exit(code) && code != 0 &&
-                        !is_nonfinal_logical_command) {
+                        !is_nonfinal_logical_command && !last_result_errexit_exempt) {
                         if (code != 253 && code != 254 && code != 255) {
                             return cjsh_env::posix_error_exit(code);
                         }
@@ -2062,7 +2077,8 @@ int ShellScriptInterpreter::run_pipeline(const std::vector<Command>& cmds) {
     return set_last_status(exit_code);
 }
 
-std::string ShellScriptInterpreter::expand_parameter_expression(const std::string& param_expr) {
+std::string ShellScriptInterpreter::expand_parameter_expression(const std::string& param_expr,
+                                                                bool quoted) {
     auto var_reader = [this](const std::string& name) -> std::string {
         if (config::is_posix_mode() && name == "-" && shell_parser) {
             std::string flags = "$-";
@@ -2110,6 +2126,27 @@ std::string ShellScriptInterpreter::expand_parameter_expression(const std::strin
         std::string expanded = expand_all_substitutions(word, [](const std::string& command) {
             return g_shell ? g_shell->execute(command) : 1;
         });
+        std::string value;
+        size_t start = 0;
+        bool single = false;
+        for (size_t i = 0; i <= expanded.size(); ++i) {
+            if (i != expanded.size() && (expanded[i] != '\'' || is_char_escaped(expanded, i))) {
+                continue;
+            }
+            std::string part = expanded.substr(start, i - start);
+            if (!single) {
+                shell_parser->expand_env_vars_selective(part);
+            }
+            value += part;
+            if (i < expanded.size()) {
+                value += '\'';
+            }
+            single = !single;
+            start = i + 1;
+        }
+        expanded = std::move(value);
+        (void)strip_subst_literal_markers(expanded);
+        expanded = strip_noenv_sentinels(expanded).first;
 
         if (!expanded.empty() && expanded[0] == '~' &&
             (expanded.size() == 1 || expanded[1] == '/')) {
@@ -2121,16 +2158,89 @@ std::string ShellScriptInterpreter::expand_parameter_expression(const std::strin
         return expanded;
     };
 
+    auto value_word_expander = [this, quoted, &word_expander](const std::string& word) {
+        if (!config::is_posix_mode() || !quoted) {
+            return word_expander(word);
+        }
+        std::string source = expand_all_substitutions(word, [](const std::string& command) {
+            return g_shell ? g_shell->execute(command) : 1;
+        });
+        std::string value;
+        std::string part;
+        char quote = '\0';
+        auto flush = [&] {
+            if (quote != '\'') {
+                shell_parser->expand_env_vars_selective(part);
+            }
+            (void)strip_subst_literal_markers(part);
+            value += strip_noenv_sentinels(part).first;
+            part.clear();
+        };
+        for (size_t i = 0; i < source.size(); ++i) {
+            const bool substitution =
+                source.compare(i, subst_literal_start().size(), subst_literal_start()) == 0;
+            const auto& begin_marker = substitution ? subst_literal_start() : noenv_start();
+            const auto& end_marker = substitution ? subst_literal_end() : noenv_end();
+            if (source.compare(i, begin_marker.size(), begin_marker) == 0) {
+                const size_t end = source.find(end_marker, i + begin_marker.size());
+                if (end != std::string::npos) {
+                    flush();
+                    std::string content =
+                        strip_noenv_sentinels(
+                            source.substr(i + begin_marker.size(), end - i - begin_marker.size()))
+                            .first;
+                    if (quote == '"') {
+                        std::string decoded;
+                        for (size_t j = 0; j < content.size(); ++j) {
+                            if (content[j] == '\\' && j + 1 < content.size() &&
+                                (content[j + 1] == '\\' || content[j + 1] == '"')) {
+                                ++j;
+                            }
+                            decoded += content[j];
+                        }
+                        content = std::move(decoded);
+                    }
+                    value += content;
+                    i = end + end_marker.size() - 1;
+                    continue;
+                }
+            }
+            char ch = source[i];
+            if (ch == '\\' && quote != '\'' && i + 1 < source.size()) {
+                char next = source[++i];
+                if (next == '$') {
+                    part += '\\';
+                }
+                if (quote == '"' && std::string("$`\"\\\n").find(next) == std::string::npos) {
+                    part += '\\';
+                }
+                if (next != '\n') {
+                    part += next;
+                }
+                continue;
+            }
+            if ((ch == '\'' || ch == '"') && (quote == '\0' || quote == ch)) {
+                flush();
+                quote = quote == '\0' ? ch : '\0';
+            } else {
+                part += ch;
+            }
+        }
+        flush();
+        return value;
+    };
+
     auto indirect_reader = [this](const std::string& name) -> std::string {
         return variable_manager.get_indirect_value(name);
     };
 
     ParameterExpansionEvaluator evaluator(
         var_reader, var_writer, var_checker, pattern_match_fn, array_length_reader,
-        array_keys_reader, word_expander, indirect_reader,
+        array_keys_reader, value_word_expander, indirect_reader,
         [this](const std::string& text, const std::string& pattern, bool longest) {
             return pattern_matcher.match_end_positions(text, pattern, longest);
-        });
+        },
+        word_expander);
     return evaluator.expand(param_expr);
 }
 
@@ -2144,6 +2254,15 @@ bool ShellScriptInterpreter::variable_is_set(const std::string& var_name) {
 
 bool ShellScriptInterpreter::has_function(const std::string& name) const {
     return function_evaluator::has_function(functions, name);
+}
+
+bool ShellScriptInterpreter::unset_function(const std::string& name) {
+    if (readonly_function_manager_is(name)) {
+        print_error({ErrorType::INVALID_ARGUMENT, "unset", name + ": readonly function", {}});
+        return false;
+    }
+    functions.erase(name);
+    return true;
 }
 
 std::vector<std::string> ShellScriptInterpreter::get_function_names() const {
@@ -2420,7 +2539,14 @@ std::string ShellScriptInterpreter::expand_all_substitutions(
                     }
 
                     try {
-                        out += std::to_string(evaluate_arithmetic_expression(expanded_expr));
+                        const std::string value =
+                            std::to_string(evaluate_arithmetic_expression(expanded_expr));
+                        if (config::is_posix_mode()) {
+                            CommandSubstitutionEvaluator::append_substitution_result(
+                                value, in_quotes, out);
+                        } else {
+                            out += value;
+                        }
                     } catch (const std::runtime_error& e) {
                         throw std::runtime_error(std::string(e.what()) + " while evaluating $((" +
                                                  expr + "))");
@@ -2431,28 +2557,16 @@ std::string ShellScriptInterpreter::expand_all_substitutions(
             }
 
             if (c == '$' && i + 1 < result.size() && result[i + 1] == '{') {
-                size_t brace_depth = 1;
-                size_t j = i + 2;
-                bool found = false;
-
-                while (j < result.size() && brace_depth > 0) {
-                    if (result[j] == '{') {
-                        brace_depth++;
-                    } else if (result[j] == '}') {
-                        brace_depth--;
-                        if (brace_depth == 0) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    j++;
-                }
+                size_t j = 0;
+                const bool found = parser_find_matching_parameter_expansion_end(result, i + 1, j);
 
                 if (found) {
                     std::string param_expr = result.substr(i + 2, j - (i + 2));
-                    std::string expanded_result = expand_parameter_expression(param_expr);
+                    std::string expanded_result =
+                        expand_parameter_expression(param_expr, in_quotes);
 
-                    if (expanded_result.find('$') != std::string::npos) {
+                    if (!config::is_posix_mode() &&
+                        expanded_result.find('$') != std::string::npos) {
                         size_t dollar_pos = 0;
                         while ((dollar_pos = expanded_result.find('$', dollar_pos)) !=
                                std::string::npos) {
@@ -2476,7 +2590,17 @@ std::string ShellScriptInterpreter::expand_all_substitutions(
                         }
                     }
 
-                    out += expanded_result;
+                    const size_t operator_pos = posix_parameter_name_end(param_expr);
+                    const bool quoted_default =
+                        operator_pos != std::string::npos && operator_pos < param_expr.size() &&
+                        std::string(":-+=?").find(param_expr[operator_pos]) != std::string::npos &&
+                        param_expr.find_first_of("\"'") != std::string::npos;
+                    if (config::is_posix_mode() && (in_quotes || !quoted_default)) {
+                        CommandSubstitutionEvaluator::append_substitution_result(expanded_result,
+                                                                                 in_quotes, out);
+                    } else {
+                        out += expanded_result;
+                    }
                     i = j;
                     continue;
                 } else {

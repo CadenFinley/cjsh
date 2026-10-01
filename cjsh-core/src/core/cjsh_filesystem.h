@@ -133,7 +133,8 @@ class Result<void> {
 Result<int> safe_open(const std::string& path, int flags, mode_t mode = 0644);
 Result<void> safe_dup2(int oldfd, int newfd);
 void safe_close(int fd);
-Result<void> redirect_fd(const std::string& file, int target_fd, int flags);
+Result<void> redirect_fd(const std::string& file, int target_fd, int flags,
+                         bool force_overwrite = false);
 Result<void> set_close_on_exec(int fd);
 Result<void> create_pipe_cloexec(int pipe_fds[2]);
 Result<void> duplicate_pipe_read_end_to_fd(int (&pipe_fds)[2], int target_fd);

@@ -36,6 +36,7 @@ https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html
 
 import argparse
 from dataclasses import dataclass
+import locale
 import os
 from pathlib import Path
 import shlex
@@ -51,6 +52,24 @@ class Case:
     stdout: str = ""
     status: int | None = 0  # None requires a nonzero status and a diagnostic.
     diagnostic: str = ""
+    locale: str | None = "C"
+
+
+def utf8_locale():
+    previous = locale.setlocale(locale.LC_CTYPE)
+    try:
+        for name in ("C.UTF-8", "en_US.UTF-8", "UTF-8"):
+            try:
+                locale.setlocale(locale.LC_CTYPE, name)
+                return name
+            except locale.Error:
+                continue
+    finally:
+        locale.setlocale(locale.LC_CTYPE, previous)
+    return None
+
+
+UTF8_LOCALE = utf8_locale()
 
 
 CORE = [
@@ -86,6 +105,43 @@ CORE = [
     Case("background pipeline", 'printf hi | cat > output & p=$!; wait "$p"; cat output', "hi"),
     Case("empty here document", 'cat <<EOF\nEOF\necho yes', "yes\n"),
     Case("blank here document lines", 'cat <<EOF\n\nx\n\nEOF', "\nx\n\n"),
+    Case('assignment last substitution status', 'x=$(exit 3) y=$(exit 7); echo "$?"', '7\n'),
+    Case('read write descriptor', 'exec 3<>fields-input; read -r x <&3; printf "%s\\n" "$x"; printf extra >&3; exec 3>&-', 'a:b:c\n'),
+    Case('multiple heredocs', 'cat <<ONE <<TWO\nfirst\nONE\nsecond\nTWO', 'second\n'),
+    Case('heredoc continued line', 'cat <<EOF\na\\\nb\nEOF', 'ab\n'),
+    Case('noclobber devnull', 'set -C; echo yes >/dev/null; echo "$?"', '0\n'),
+    Case('function set positional', 'set -- outside; f() { set -- inside; echo "$1"; }; f arg; echo "$1"', 'inside\noutside\n'),
+    Case('function shift positional', 'set -- outside; f() { shift; echo "$#:$1"; }; f a b; echo "$#:$1"', '1:b\n1:outside\n'),
+    Case('function body if', 'f() if true; then echo yes; fi; f', 'yes\n'),
+    Case('alias trailing blank', "alias a='echo '\nalias b='yes'\na b", 'yes\n'),
+    Case('alias chaining', "alias a='b'\nalias b='echo yes'\na", 'yes\n'),
+    Case('alias operator replacement', "alias a='echo yes | cat'\na", 'yes\n'),
+    Case('alias function definition captured', "alias hi='echo old'\nf() { hi; }\nalias hi='echo new'\nf", 'old\n'),
+    Case('function keyword body multiline', 'f()\nif true; then\n echo yes\nfi\nf', 'yes\n'),
+    Case('function body loop', 'f() for x in a b; do echo "$x"; done; f', 'a\nb\n'),
+    Case('function body case', 'f() case x in x) echo yes;; esac; f', 'yes\n'),
+    Case('function body while', 'f() while false; do :; done; f; echo "$?"', '0\n'),
+    Case('function parameters restore', 'set -- outer; f() { set -- inside; shift; echo "$#"; }; f arg; echo "$1"', '0\nouter\n'),
+    Case('alias recursive identity', "alias echo='echo prefix'\necho yes", 'prefix yes\n'),
+    Case('alias mutual recursion', "alias a=b b='a x'\na", '', status=127, diagnostic='command not found'),
+    Case('alias quoted word', "alias hi='echo bad'\nprintf '%s\\n' 'hi'", 'hi\n'),
+    Case('alias arguments and parameters', "alias x=bad hi='echo wrong'\nx=good\necho if hi ${x}", 'if hi good\n'),
+    Case('alias redirection prefix', "alias hi='echo yes'\n3>output hi", 'yes\n'),
+    Case('alias frozen subshell function', "alias hi='echo old'\nf() (hi)\nalias hi='echo new'\nf", 'old\n'),
+    Case('alias eval inside frozen function', "alias hi='echo old'\nf() { eval hi; }\nalias hi='echo new'\nf", 'new\n'),
+    Case('heredoc multiple quoted order', "x=expanded\ncat <<FIRST <<'LAST'\n$x\nFIRST\n$x\nLAST\necho after", '$x\nafter\n'),
+    Case('heredoc strip tabs', 'cat <<-EOF\n\tfirst\n\tEOF', 'first\n'),
+    Case('heredoc partial delimiter quoting', "x=value\ncat <<E'OF'\n$x\nEOF", '$x\n'),
+    Case('heredoc escaped delimiter', 'x=value\ncat <<\\EOF\n$x\nEOF', '$x\n'),
+    Case('heredoc quoted continuation', "cat <<'EOF'\na\\\nb\nEOF", 'a\\\nb\n'),
+    Case('read write preserves data', 'printf first > output; exec 3<>output; printf X >&3; exec 3>&-; cat output', 'Xirst'),
+    Case('read write default descriptor', 'printf yes > output; read -r x <>output; echo "$x"', 'yes\n'),
+    Case('noclobber symlink to device', 'ln -s /dev/null output; set -C; echo yes > output; echo done', 'done\n'),
+    Case('noclobber force regular file', 'echo old > output; set -C; echo new >| output; cat output', 'new\n'),
+    Case('redirection creation mode', 'umask 0; : > output; set -- $(ls -l output); case $1 in -rw-rw-rw-*) echo yes;; *) echo bad;; esac', 'yes\n'),
+    Case('read write creation mode', 'umask 077; exec 3<>output; exec 3>&-; set -- $(ls -l output); case $1 in -rw-------*) echo yes;; *) echo bad;; esac', 'yes\n'),
+    Case('exit trap overrides subshell status', '(trap \'exit 7\' 0; exit 3); echo "$?"', '7\n'),
+    Case('function removes itself', 'f() { unset -f f; echo yes; }; f; command -v f >/dev/null; echo "$?"', 'yes\n1\n'),
 ]
 
 EXPANSION = [
@@ -106,6 +162,7 @@ EXPANSION = [
     Case("default empty", 'x=; echo "${x-default}:${x:-default}"', ":default\n"),
     Case("assignment expansion", 'unset x; echo "${x:=value}:$x"', "value:value\n"),
     Case("alternate", 'x=one; echo "${x:+yes}:${missing+no}"', "yes:\n"),
+    Case("parameter literal brace", 'unset x; echo "${x:-"}"}"', "}\n"),
     Case("length", 'x=abcdef; echo "${#x}"', "6\n"),
     Case("prefix suffix", 'x=abcabc; echo "${x#a*}:${x##a*}:${x%c*}:${x%%c*}"', "bcabc::abcab:ab\n"),
     Case("operand extension text", 'unset x; echo "${x:-a+=b}"', "a+=b\n"),
@@ -131,6 +188,33 @@ EXPANSION = [
     Case("assignment parameter special", 'x=$#; echo "$x"', "0\n"),
     Case("mixed quote expansion", "x=value; printf '%s\\n' 'literal '$x", "literal value\n"),
     Case("single quote dollar literal", "x=value; printf '%s\\n' 'a$x'\"$x\"", "a$xvalue\n"),
+    Case('escaped dollar', "printf '<%s>\\n' \\$x", '<$x>\n'),
+    Case('hash inside word', "printf '%s\\n' a#b '#c' # comment\nprintf done", 'a#b\n#c\ndone'),
+    Case('escaped newline in double quotes', 'printf "%s\\n" "a\\\nb"', 'ab\n'),
+    Case('IFS literal not split', 'IFS=:; set -- a:b; echo "$#:$1"', '1:a:b\n'),
+    Case('parameter wildcard variable', 'x=abc; p="a*"; echo "${x#$p}"', 'bc\n'),
+    Case('parameter quote variable pattern', 'x="a*bc"; p="a*"; echo "${x#"$p"}"', 'bc\n'),
+    Case('substitution parentheses in case', 'echo "$(case x in x) echo yes;; esac)"', 'yes\n'),
+    Case('unicode character length', 'x=é; echo "${#x}"', '1\n', locale=UTF8_LOCALE),
+    Case('unicode pattern question', 'case é in ?) echo yes;; *) echo bad;; esac', 'yes\n', locale=UTF8_LOCALE),
+    Case('unicode prefix removal', 'x=éabc; echo "${x#?}"', 'abc\n', locale=UTF8_LOCALE),
+    Case('IFS mixed literal and expansion', 'IFS=:; x=a:b; set -- p:q:$x:r; printf "<%s>\\n" "$@"', '<p:q:a>\n<b:r>\n'),
+    Case('IFS mixed literal and command substitution', 'IFS=:; set -- p:q:$(printf a:b):r; printf "<%s>\\n" "$@"', '<p:q:a>\n<b:r>\n'),
+    Case('IFS mixed literal and braced expansion', 'IFS=:; x=a:b; set -- p:q:${x}:r; printf "<%s>\\n" "$@"', '<p:q:a>\n<b:r>\n'),
+    Case('IFS literal glob', 'touch aXb; IFS="*"; set -- a*b; echo "$1"', 'aXb\n'),
+    Case('parameter expansion literal dollar', 'other=wrong; x=\'$other\'; printf \'%s\\n\' "${x}" ${x}', '$other\n$other\n'),
+    Case('parameter expansion literal quotes', 'x=\'"a b"\'; printf \'<%s>\\n\' "${x}"', '<"a b">\n'),
+    Case('parameter single quoted pattern', 'x=\'a*bc\'; p=wrong; echo "${x#\'a*\'}"', 'bc\n'),
+    Case('case substitution optional parentheses', 'echo "$(case x in (x) echo yes;; esac)"', 'yes\n'),
+    Case('case substitution nested case', 'echo "$(case x in x) case y in y) echo yes;; esac;; esac)"', 'yes\n'),
+    Case('case substitution case argument', 'echo "$(printf case)"', 'case\n'),
+    Case('substitution field metadata preserved', 'set -- $(printf "a b"); echo "$#:$1:$2"', '2:a:b\n'),
+    Case('IFS literal pipeline', 'IFS=:; printf "%s\\n" a:b | cat', 'a:b\n'),
+    Case('IFS literal redirection', 'IFS=:; printf "%s\\n" a:b > output; cat output', 'a:b\n'),
+    Case('IFS mixed pipeline', 'IFS=:; x=a:b; printf "<%s>\\n" p:q:$x:r | cat', '<p:q:a>\n<b:r>\n'),
+    Case('IFS arithmetic field splitting', 'IFS=3; set -- a$((3))b; echo "$#:$1:$2"', '2:a:b\n'),
+    Case('parameter substitution pattern', 'x=abc; echo "${x#$(printf a)}"', 'bc\n'),
+    Case('quoted default operand', 'unset x; printf "<%s>\\n" "${x:-"a b"}" ${x:-"a b"}', '<a b>\n<a b>\n'),
 ]
 
 ERRORS = [Case(name, code + '; echo survived', status=None) for name, code in [
@@ -175,6 +259,12 @@ ERRORS = [Case(name, code + '; echo survived', status=None) for name, code in [
     Case("errexit conditional", 'set -e; if false; then :; fi; echo survived', "survived\n"),
     Case("errexit or", 'set -e; false || echo survived', "survived\n"),
     Case("errexit substitution", 'set -e; x=$(false; echo bad); echo survived', status=1),
+    Case('errexit function condition', 'set -e; f() { false; echo survived; }; if f; then echo yes; fi', 'survived\nyes\n'),
+    Case('errexit negation exception', 'set -e; ! true; echo yes', 'yes\n'),
+    Case('errexit function and or', 'set -e; f() { false; echo survived; }; f || echo bad; echo yes', 'survived\nyes\n'),
+    Case('errexit while condition function', 'set -e; f() { false; echo survived; return 1; }; while f; do :; done; echo yes', 'survived\nyes\n'),
+    Case('errexit function negation', 'set -e; f() { false; echo survived; }; ! f; echo yes', 'survived\nyes\n'),
+    Case('errexit ordinary function', 'set -e; f() { false; echo bad; }; f; echo bad', '', status=1),
 ]
 
 RESTRICTIONS = [Case(name, code, status=None, diagnostic="POSIX") for name, code in [
@@ -248,7 +338,27 @@ BUILTINS = [
     Case("set severity text operand", 'set errexit_severity; echo "$1"', "errexit_severity\n"),
     Case("hashall disabled", 'set +h; case $- in *h*) echo bad;; *) echo yes;; esac', "yes\n"),
     Case("native flags absent", 'case $- in *B*) echo bad;; *) echo yes;; esac', "yes\n"),
+    Case('unset function', 'f() { :; }; unset -f f; command -v f >/dev/null; echo "$?"', '1\n'),
+    Case('read final variable retains delimiters', 'IFS=: read -r a b < fields-input; printf "%s|%s\\n" "$a" "$b"', 'a|b:c\n'),
+    Case('read final variable retains spaces', 'read -r a b < spaces; printf "%s|%s\\n" "$a" "$b"', 'a|b  c\n'),
+    Case('read escaped separator', 'read a b < escaped; printf "%s|%s\\n" "$a" "$b"', 'a b|c\n'),
+    Case('read continued line', 'read a < continued; printf "%s\\n" "$a"', 'abcd\n'),
+    Case('read one variable delimiter', 'IFS=: read -r a < fields-input; printf "%s\\n" "$a"', 'a:b:c\n'),
+    Case('trap reinput quoting', 'trap "printf \'%s\\\\n\' done" USR1; saved=$(trap); trap - USR1; eval "$saved"; kill -s USR1 $$; echo after', 'done\nafter\n'),
+    Case('trap explicit end of options', "trap -- 'echo done' 0; :", 'done\n'),
+    Case('trap selected condition output', "trap 'echo done' TERM; trap -p TERM > saved; test -s saved; echo yes", 'yes\n'),
+    Case('trap numeric reset', "trap 'echo bad' TERM; trap 15; echo yes", 'yes\n'),
+    Case('trap signal exit status', "trap 'exit 7' 0; exit 3", '', status=7),
+    Case('read EOF assigns partial line', 'printf partial > output; x=old; read -r x < output; echo "$?:$x"', '1:partial\n'),
+    Case('read EOF clears variables', 'x=old; read -r x </dev/null; echo "$?:$x"', '1:\n'),
+    Case('read empty fields', 'printf ":a::b:\\n" > output; IFS=: read -r a b c < output; printf "<%s>|<%s>|<%s>\\n" "$a" "$b" "$c"', '<>|<a>|<:b:>\n'),
+    Case('trap default state restore', 'trap -p TERM > saved; trap "echo bad" TERM; . ./saved; trap -p TERM', 'trap -- - TERM\n'),
+    Case('trap ordinary failure preserves exit', 'trap false 0; exit 3', '', status=3),
+    Case('trap bare exit preserves status', 'trap exit 0; exit 3', '', status=3),
 ]
+
+
+# Regression cases from the POSIX.1-2024 audit. Each runs through all entry paths.
 
 
 class Runner:
@@ -257,10 +367,13 @@ class Runner:
         self.root = Path(directory)
         self.sh = self.root / "sh"
         self.sh.symlink_to(self.binary)
-        self.total = self.failed = 0
+        self.total = self.failed = self.skipped = 0
 
     def check(self, name, entry, case, route="command", flags=(), stdin="", config=False):
         self.total += 1
+        if case.locale is None:
+            self.skipped += 1
+            return
         work = self.root / str(self.total)
         work.mkdir()
         home = work / "home"
@@ -270,8 +383,12 @@ class Runner:
         (work / "local-fixture").write_text('echo from-local\n')
         (work / "return-fixture").write_text('return 7\n')
         (work / "input").write_text('a\\b c\n')
+        (work / "fields-input").write_text("a:b:c\n")
+        (work / "spaces").write_text("a b  c\n")
+        (work / "escaped").write_text("a\\ b c\n")
+        (work / "continued").write_text("ab\\\ncd\n")
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(home),
-               "LC_ALL": "C", "TERM": "dumb", "XDG_CACHE_HOME": str(work / "cache"),
+               "LC_ALL": case.locale, "TERM": "dumb", "XDG_CACHE_HOME": str(work / "cache"),
                "XDG_CONFIG_HOME": str(work / "config")}
         argv = [self.binary, "--posix"] if entry == "flag" else [str(self.sh)]
         argv += ["--no-sh-warning"]
@@ -299,7 +416,7 @@ class Runner:
         try:
             process = subprocess.Popen(argv, cwd=work, env=env, stdin=subprocess.PIPE,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                       text=True, start_new_session=True)
+                                       text=True, errors="backslashreplace", start_new_session=True)
             try:
                 out, err = process.communicate(stdin, timeout=8)
             except subprocess.TimeoutExpired:
@@ -376,7 +493,7 @@ def main():
                         runner.check(case.name, entry, case, route)
         if args.category in ("invocation", "all"):
             invocation(runner)
-        print(f"Total tests: {runner.total}\nPassed: {runner.total-runner.failed}\nFailed: {runner.failed}")
+        print(f"Total tests: {runner.total}\nPassed: {runner.total-runner.failed-runner.skipped}\nFailed: {runner.failed}\nSkipped: {runner.skipped}")
         if runner.failed:
             print(f"{runner.failed}/{runner.total} POSIX tests failed")
         else:

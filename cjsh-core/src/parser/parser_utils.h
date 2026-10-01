@@ -76,6 +76,8 @@ bool decode_dollar_single_quote(std::string_view text, size_t start, size_t& end
 // End of the parameter name (including an optional length prefix), or npos
 // when the expression uses syntax outside POSIX.1-2024.
 size_t posix_parameter_name_end(std::string_view expression);
+bool parser_find_matching_parameter_expansion_end(std::string_view text, size_t opening,
+                                                  size_t& end_out);
 std::string trim_leading_whitespace(const std::string& s);
 std::string trim_whitespace(const std::string& s);
 bool is_valid_identifier_start(char c);

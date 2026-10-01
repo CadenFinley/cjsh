@@ -30,6 +30,7 @@
 #include "parser_utils.h"
 #include "shell.h"
 #include "shell_env.h"
+#include "string_utils.h"
 
 #include <cctype>
 #include <cstdlib>
@@ -49,7 +50,7 @@ ParameterExpansionEvaluator::ParameterExpansionEvaluator(
     VariableReader var_reader, VariableWriter var_writer, VariableChecker var_checker,
     PatternMatcher pattern_matcher, ArrayLengthReader array_length_reader,
     ArrayKeysReader array_keys_reader, WordExpander word_expander, IndirectReader indirect_reader,
-    PatternEndpoints pattern_endpoints)
+    PatternEndpoints pattern_endpoints, WordExpander pattern_word_expander)
     : read_variable(std::move(var_reader)),
       write_variable(std::move(var_writer)),
       is_variable_set(std::move(var_checker)),
@@ -57,6 +58,7 @@ ParameterExpansionEvaluator::ParameterExpansionEvaluator(
       read_array_length(std::move(array_length_reader)),
       read_array_keys(std::move(array_keys_reader)),
       expand_word(std::move(word_expander)),
+      expand_pattern_word(std::move(pattern_word_expander)),
       read_indirect(std::move(indirect_reader)),
       find_pattern_endpoints(std::move(pattern_endpoints)) {
 }
@@ -112,7 +114,7 @@ std::string ParameterExpansionEvaluator::expand(const std::string& param_expr) {
             }
         }
         std::string value = read_variable(var_name);
-        return std::to_string(value.length());
+        return std::to_string(string_utils::character_offsets(value).size() - 1);
     }
 
     std::string substring_result;
@@ -232,7 +234,10 @@ std::string ParameterExpansionEvaluator::expand(const std::string& param_expr) {
     const bool is_set = needs_presence && is_variable_set(var_name);
 
     std::string operand = param_expr.substr(op_pos + op.length());
-    auto expand_operand = [&]() -> std::string {
+    auto expand_operand = [&](bool pattern = false) -> std::string {
+        if (pattern && expand_pattern_word) {
+            return expand_pattern_word(operand);
+        }
         return expand_word ? expand_word(operand) : operand;
     };
 
@@ -291,17 +296,17 @@ std::string ParameterExpansionEvaluator::expand(const std::string& param_expr) {
     }
 
     if (op == "#") {
-        return pattern_match_prefix(var_value, operand, false);
+        return pattern_match_prefix(var_value, expand_operand(true), false);
     }
     if (op == "##") {
-        return pattern_match_prefix(var_value, operand, true);
+        return pattern_match_prefix(var_value, expand_operand(true), true);
     }
 
     if (op == "%") {
-        return pattern_match_suffix(var_value, operand, false);
+        return pattern_match_suffix(var_value, expand_operand(true), false);
     }
     if (op == "%%") {
-        return pattern_match_suffix(var_value, operand, true);
+        return pattern_match_suffix(var_value, expand_operand(true), true);
     }
 
     if (op == "/") {
@@ -350,8 +355,9 @@ std::string ParameterExpansionEvaluator::pattern_match_prefix(const std::string&
         }
     }
 
-    for (size_t step = 0; step <= value.length(); ++step) {
-        const size_t i = longest ? value.length() - step : step;
+    const auto offsets = string_utils::character_offsets(value);
+    for (size_t step = 0; step < offsets.size(); ++step) {
+        const size_t i = offsets[longest ? offsets.size() - step - 1 : step];
         std::string prefix = value.substr(0, i);
         if (matches_pattern(prefix, pattern)) {
             return value.substr(i);
@@ -394,11 +400,12 @@ std::string ParameterExpansionEvaluator::pattern_match_suffix(const std::string&
         }
     }
 
-    for (size_t step = 0; step <= value.length(); ++step) {
-        const size_t i = longest ? value.length() - step : step;
-        std::string suffix = value.substr(value.length() - i);
+    const auto offsets = string_utils::character_offsets(value);
+    for (size_t step = 0; step < offsets.size(); ++step) {
+        const size_t begin = offsets[longest ? step : offsets.size() - step - 1];
+        std::string suffix = value.substr(begin);
         if (matches_pattern(suffix, pattern)) {
-            return value.substr(0, value.length() - i);
+            return value.substr(0, begin);
         }
     }
 

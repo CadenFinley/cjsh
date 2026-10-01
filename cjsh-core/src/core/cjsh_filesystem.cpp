@@ -895,8 +895,20 @@ void safe_close(int fd) {
     close_fd_if_valid(fd);
 }
 
-Result<void> redirect_fd(const std::string& file, int target_fd, int flags) {
-    auto open_result = safe_open(file, flags, 0644);
+Result<void> redirect_fd(const std::string& file, int target_fd, int flags, bool force_overwrite) {
+    const bool noclobber = !force_overwrite && (flags & O_TRUNC) && g_shell &&
+                           g_shell->get_shell_option(ShellOption::Noclobber);
+    auto open_result = safe_open(file, noclobber ? flags & ~(O_TRUNC | O_CREAT) : flags, 0666);
+    if (noclobber && open_result.is_error() && errno == ENOENT) {
+        open_result = safe_open(file, (flags & ~O_TRUNC) | O_CREAT | O_EXCL, 0666);
+    } else if (noclobber && open_result.is_ok()) {
+        struct stat opened{};
+        if (fstat(open_result.value(), &opened) == -1 || S_ISREG(opened.st_mode)) {
+            safe_close(open_result.value());
+            errno = EEXIST;
+            return Result<void>::error("cannot overwrite existing file (noclobber is set)");
+        }
+    }
     if (open_result.is_error()) {
         return Result<void>::error(open_result.error());
     }
@@ -1089,7 +1101,7 @@ bool should_noclobber_prevent_overwrite(const std::string& filename, bool force_
     }
 
     struct stat file_stat{};
-    return stat(filename.c_str(), &file_stat) == 0;
+    return stat(filename.c_str(), &file_stat) == 0 && S_ISREG(file_stat.st_mode);
 }
 
 bool command_exists(const std::string& command_path) {

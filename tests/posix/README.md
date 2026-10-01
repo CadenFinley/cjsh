@@ -39,6 +39,13 @@ group. Timeouts terminate the group. `test_posix_interactive.py` uses PTYs for
 interactive recovery, `ignoreeof`, and `notify` behavior, including wait statuses.
 Existing startup coverage remains in `tests/core/test_batch2_startup.py`.
 
+The fixtures cover alias chaining and definition-time expansion, compound function
+bodies, expansion-only IFS splitting, queued heredocs, persistent `<>` descriptors,
+`read` field boundaries and EOF, trap state restoration, and `errexit` exceptions.
+Character-counting and pattern tests select an installed UTF-8 locale; unavailable
+locales are reported as skipped checks. Invalid output bytes are displayed in
+failure reports without aborting the remaining tests.
+
 ```sh
 python3 tests/posix/test_posix_mode.py build/release/cjsh
 python3 tests/posix/test_posix_interactive.py build/release/cjsh

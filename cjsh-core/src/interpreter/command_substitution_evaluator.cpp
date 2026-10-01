@@ -201,7 +201,7 @@ bool CommandSubstitutionEvaluator::try_handle_command_substitution(const std::st
     }
 
     size_t cmd_end = 0;
-    if (!find_matching_delimiter(input, i + 2, '(', ')', cmd_end)) {
+    if (!parser_find_matching_command_substitution_end(input, i + 2, cmd_end)) {
         return false;
     }
 

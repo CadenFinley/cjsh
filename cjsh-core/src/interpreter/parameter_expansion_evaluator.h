@@ -53,7 +53,8 @@ class ParameterExpansionEvaluator {
                                 ArrayKeysReader array_keys_reader = nullptr,
                                 WordExpander word_expander = nullptr,
                                 IndirectReader indirect_reader = nullptr,
-                                PatternEndpoints pattern_endpoints = nullptr);
+                                PatternEndpoints pattern_endpoints = nullptr,
+                                WordExpander pattern_word_expander = nullptr);
     std::string expand(const std::string& param_expr);
 
    private:
@@ -64,6 +65,7 @@ class ParameterExpansionEvaluator {
     ArrayLengthReader read_array_length;
     ArrayKeysReader read_array_keys;
     WordExpander expand_word;
+    WordExpander expand_pattern_word;
     IndirectReader read_indirect;
     PatternEndpoints find_pattern_endpoints;
 

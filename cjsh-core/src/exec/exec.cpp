@@ -834,7 +834,7 @@ bool apply_ordered_redirections(const Command& cmd, ErrorHandler&& on_error) {
                         path + ": cannot overwrite existing file (noclobber is set)");
         }
 
-        auto redirect_result = cjsh_filesystem::redirect_fd(path, fd, flags);
+        auto redirect_result = cjsh_filesystem::redirect_fd(path, fd, flags, force_overwrite);
         if (redirect_result.is_error()) {
             return fail(classify_filesystem_error(errno),
                         label + path + ": " + redirect_result.error());
@@ -844,6 +844,11 @@ bool apply_ordered_redirections(const Command& cmd, ErrorHandler&& on_error) {
 
     for (const auto& redirection : cmd.redirection_order) {
         switch (redirection.type) {
+            case CommandRedirectionType::ReadWrite:
+                if (!redirect_file(redirection.value, redirection.fd, O_RDWR | O_CREAT, true, "")) {
+                    return false;
+                }
+                break;
             case CommandRedirectionType::Input:
                 if (!redirect_file(redirection.value, STDIN_FILENO, O_RDONLY, false, "")) {
                     return false;
@@ -1229,7 +1234,7 @@ bool Exec::requires_fork(const Command& cmd) const {
            cmd.background || !cmd.stderr_file.empty() || cmd.stderr_to_stdout ||
            cmd.stdout_to_stderr || !cmd.here_doc.empty() || !cmd.here_string.empty() ||
            cmd.both_output || !cmd.process_substitutions.empty() || !cmd.fd_redirections.empty() ||
-           !cmd.fd_duplications.empty();
+           !cmd.fd_duplications.empty() || !cmd.redirection_order.empty();
 }
 
 bool Exec::can_execute_in_process(const Command& cmd) const {
@@ -1845,8 +1850,9 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
                         cmd.output_file + ": cannot overwrite existing file (noclobber is set)");
                 }
 
-                auto redirect_result = cjsh_filesystem::redirect_fd(cmd.output_file, STDOUT_FILENO,
-                                                                    O_WRONLY | O_CREAT | O_TRUNC);
+                auto redirect_result =
+                    cjsh_filesystem::redirect_fd(cmd.output_file, STDOUT_FILENO,
+                                                 O_WRONLY | O_CREAT | O_TRUNC, cmd.force_overwrite);
                 if (redirect_result.is_error()) {
                     child_exit_with_error(ErrorType::FILE_NOT_FOUND, command_name,
                                           cmd.output_file + ": " + redirect_result.error());
@@ -2628,8 +2634,8 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
                                          "' (noclobber is set)");
             }
 
-            auto redirect_result = cjsh_filesystem::redirect_fd(cmd.output_file, STDOUT_FILENO,
-                                                                O_WRONLY | O_CREAT | O_TRUNC);
+            auto redirect_result = cjsh_filesystem::redirect_fd(
+                cmd.output_file, STDOUT_FILENO, O_WRONLY | O_CREAT | O_TRUNC, cmd.force_overwrite);
             if (redirect_result.is_error()) {
                 throw std::runtime_error("failed to redirect stdout to file '" + cmd.output_file +
                                          "': " + redirect_result.error());

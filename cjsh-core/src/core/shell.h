@@ -172,6 +172,25 @@ class Shell {
     std::string get_errexit_severity() const;
     bool should_abort_on_nonzero_exit() const;
     bool should_abort_on_nonzero_exit(int exit_code) const;
+    class ErrexitScope {
+       public:
+        explicit ErrexitScope(Shell* shell, bool suppress = true)
+            : shell_(suppress ? shell : nullptr) {
+            if (shell_) {
+                ++shell_->errexit_suppression_depth;
+            }
+        }
+        ~ErrexitScope() {
+            if (shell_) {
+                --shell_->errexit_suppression_depth;
+            }
+        }
+        ErrexitScope(const ErrexitScope&) = delete;
+        ErrexitScope& operator=(const ErrexitScope&) = delete;
+
+       private:
+        Shell* shell_;
+    };
 
     std::unordered_set<std::string> get_available_commands() const;
     std::string get_previous_directory() const;
@@ -208,6 +227,7 @@ class Shell {
     std::vector<std::string> directory_stack;
     std::string last_interactive_command;
     ErrorSeverity errexit_severity_level = ErrorSeverity::ERROR;
+    unsigned errexit_suppression_depth = 0;
 
     std::array<std::vector<std::string>, static_cast<size_t>(HookType::Count)> hooks;
     std::string last_directory;

@@ -44,6 +44,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -159,8 +160,7 @@ std::optional<RedirectionToken> parse_redirection_token(std::string_view token) 
         return std::nullopt;
     }
 
-    if (*parsed == RedirectionToken::ReadWrite || *parsed == RedirectionToken::DupInput ||
-        *parsed == RedirectionToken::DupOutput) {
+    if (*parsed == RedirectionToken::DupInput || *parsed == RedirectionToken::DupOutput) {
         return std::nullopt;
     }
 
@@ -503,6 +503,13 @@ bool Parser::handle_fd_redirection(const std::string& value, size_t& i,
         return false;
     }
 
+    if (value.size() > 2 && value.compare(value.size() - 2, 2, "<>") == 0 &&
+        value.find_first_not_of("0123456789") == value.size() - 2) {
+        int fd = std::stoi(value.substr(0, value.size() - 2));
+        cmd.add_redirection(CommandRedirectionType::ReadWrite,
+                            QuoteInfo(tokens[++i]).unescaped_value(), fd);
+        return true;
+    }
     char op = value.back();
     if ((op != '<' && op != '>') || !std::isdigit(value[0])) {
         return false;
@@ -563,8 +570,17 @@ const std::vector<std::string>& Parser::prepare_interactive_input(const std::str
 }
 
 std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
+    bool incomplete_documents = false;
     std::string rewritten =
         config::is_posix_mode() && source.find("$'") != std::string::npos ? source : "";
+    if (config::is_posix_mode() && source.find("<<") != std::string::npos) {
+        std::map<std::string, std::string> documents;
+        rewritten =
+            CommandPreprocessor::process_here_documents(source, documents, &incomplete_documents);
+        for (auto& [placeholder, content] : documents) {
+            current_here_docs[placeholder] = std::move(content);
+        }
+    }
     const std::string& script = rewritten.empty() ? source : rewritten;
     if (prepared_input) {
         auto prepared = std::move(*prepared_input);
@@ -574,7 +590,7 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
         }
     }
     // shared script splitter used by shell::execute and interactive continuation checks
-    incomplete_here_document = false;
+    incomplete_here_document = incomplete_documents;
     // control-flow blocks like if/then/fi depend on this producing stable logical line chunks
     std::vector<std::string> lines;
 
@@ -1095,11 +1111,154 @@ std::vector<std::string> Parser::prepare_expansion_tokens(std::vector<std::strin
     return args;
 }
 
+std::string Parser::expand_aliases(const std::string& source) const {
+    if (shell && !shell->get_shell_option(ShellOption::ExpandAliases)) {
+        return source;
+    }
+    std::unordered_set<std::string> active;
+    bool command_start = true;
+    bool next_alias = false;
+    bool redirection_operand = false;
+    std::vector<int> cases;
+    std::function<std::string(const std::string&)> expand = [&](const std::string& input) {
+        std::string output;
+        for (size_t i = 0; i < input.size();) {
+            const char c = input[i];
+            if (std::isspace(static_cast<unsigned char>(c))) {
+                output += c;
+                ++i;
+                if (c == '\n') {
+                    command_start = true;
+                }
+                continue;
+            }
+            if (c == '#' && (i == 0 || std::isspace(static_cast<unsigned char>(input[i - 1])))) {
+                size_t end = input.find('\n', i);
+                if (end == std::string::npos) {
+                    end = input.size();
+                }
+                output.append(input, i, end - i);
+                i = end;
+                continue;
+            }
+            if (std::string(";&|()<>{}").find(c) != std::string::npos) {
+                output += c;
+                ++i;
+                if (c == '<' || c == '>') {
+                    while (i < input.size() &&
+                           std::string("<>&|-").find(input[i]) != std::string::npos) {
+                        output += input[i++];
+                    }
+                    redirection_operand = true;
+                } else if (c == ';' && i < input.size() && input[i] == ';' && !cases.empty()) {
+                    cases.back() = 1;
+                    output += input[i++];
+                    command_start = true;
+                } else if (c == ')' && !cases.empty() && cases.back() == 1) {
+                    cases.back() = 2;
+                    command_start = true;
+                } else {
+                    command_start = true;
+                }
+                next_alias = false;
+                continue;
+            }
+            const size_t begin = i;
+            bool quoted = false;
+            char quote = '\0';
+            for (; i < input.size(); ++i) {
+                const char ch = input[i];
+                if (ch == '\\' && quote != '\'') {
+                    quoted = true;
+                    if (i + 1 < input.size()) {
+                        ++i;
+                    }
+                    continue;
+                }
+                if (quote != '\0') {
+                    if (ch == quote) {
+                        quote = '\0';
+                    }
+                    continue;
+                }
+                if (ch == '\'' || ch == '"') {
+                    quoted = true;
+                    quote = ch;
+                    continue;
+                }
+                if (ch == '$' && i + 1 < input.size() && input[i + 1] == '(') {
+                    size_t end;
+                    if (parser_find_matching_command_substitution_end(input, i + 2, end)) {
+                        i = end;
+                        continue;
+                    }
+                }
+                if (ch == '$' && i + 1 < input.size() && input[i + 1] == '{') {
+                    size_t end = find_matching_brace(input, i + 1);
+                    if (end != std::string::npos) {
+                        i = end;
+                        continue;
+                    }
+                }
+                if (std::isspace(static_cast<unsigned char>(ch)) ||
+                    std::string(";&|()<>{}").find(ch) != std::string::npos) {
+                    break;
+                }
+            }
+            const std::string word = input.substr(begin, i - begin);
+            const bool pattern = !cases.empty() && cases.back() == 1;
+            const bool reserved =
+                !quoted && (word == "if" || word == "then" || word == "elif" || word == "else" ||
+                            word == "fi" || word == "for" || word == "while" || word == "until" ||
+                            word == "do" || word == "done" || word == "case" || word == "esac" ||
+                            word == "in" || word == "!");
+            auto alias = aliases.find(word);
+            const bool eligible = !quoted && !redirection_operand && !pattern && !reserved &&
+                                  (command_start || next_alias) && alias != aliases.end() &&
+                                  !active.count(word);
+            next_alias = false;
+            if (eligible) {
+                active.insert(word);
+                output += expand(alias->second);
+                active.erase(word);
+                next_alias = !alias->second.empty() &&
+                             (alias->second.back() == ' ' || alias->second.back() == '\t');
+                continue;
+            }
+            output += word;
+            if (redirection_operand) {
+                redirection_operand = false;
+                continue;
+            }
+            if (i < input.size() && (input[i] == '<' || input[i] == '>') && !word.empty() &&
+                word.find_first_not_of("0123456789") == std::string::npos) {
+                continue;
+            }
+            if (!quoted && word == "case" && command_start) {
+                cases.push_back(0);
+            } else if (!cases.empty() && !quoted && word == "in" && cases.back() == 0) {
+                cases.back() = 1;
+            } else if (!cases.empty() && !quoted && word == "esac" && (command_start || pattern)) {
+                cases.pop_back();
+            }
+            if (command_start && looks_like_assignment(word)) {
+                continue;
+            }
+            command_start = command_start && !quoted &&
+                            (word == "if" || word == "then" || word == "elif" || word == "else" ||
+                             word == "while" || word == "until" || word == "do" || word == "!");
+        }
+        return output;
+    };
+    return expand(source);
+}
+
 std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
     ensure_parsers_initialized();
 
     std::vector<std::string> args;
-    const bool simple_candidate = is_simple_command_candidate(cmdline);
+    const bool simple_candidate =
+        is_simple_command_candidate(cmdline) && !contains_internal_substitution_markers(cmdline);
     const bool arithmetic_assignment_candidate =
         !simple_candidate && is_simple_arithmetic_assignment_candidate(cmdline);
 
@@ -1134,7 +1293,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
         }
     }
 
-    if (simple_candidate && !args.empty()) {
+    if (simple_candidate && !args.empty() && !config::is_posix_mode()) {
         auto alias_it = aliases.find(args[0]);
         if (alias_it == aliases.end()) {
             bool has_tilde = std::any_of(args.begin(), args.end(), [](const std::string& token) {
@@ -1168,7 +1327,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
 
     if (!args.empty()) {
         auto alias_it = aliases.find(args[0]);
-        if (alias_it != aliases.end() &&
+        if (!config::is_posix_mode() && alias_it != aliases.end() &&
             (!shell || shell->get_shell_option(ShellOption::ExpandAliases))) {
             std::vector<std::string> alias_args;
             alias_args.reserve(8);
@@ -1293,6 +1452,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
                                        command_name == "typeset" || command_name == "local" ||
                                        command_name == "readonly";
 
+    std::vector<std::vector<bool>> expanded_bytes(args.size());
     for (size_t arg_index = 0; arg_index < args.size(); ++arg_index) {
         std::string& raw_arg = args[arg_index];
         QuoteInfo qi(raw_arg);
@@ -1317,7 +1477,19 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
             raw_arg = qi.is_double ? create_quote_tag(QUOTE_DOUBLE, recombined) : recombined;
             continue;
         }
-        std::string expanded_value = expand_env_value(qi.value);
+        std::string expanded_value;
+        if (config::is_posix_mode() && qi.is_unquoted()) {
+            expanded_value = qi.value;
+            try {
+                variableExpander->expand_word(expanded_value, expanded_bytes[arg_index]);
+            } catch (const std::runtime_error& error) {
+                if (report_environment_expansion_error(error)) {
+                    throw;
+                }
+            }
+        } else {
+            expanded_value = expand_env_value(qi.value);
+        }
         raw_arg = qi.is_double ? create_quote_tag(QUOTE_DOUBLE, expanded_value) : expanded_value;
     }
 
@@ -1326,11 +1498,16 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
     // Expansion above may assign IFS; resolve it after expansion, once for this
     // field-splitting pass. Never retain it across commands or function scopes.
     const std::string ifs = cjsh_env::get_ifs_delimiters();
-    for (std::string& raw_arg : args) {
+    for (size_t index = 0; index < args.size(); ++index) {
+        std::string& raw_arg = args[index];
         QuoteInfo qi(raw_arg);
 
         if (qi.is_unquoted()) {
-            std::vector<std::string> split_words = tokenizer->split_by_ifs(raw_arg, ifs);
+            const auto* bytes =
+                config::is_posix_mode() && expanded_bytes[index].size() == raw_arg.size()
+                    ? &expanded_bytes[index]
+                    : nullptr;
+            std::vector<std::string> split_words = tokenizer->split_by_ifs(raw_arg, ifs, bytes);
             (void)ifs_expanded_args.insert(ifs_expanded_args.end(),
                                            std::make_move_iterator(split_words.begin()),
                                            std::make_move_iterator(split_words.end()));
@@ -1690,6 +1867,9 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                         cmd.add_redirection(CommandRedirectionType::HereString, cmd.here_string);
                         break;
                     case RedirectionToken::ReadWrite:
+                        cmd.add_redirection(CommandRedirectionType::ReadWrite,
+                                            get_next_token_value(i), STDIN_FILENO);
+                        break;
                     case RedirectionToken::DupInput:
                     case RedirectionToken::DupOutput:
                         break;
@@ -1731,7 +1911,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
         if (!filtered_args.empty()) {
             const std::string& alias_candidate = QuoteInfo(filtered_args[0]).value;
             auto alias_it = aliases.find(alias_candidate);
-            if (alias_it != aliases.end() &&
+            if (!config::is_posix_mode() && alias_it != aliases.end() &&
                 (!shell || shell->get_shell_option(ShellOption::ExpandAliases))) {
                 try {
                     std::vector<std::string> alias_args =
@@ -1780,6 +1960,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             const auto& raw = tilde_expanded_args[arg_idx];
             QuoteInfo qi(raw);
             std::string& val = qi.value;
+            std::vector<bool> expanded_bytes;
             bool had_noenv = val.find(noenv_start()) != std::string::npos;
 
             bool skip_env_expansion = (!qi.is_single) && ((is_subshell_command && arg_idx == 1) ||
@@ -1790,7 +1971,9 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                     variableExpander = std::make_unique<VariableExpander>(shell, env_vars);
                 }
                 try {
-                    if (had_noenv) {
+                    if (config::is_posix_mode() && qi.is_unquoted()) {
+                        variableExpander->expand_word(val, expanded_bytes);
+                    } else if (had_noenv) {
                         variableExpander->expand_env_vars_selective(val);
                     } else {
                         variableExpander->expand_env_vars(val);
@@ -1813,7 +1996,10 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                 if (!tokenizer) {
                     tokenizer = std::make_unique<Tokenizer>();
                 }
-                fields = tokenizer->split_by_ifs(val);
+                const auto* bytes = config::is_posix_mode() && expanded_bytes.size() == val.size()
+                                        ? &expanded_bytes
+                                        : nullptr;
+                fields = tokenizer->split_by_ifs(val, cjsh_env::get_ifs_delimiters(), bytes);
             } else {
                 fields.push_back(val);
             }
@@ -1915,36 +2101,23 @@ std::vector<Command> Parser::parse_pipeline_with_preprocessing(const std::string
     std::vector<Command> commands = parse_pipeline(preprocessed.processed_text);
 
     for (auto& cmd : commands) {
-        if (!cmd.input_file.empty() && cmd.input_file.find("HEREDOC_PLACEHOLDER_") == 0) {
-            std::string placeholder = cmd.input_file;
-            auto it = current_here_docs.find(cmd.input_file);
-            if (it != current_here_docs.end()) {
-                std::string content = it->second;
-                process_heredoc_content(content);
-                cmd.here_doc = content;
-                cmd.input_file.clear();
-                for (auto& redirection : cmd.redirection_order) {
-                    if (redirection.type == CommandRedirectionType::Input &&
-                        redirection.value == placeholder) {
-                        redirection.type = CommandRedirectionType::HereDoc;
-                        redirection.value = cmd.here_doc;
-                    }
-                }
+        for (auto& redirection : cmd.redirection_order) {
+            if (redirection.type != CommandRedirectionType::Input &&
+                redirection.type != CommandRedirectionType::HereDoc) {
+                continue;
             }
-        }
-
-        if (!cmd.here_doc.empty() && (current_here_docs.count(cmd.here_doc) != 0U)) {
-            std::string content = current_here_docs[cmd.here_doc];
+            auto it = current_here_docs.find(redirection.value);
+            if (it == current_here_docs.end()) {
+                continue;
+            }
+            std::string content = it->second;
             process_heredoc_content(content);
-            cmd.here_doc = content;
-        }
-
-        if (!cmd.here_doc.empty()) {
-            for (auto& redirection : cmd.redirection_order) {
-                if (redirection.type == CommandRedirectionType::HereDoc) {
-                    redirection.value = cmd.here_doc;
-                }
+            if (cmd.input_file == redirection.value) {
+                cmd.input_file.clear();
             }
+            redirection.type = CommandRedirectionType::HereDoc;
+            redirection.value = std::move(content);
+            cmd.here_doc = redirection.value;
         }
     }
 

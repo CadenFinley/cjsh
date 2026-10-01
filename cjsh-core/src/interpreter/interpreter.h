@@ -60,7 +60,8 @@ class ShellScriptInterpreter {
     void set_error_source(const std::string& source);
     const std::string& get_error_source() const;
 
-    int execute_block(const std::vector<std::string>& lines, bool skip_validation = false);
+    int execute_block(const std::vector<std::string>& lines, bool skip_validation = false,
+                      std::optional<bool> aliases_preexpanded = std::nullopt);
     std::vector<std::string> parse_into_lines(const std::string& script);
     bool needs_additional_input(const std::vector<std::string>& lines);
 
@@ -134,10 +135,11 @@ class ShellScriptInterpreter {
     std::vector<SyntaxError> validate_heredoc_syntax(const std::vector<std::string>& lines);
 
     bool has_function(const std::string& name) const;
+    bool unset_function(const std::string& name);
     std::vector<std::string> get_function_names() const;
     int invoke_function(const std::vector<std::string>& args);
 
-    std::string expand_parameter_expression(const std::string& param_expr);
+    std::string expand_parameter_expression(const std::string& param_expr, bool quoted = false);
 
     std::string get_variable_value(const std::string& var_name);
 
@@ -177,7 +179,7 @@ class ShellScriptInterpreter {
     int set_last_status(int code);
     int run_pipeline(const std::vector<Command>& cmds);
 
-    int execute_subshell(const std::string& subshell_content);
+    int execute_subshell(const std::string& subshell_content, bool preexpanded = false);
     int execute_function_call(const std::vector<std::string>& expanded_args);
     int handle_env_assignment(const std::vector<std::string>& expanded_args);
 
@@ -186,6 +188,7 @@ class ShellScriptInterpreter {
     std::optional<int> pending_assignment_exit_status;
 
     bool skip_validation_mode = false;
+    bool aliases_preexpanded = false;
     std::string error_source;
     size_t source_depth = 0;
 

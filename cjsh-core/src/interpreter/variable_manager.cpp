@@ -751,8 +751,10 @@ VariableManager::VariableLookup VariableManager::lookup_variable(const std::stri
     if (!key.empty() && std::all_of(key.begin(), key.end(),
                                     [](unsigned char ch) { return std::isdigit(ch) != 0; })) {
         VariableLookup positional;
-        // Raw getenv here: positional parameters can be mirrored in the process environment.
-        if (const char* value = getenv(key.c_str())) {
+        // Parameter zero is the invocation name. Other numeric parameters have
+        // one authoritative store, including after set/shift inside functions.
+        if (key == "0" && getenv("0") != nullptr) {
+            const char* value = getenv("0");
             positional = {include_value ? value : "", true};
         } else {
             int number = 0;

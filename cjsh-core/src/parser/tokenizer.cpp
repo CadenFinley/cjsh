@@ -112,12 +112,18 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
         if (!in_subst_literal && cmdline.compare(i, subst_start.size(), subst_start) == 0) {
             in_subst_literal = true;
             token_saw_substitution = true;
+            if (config::is_posix_mode()) {
+                current_token += subst_start;
+            }
             i += subst_start.size() - 1;
             continue;
         }
 
         if (in_subst_literal && cmdline.compare(i, subst_end.size(), subst_end) == 0) {
             in_subst_literal = false;
+            if (config::is_posix_mode()) {
+                current_token += subst_end;
+            }
             i += subst_end.size() - 1;
             continue;
         }
@@ -130,6 +136,10 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
         }
 
         if (escaped) {
+            if (c == '\n') {
+                escaped = false;
+                continue;
+            }
             if (in_quotes && quote_char == '"') {
                 if (c == '$') {
                     current_token += '\\';
@@ -141,6 +151,9 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                     current_token += c;
                 }
             } else {
+                if (c == '$') {
+                    current_token += '\\';
+                }
                 // Keep escaped whitespace protected until field splitting has finished.
                 if (is_whitespace(c) || c == '*' || c == '?' || c == '[' || c == ']') {
                     current_token += '\x1F';
@@ -406,7 +419,10 @@ std::vector<std::string> Tokenizer::merge_redirection_tokens(
         const bool is_io_number =
             std::binary_search(io_number_tokens.begin(), io_number_tokens.end(), i);
 
-        if (is_io_number && token == "2") {
+        if (is_io_number && i + 2 < tokens.size() && tokens[i + 1] == "<" && tokens[i + 2] == ">") {
+            result.push_back(token + "<>");
+            i += 2;
+        } else if (is_io_number && token == "2") {
             size_t next_index = i + 1;
             if (next_index >= tokens.size()) {
                 result.push_back(token);
@@ -454,7 +470,10 @@ std::vector<std::string> Tokenizer::merge_redirection_tokens(
             i += 2;
         }
 
-        else if (token == "<" && i + 1 < tokens.size() && tokens[i + 1] == "<") {
+        else if (token == "<" && i + 1 < tokens.size() && tokens[i + 1] == ">") {
+            result.push_back("<>");
+            i++;
+        } else if (token == "<" && i + 1 < tokens.size() && tokens[i + 1] == "<") {
             result.push_back("<<");
             i++;
         }
@@ -561,7 +580,8 @@ std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input) {
     return split_by_ifs(input, cjsh_env::get_ifs_delimiters());
 }
 
-std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input, const std::string& ifs) {
+std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input, const std::string& ifs,
+                                                 const std::vector<bool>* expanded_bytes) {
     std::vector<std::string> result;
 
     if (input.empty()) {
@@ -585,6 +605,7 @@ std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input, const
     bool in_double = false;
 
     size_t idx = 0;
+    auto eligible = [&](size_t i) { return !expanded_bytes || (*expanded_bytes)[i]; };
     while (idx < input.size()) {
         char c = input[idx];
 
@@ -609,7 +630,7 @@ std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input, const
                 continue;
             }
 
-            const bool is_ifs = ifs.find(c) != std::string::npos;
+            const bool is_ifs = eligible(idx) && ifs.find(c) != std::string::npos;
             const bool is_ifs_whitespace = is_ifs && (c == ' ' || c == '\t' || c == '\n');
             if (is_ifs_whitespace) {
                 if (in_word) {
@@ -620,13 +641,16 @@ std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input, const
 
                 do {
                     ++idx;
-                } while (idx < input.size() && ifs.find(input[idx]) != std::string::npos &&
+                } while (idx < input.size() && eligible(idx) &&
+                         ifs.find(input[idx]) != std::string::npos &&
                          (input[idx] == ' ' || input[idx] == '\t' || input[idx] == '\n'));
 
-                if (idx < input.size() && ifs.find(input[idx]) != std::string::npos &&
-                    input[idx] != ' ' && input[idx] != '\t' && input[idx] != '\n') {
+                if (idx < input.size() && eligible(idx) &&
+                    ifs.find(input[idx]) != std::string::npos && input[idx] != ' ' &&
+                    input[idx] != '\t' && input[idx] != '\n') {
                     ++idx;
-                    while (idx < input.size() && ifs.find(input[idx]) != std::string::npos &&
+                    while (idx < input.size() && eligible(idx) &&
+                           ifs.find(input[idx]) != std::string::npos &&
                            (input[idx] == ' ' || input[idx] == '\t' || input[idx] == '\n')) {
                         ++idx;
                     }
@@ -639,7 +663,8 @@ std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input, const
                 current_word.clear();
                 in_word = false;
                 ++idx;
-                while (idx < input.size() && ifs.find(input[idx]) != std::string::npos &&
+                while (idx < input.size() && eligible(idx) &&
+                       ifs.find(input[idx]) != std::string::npos &&
                        (input[idx] == ' ' || input[idx] == '\t' || input[idx] == '\n')) {
                     ++idx;
                 }

@@ -67,6 +67,15 @@ errors inside `eval` or a dot-sourced file still follow the rules of those comma
 Subshell errors remain isolated from the parent. Dot (`.`) searches `PATH` for
 names without a slash, including readable files without execute permission.
 
+Aliases expand before command operators are parsed, including chained aliases and
+the next word after an alias ending in a blank. Function definitions retain the
+aliases present when their bodies are read. A function body can be any supported
+POSIX compound command; `set --` and `shift` affect its arguments until it returns.
+`unset -f` removes functions. `read` preserves the remaining separators in its
+last variable and assigns partial input on EOF while returning failure. `trap -p`
+prints restorable condition states, and an explicit `exit` in an exit trap selects
+the final exit status.
+
 The strict language policy rejects arrays, append assignments, arithmetic commands
 (`((…))`), C-style `for`, `select`, the `function` keyword, `[[…]]`, process
 substitution, here-strings, `|&`, combined output redirections, `;;&`, and cjsh's

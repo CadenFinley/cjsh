@@ -94,9 +94,36 @@ std::optional<FunctionHeader> parse_function_header(const std::string& source,
                    : std::nullopt;
     }
     if (source[pos] != '{' && source[pos] != '(') {
+        for (const auto* keyword : {"if", "for", "while", "until", "case"}) {
+            const std::string word(keyword);
+            if (source.compare(pos, word.size(), word) == 0 &&
+                (pos + word.size() == source.size() ||
+                 std::isspace(static_cast<unsigned char>(source[pos + word.size()])))) {
+                return FunctionHeader{std::move(name), pos, 'k', '\0'};
+            }
+        }
         return std::nullopt;
     }
     return FunctionHeader{std::move(name), pos, source[pos], source[pos] == '{' ? '}' : ')'};
+}
+
+size_t find_function_body_end(const std::string& source, const FunctionHeader& header) {
+    if (header.opening != 'k') {
+        size_t close = header.opening == '{' ? find_matching_brace(source, header.body_start)
+                                             : find_matching_paren(source, header.body_start);
+        return close == std::string::npos ? close : close + 1;
+    }
+    const std::string body = source.substr(header.body_start);
+    const bool is_if = body.rfind("if", 0) == 0;
+    const bool is_case = body.rfind("case", 0) == 0;
+    const std::string closer = is_if ? "fi" : is_case ? "esac" : "done";
+    const std::vector<std::string> openers =
+        is_if     ? std::vector<std::string>{"if"}
+        : is_case ? std::vector<std::string>{"case"}
+                  : std::vector<std::string>{"for", "while", "until"};
+    int depth = 0;
+    size_t end = parser_find_block_end(body, openers, closer, depth);
+    return end == std::string::npos ? end : header.body_start + end + closer.size();
 }
 
 FunctionParseResult parse_and_register_functions(
@@ -122,10 +149,7 @@ FunctionParseResult parse_and_register_functions(
         if (!header || header->opening == '\0') {
             break;
         }
-        auto find_close = [&] {
-            return header->opening == '{' ? find_matching_brace(current_line, header->body_start)
-                                          : find_matching_paren(current_line, header->body_start);
-        };
+        auto find_close = [&] { return find_function_body_end(current_line, *header); };
         size_t body_close = find_close();
         while (body_close == std::string::npos && line_index + 1 < lines.size()) {
             current_line += '\n';
@@ -135,8 +159,10 @@ FunctionParseResult parse_and_register_functions(
         if (body_close == std::string::npos) {
             break;
         }
+        const bool keyword_body = header->opening == 'k';
+        const size_t begin = header->body_start + (keyword_body ? 0 : 1);
         const std::string body =
-            current_line.substr(header->body_start + 1, body_close - header->body_start - 1);
+            current_line.substr(begin, body_close - begin - (keyword_body ? 0 : 1));
         if (readonly_function_manager_is(header->name)) {
             print_error({ErrorType::INVALID_ARGUMENT,
                          "readonly",
@@ -146,7 +172,7 @@ FunctionParseResult parse_and_register_functions(
             functions[header->name] = {parse_lines_func(body), header->opening == '('};
         }
         result.found = true;
-        current_line = trim_func(current_line.substr(body_close + 1));
+        current_line = trim_func(current_line.substr(body_close));
         const size_t next = current_line.find_first_not_of("; \t\r\n");
         current_line = next == std::string::npos ? "" : current_line.substr(next);
     }

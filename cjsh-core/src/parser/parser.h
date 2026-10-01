@@ -44,6 +44,7 @@ class Shell;
 
 enum class CommandRedirectionType : std::uint8_t {
     Input,
+    ReadWrite,
     Output,
     Append,
     ForceOutput,
@@ -128,6 +129,7 @@ class Parser {
     }
 
     std::vector<std::string> parse_command(const std::string& cmdline);
+    std::string expand_aliases(const std::string& source) const;
     std::vector<Command> parse_pipeline(const std::string& command);
     std::vector<std::string> expand_wildcards(const std::string& pattern);
     std::vector<LogicalCommand> parse_logical_commands(const std::string& command);

@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <string>
 #include <utility>
@@ -443,6 +444,34 @@ bool PatternMatcher::matches_pattern(const std::string& text, const std::string&
             alternative.begin(), alternative.end(),
             [](const PatternNode& node) { return node.kind == PatternNodeKind::ExtendedGroup; });
         if (!has_extended_group) {
+            if (MB_CUR_MAX > 1) {
+                std::string locale_pattern;
+                for (const auto& node : alternative) {
+                    switch (node.kind) {
+                        case PatternNodeKind::Literal:
+                            if (std::string("\\*?[").find(node.value) != std::string::npos) {
+                                locale_pattern += '\\';
+                            }
+                            locale_pattern += node.value;
+                            break;
+                        case PatternNodeKind::AnyCharacter:
+                            locale_pattern += '?';
+                            break;
+                        case PatternNodeKind::AnyString:
+                            locale_pattern += '*';
+                            break;
+                        case PatternNodeKind::CharacterClass:
+                            locale_pattern += node.character_class;
+                            break;
+                        case PatternNodeKind::ExtendedGroup:
+                            break;
+                    }
+                }
+                if (fnmatch(locale_pattern.c_str(), text.c_str(), 0) == 0) {
+                    return true;
+                }
+                continue;
+            }
             if (matches_simple_sequence(alternative, text)) {
                 return true;
             }
@@ -459,6 +488,9 @@ bool PatternMatcher::matches_pattern(const std::string& text, const std::string&
 std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std::string& text,
                                                                        const std::string& pattern,
                                                                        bool longest) const {
+    if (MB_CUR_MAX > 1) {
+        return std::nullopt;
+    }
     const auto& compiled = compiled_pattern_for(pattern, false);
     // Non-repeating groups can share suffix results just like ordinary globs.
     // Repetition and negation still use the general matcher; do not change their

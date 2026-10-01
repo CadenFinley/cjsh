@@ -46,6 +46,7 @@ struct FunctionHeader {
 
 std::optional<FunctionHeader> parse_function_header(const std::string& source,
                                                     bool allow_missing_body = false);
+size_t find_function_body_end(const std::string& source, const FunctionHeader& header);
 
 struct FunctionDefinition {
     std::vector<std::string> body_lines;

@@ -28,11 +28,13 @@
 
 #include "command_preprocessor.h"
 
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <map>
 #include <string>
+#include <vector>
 
 #include "parser_utils.h"
 #include "string_utils.h"
@@ -53,95 +55,127 @@ CommandPreprocessor::PreprocessedCommand CommandPreprocessor::preprocess(
 }
 
 std::string CommandPreprocessor::process_here_documents(
-    const std::string& command, std::map<std::string, std::string>& here_docs) {
-    std::string result = command;
-
-    size_t here_pos = result.find("<<");
-    if (here_pos == std::string::npos) {
-        return result;
+    const std::string& command, std::map<std::string, std::string>& here_docs, bool* incomplete) {
+    if (incomplete) {
+        *incomplete = false;
     }
-
-    HereDocHeader header;
-    if (!parse_here_doc_header(result, here_pos, header)) {
-        return result;
-    }
-
-    const bool strip_tabs = header.strip_tabs;
-    const bool delimiter_quoted = !header.expand;
-    const std::string& delimiter = header.delimiter;
-    size_t delim_end = header.delimiter_end;
-
-    size_t content_start = result.find('\n', delim_end);
-    if (content_start == std::string::npos) {
-        return result;
-    }
-    content_start++;
-
-    std::string content;
-    bool first_content_line = true;
-    size_t delimiter_line_start = std::string::npos;
-    size_t delimiter_line_end = std::string::npos;
-
-    size_t scan_pos = content_start;
-    while (scan_pos <= result.size()) {
-        size_t line_end = result.find('\n', scan_pos);
-        bool has_newline = (line_end != std::string::npos);
-        size_t line_len = has_newline ? line_end - scan_pos : result.size() - scan_pos;
-
-        std::string line = result.substr(scan_pos, line_len);
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-
-        std::string compare_line = trim_here_doc_compare_line(line);
-
-        if (compare_line == delimiter) {
-            delimiter_line_start = scan_pos;
-            delimiter_line_end = has_newline ? line_end + 1 : result.size();
-            break;
-        }
-
-        std::string line_to_store = line;
-        if (strip_tabs) {
-            size_t first_non_tab = line_to_store.find_first_not_of('\t');
-            if (first_non_tab == std::string::npos) {
-                line_to_store.clear();
-            } else {
-                (void)line_to_store.erase(0, first_non_tab);
+    std::string result;
+    size_t position = 0;
+    while (position < command.size()) {
+        const size_t newline = command.find('\n', position);
+        const size_t line_end = newline == std::string::npos ? command.size() : newline;
+        const std::string line = command.substr(position, line_end - position);
+        struct Pending {
+            size_t position;
+            HereDocHeader header;
+            std::string placeholder;
+        };
+        std::vector<Pending> pending;
+        char quote = '\0';
+        for (size_t i = 0; i < line.size(); ++i) {
+            const char c = line[i];
+            if (c == '\\' && quote != '\'') {
+                ++i;
+                continue;
+            }
+            if (quote != '\0') {
+                if (c == quote) {
+                    quote = '\0';
+                }
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                quote = c;
+                continue;
+            }
+            if (c == '#' && (i == 0 || std::isspace(static_cast<unsigned char>(line[i - 1])))) {
+                break;
+            }
+            if (line.compare(i, 3, "<<<") == 0) {
+                i += 2;
+                continue;
+            }
+            HereDocHeader header;
+            if (c == '<' && parse_here_doc_header(line, i, header)) {
+                pending.push_back(
+                    {i, header, "HEREDOC_PLACEHOLDER_" + std::to_string(next_placeholder_id())});
+                i = header.delimiter_end - 1;
             }
         }
-
-        if (!first_content_line) {
-            content += '\n';
+        if (pending.empty() || newline == std::string::npos) {
+            if (incomplete && !pending.empty()) {
+                *incomplete = true;
+            }
+            result += line;
+            if (newline != std::string::npos) {
+                result += '\n';
+            }
+            position = newline == std::string::npos ? command.size() : newline + 1;
+            continue;
         }
-        content += line_to_store;
-        first_content_line = false;
-
-        if (!has_newline) {
+        size_t body_position = newline + 1;
+        bool complete = true;
+        for (const auto& item : pending) {
+            std::string content;
+            bool terminated = false;
+            while (body_position < command.size()) {
+                std::string logical_line;
+                bool has_newline;
+                do {
+                    size_t end = command.find('\n', body_position);
+                    has_newline = end != std::string::npos;
+                    if (!has_newline) {
+                        end = command.size();
+                    }
+                    std::string part = command.substr(body_position, end - body_position);
+                    body_position = has_newline ? end + 1 : end;
+                    if (item.header.strip_tabs) {
+                        size_t first = part.find_first_not_of('\t');
+                        part.erase(0, first == std::string::npos ? part.size() : first);
+                    }
+                    logical_line += part;
+                    size_t slashes = 0;
+                    for (size_t i = logical_line.size(); i > 0 && logical_line[i - 1] == '\\';
+                         --i) {
+                        ++slashes;
+                    }
+                    if (!item.header.expand || !has_newline || slashes % 2 == 0) {
+                        break;
+                    }
+                    logical_line.pop_back();
+                } while (body_position < command.size());
+                if (logical_line == item.header.delimiter) {
+                    terminated = true;
+                    break;
+                }
+                content += logical_line;
+                if (has_newline) {
+                    content += '\n';
+                }
+            }
+            if (!terminated) {
+                complete = false;
+                break;
+            }
+            here_docs[item.placeholder] = item.header.expand ? "__EXPAND__" + content : content;
+        }
+        if (!complete) {
+            if (incomplete) {
+                *incomplete = true;
+            }
+            result += command.substr(position);
             break;
         }
-        scan_pos = line_end + 1;
+        size_t copied = 0;
+        for (const auto& item : pending) {
+            result += line.substr(copied, item.position - copied);
+            result += "< " + item.placeholder;
+            copied = item.header.delimiter_end;
+        }
+        result += line.substr(copied);
+        result += '\n';
+        position = body_position;
     }
-
-    if (delimiter_line_start == std::string::npos) {
-        return result;
-    }
-
-    std::string placeholder = "HEREDOC_PLACEHOLDER_" + std::to_string(next_placeholder_id());
-
-    std::string rest_of_line = result.substr(delim_end, content_start - delim_end);
-
-    std::string stored_content = content;
-    if (!delimiter_quoted) {
-        stored_content = "__EXPAND__" + content;
-    }
-    here_docs[placeholder] = stored_content;
-
-    std::string before_here = result.substr(0, here_pos);
-    std::string after_delimiter = result.substr(delimiter_line_end);
-
-    result = before_here + "< " + placeholder + rest_of_line + after_delimiter;
-
     return result;
 }
 

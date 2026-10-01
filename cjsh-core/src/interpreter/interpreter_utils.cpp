@@ -88,7 +88,11 @@ size_t find_inline_comment_start(const std::string& s, size_t start, size_t end)
                     quote = '\0';
                 }
             }
-        } else if (!in_quotes && !in_brace_expansion && c == '#') {
+        } else if (!in_quotes && !in_brace_expansion && c == '#' && !is_char_escaped(s, i) &&
+                   (i == start ||
+                    (!is_char_escaped(s, i - 1) &&
+                     (std::isspace(static_cast<unsigned char>(s[i - 1])) ||
+                      std::string_view(";&|()<>").find(s[i - 1]) != std::string_view::npos)))) {
             return i;
         }
     }

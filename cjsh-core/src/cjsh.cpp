@@ -30,9 +30,11 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <clocale>
 #include <csignal>
 #include <cstdlib>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "builtin.h"
@@ -54,6 +56,8 @@
 std::unique_ptr<Shell> g_shell = nullptr;
 
 namespace {
+
+std::optional<int> cleanup_exit_status;
 
 void cleanup_resources() {
     // Both main and atexit use this dispatcher; shutdown must only run once.
@@ -80,6 +84,7 @@ void cleanup_resources() {
                            : numeric_utils::parse_exit_status_or(
                                  cjsh_env::get_shell_variable_value("?"), 0, false);
     g_shell->run_exit_handlers(status);
+    cleanup_exit_status = read_exit_code_or(status);
 
     // Destroy the shell before static teardown so its dependencies are still available.
     g_shell.reset();
@@ -238,6 +243,7 @@ int run_cjsh(int argc, char* argv[]) {
         return 1;
     }
 
+    (void)std::setlocale(LC_ALL, "");
     initialize_shell(argc, argv, parse_result);
     process_startup_files();
 
@@ -264,5 +270,5 @@ int main(int argc, char* argv[]) {
     // Normal returns share cleanup with exit(), after publishing the command status.
     pipeline_status_utils::set_last_status_env(exit_code);
     cleanup_resources();
-    return read_exit_code_or(exit_code);
+    return cleanup_exit_status.value_or(exit_code);
 }

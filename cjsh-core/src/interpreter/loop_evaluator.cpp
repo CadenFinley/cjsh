@@ -569,7 +569,10 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
 
             int c = 0;
             if (!cond.empty()) {
-                c = execute_simple_or_pipeline(cond);
+                {
+                    Shell::ErrexitScope scope(g_shell.get());
+                    c = execute_simple_or_pipeline(cond);
+                }
                 if (abort_pending()) {
                     rc = c;
                     break;

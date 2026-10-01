@@ -67,6 +67,7 @@ enum class ReadInputStatus : std::uint8_t {
     Success,
     TimeoutNoData,
     EndOfFileNoData,
+    EndOfFile,
     Error,
 };
 
@@ -274,11 +275,13 @@ ReadInputStatus collect_input(const ReadOptions& options, std::string& input) {
             chars_read++;
         }
     } else {
+        bool escaped = false;
         while (read_char(c)) {
-            if (options.delim.find(c) != std::string::npos) {
+            if (options.delim.find(c) != std::string::npos && !escaped) {
                 break;
             }
             input += c;
+            escaped = config::is_posix_mode() && !options.raw_mode && c == '\\' && !escaped;
         }
     }
 
@@ -297,6 +300,9 @@ ReadInputStatus collect_input(const ReadOptions& options, std::string& input) {
 
     if (reached_eof && input.empty()) {
         return ReadInputStatus::EndOfFileNoData;
+    }
+    if (reached_eof && config::is_posix_mode()) {
+        return ReadInputStatus::EndOfFile;
     }
 
     return ReadInputStatus::Success;
@@ -482,6 +488,71 @@ bool assign_fields_to_variables(const std::vector<std::string>& var_names,
     return true;
 }
 
+bool assign_posix_fields(const std::vector<std::string>& var_names, const std::string& raw,
+                         bool raw_mode, Shell* shell) {
+    std::string input;
+    std::vector<bool> quoted;
+    for (size_t i = 0; i < raw.size(); ++i) {
+        if (!raw_mode && raw[i] == '\\' && i + 1 < raw.size()) {
+            if (raw[++i] != '\n') {
+                input += raw[i];
+                quoted.push_back(true);
+            }
+        } else {
+            input += raw[i];
+            quoted.push_back(false);
+        }
+    }
+    const std::string ifs = cjsh_env::get_ifs_delimiters();
+    auto delimiter = [&](size_t pos) {
+        return pos < input.size() && !quoted[pos] && ifs.find(input[pos]) != std::string::npos;
+    };
+    auto whitespace = [&](size_t pos) {
+        return delimiter(pos) && (input[pos] == ' ' || input[pos] == '\t' || input[pos] == '\n');
+    };
+    std::vector<std::pair<size_t, size_t>> fields;
+    size_t pos = 0;
+    while (whitespace(pos)) {
+        ++pos;
+    }
+    size_t start = pos;
+    while (pos < input.size()) {
+        if (!delimiter(pos)) {
+            ++pos;
+            continue;
+        }
+        fields.emplace_back(start, pos);
+        if (whitespace(pos)) {
+            while (whitespace(pos)) {
+                ++pos;
+            }
+            if (delimiter(pos)) {
+                ++pos;
+            }
+        } else {
+            ++pos;
+        }
+        while (whitespace(pos)) {
+            ++pos;
+        }
+        start = pos;
+    }
+    if (start < input.size()) {
+        fields.emplace_back(start, input.size());
+    }
+    size_t end = input.size();
+    while (end > 0 && whitespace(end - 1)) {
+        --end;
+    }
+    std::vector<std::string> values(var_names.size());
+    for (size_t i = 0; i < var_names.size() && i < fields.size(); ++i) {
+        const size_t field_end =
+            i + 1 == var_names.size() && i + 1 < fields.size() ? end : fields[i].second;
+        values[i] = input.substr(fields[i].first, field_end - fields[i].first);
+    }
+    return assign_fields_to_variables(var_names, values, shell);
+}
+
 }  // namespace
 
 int read_command(const std::vector<std::string>& args, Shell* shell) {
@@ -515,9 +586,16 @@ int read_command(const std::vector<std::string>& args, Shell* shell) {
         return 128 + SIGINT;
     }
     if (read_status != ReadInputStatus::Success) {
+        if (config::is_posix_mode() && (read_status == ReadInputStatus::EndOfFile ||
+                                        read_status == ReadInputStatus::EndOfFileNoData)) {
+            (void)assign_posix_fields(var_names, input, options.raw_mode, shell);
+        }
         return 1;
     }
 
+    if (config::is_posix_mode()) {
+        return assign_posix_fields(var_names, input, options.raw_mode, shell) ? 0 : 1;
+    }
     if (!options.raw_mode) {
         input = process_backslash_escapes(input);
     }

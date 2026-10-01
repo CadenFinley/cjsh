@@ -42,6 +42,7 @@ class VariableExpander {
 
     void expand_env_vars(std::string& arg);
     void expand_env_vars_selective(std::string& arg);
+    void expand_word(std::string& arg, std::vector<bool>& expanded_bytes);
     void expand_exported_env_vars_only(std::string& arg);
 
     std::string get_variable_value(const std::string& var_name);

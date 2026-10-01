@@ -511,6 +511,13 @@ void push_function_context(
     std::vector<std::tuple<ControlToken, ControlToken, size_t>>& control_stack) {
     std::string remaining = trimmed_line;
     while (const auto header = function_evaluator::parse_function_header(remaining)) {
+        if (header->opening == 'k') {
+            const size_t end = function_evaluator::find_function_body_end(remaining, *header);
+            if (end != std::string::npos) {
+                return;
+            }
+            break;
+        }
         // A body that closes on this line must not leave a continuation context.
         // Count nested delimiters, ignoring quoted and escaped literal braces.
         int depth = 0;
@@ -805,13 +812,14 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
         }
 
         if (const auto header = function_evaluator::parse_function_header(line_without_comments)) {
-            const size_t close =
-                header->opening == '{'
-                    ? find_matching_brace(line_without_comments, header->body_start)
-                    : find_matching_paren(line_without_comments, header->body_start);
+            const size_t end =
+                function_evaluator::find_function_body_end(line_without_comments, *header);
+            const size_t close = end == std::string::npos ? end : end - 1;
             if (close != std::string::npos) {
-                const std::string body = line_without_comments.substr(
-                    header->body_start + 1, close - header->body_start - 1);
+                const bool keyword_body = header->opening == 'k';
+                const size_t begin = header->body_start + (keyword_body ? 0 : 1);
+                const std::string body =
+                    line_without_comments.substr(begin, end - begin - (keyword_body ? 0 : 1));
                 auto body_lines = parse_into_lines(body);
                 if (body_lines.empty() && !body.empty()) {
                     body_lines.push_back(body);

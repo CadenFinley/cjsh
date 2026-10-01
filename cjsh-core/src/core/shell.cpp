@@ -282,7 +282,7 @@ int Shell::execute(const std::string& script, bool skip_validation) {
         // execute the parsed lines
         // the block is tokenized, parsed, and interpreted and then passed to the execute_command
         // function
-        int exit_code = shell_script_interpreter->execute_block(lines, skip_validation);
+        int exit_code = shell_script_interpreter->execute_block(lines, skip_validation, false);
         last_command = script;
         return exit_code;
     }
@@ -461,7 +461,7 @@ int Shell::execute_script_content(const std::string& content, const std::string&
     const std::string previous_error_source = shell_script_interpreter->get_error_source();
     shell_script_interpreter->set_error_source(source_path);
     shell_script_interpreter->push_source_scope();
-    int exit_code = shell_script_interpreter->execute_block(parsed_lines);
+    int exit_code = shell_script_interpreter->execute_block(parsed_lines, false, false);
     shell_script_interpreter->pop_source_scope();
     shell_script_interpreter->set_error_source(previous_error_source);
 
@@ -914,7 +914,7 @@ std::string Shell::get_errexit_severity() const {
 }
 
 bool Shell::should_abort_on_nonzero_exit() const {
-    if (!is_errexit_enabled()) {
+    if (!is_errexit_enabled() || errexit_suppression_depth != 0) {
         return false;
     }
 
@@ -922,7 +922,7 @@ bool Shell::should_abort_on_nonzero_exit() const {
 }
 
 bool Shell::should_abort_on_nonzero_exit(int exit_code) const {
-    if (!is_errexit_enabled()) {
+    if (!is_errexit_enabled() || errexit_suppression_depth != 0) {
         return false;
     }
 

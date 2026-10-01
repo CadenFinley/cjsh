@@ -45,6 +45,7 @@
 #include "parameter_utils.h"
 #include "parser.h"
 #include "parser_utils.h"
+#include "quote_info.h"
 #include "shell.h"
 #include "shell_env.h"
 #include "string_utils.h"
@@ -196,26 +197,13 @@ void VariableExpander::expand_env_vars(std::string& arg) {
 
         if (arg[i] == '$' && i + 1 < arg.length() && arg[i + 1] == '{') {
             size_t start = i + 2;
-            size_t brace_depth = 1;
-            size_t end = start;
-
-            while (end < arg.length() && brace_depth > 0) {
-                if (arg[end] == '{') {
-                    brace_depth++;
-                } else if (arg[end] == '}') {
-                    brace_depth--;
-                }
-                if (brace_depth > 0) {
-                    end++;
-                }
-            }
-
-            if (brace_depth == 0 && end < arg.length()) {
+            size_t end = 0;
+            if (parser_find_matching_parameter_expansion_end(arg, i + 1, end)) {
                 std::string param_expr = arg.substr(start, end - start);
                 std::string value;
 
-                if (param_expr.find(':') != std::string::npos ||
-                    param_expr.find('-') != std::string::npos) {
+                if (!config::is_posix_mode() && (param_expr.find(':') != std::string::npos ||
+                                                 param_expr.find('-') != std::string::npos)) {
                     value = expand_parameter_with_default(
                         param_expr,
                         [this](const std::string& name) { return get_variable_value(name); },
@@ -285,6 +273,78 @@ void VariableExpander::expand_env_vars(std::string& arg) {
     }
 
     arg = result;
+}
+
+void VariableExpander::expand_word(std::string& arg, std::vector<bool>& expanded_bytes) {
+    std::string result;
+    expanded_bytes.clear();
+    auto append = [&](const std::string& value, bool expanded) {
+        result += value;
+        expanded_bytes.insert(expanded_bytes.end(), value.size(), expanded);
+    };
+    for (size_t i = 0; i < arg.size();) {
+        if (arg.compare(i, subst_literal_start().size(), subst_literal_start()) == 0) {
+            const size_t begin = i + subst_literal_start().size();
+            const size_t end = arg.find(subst_literal_end(), begin);
+            if (end != std::string::npos) {
+                append(strip_noenv_sentinels(arg.substr(begin, end - begin)).first, true);
+                i = end + subst_literal_end().size();
+                continue;
+            }
+        }
+        if (arg.compare(i, noenv_start().size(), noenv_start()) == 0) {
+            const size_t begin = i + noenv_start().size();
+            const size_t end = arg.find(noenv_end(), begin);
+            if (end != std::string::npos) {
+                append(arg.substr(begin, end - begin), false);
+                i = end + noenv_end().size();
+                continue;
+            }
+        }
+        if (arg[i] == QUOTE_PREFIX && i + 1 < arg.size()) {
+            append(arg.substr(i, 2), false);
+            i += 2;
+            continue;
+        }
+        if (arg[i] == '\\' && i + 1 < arg.size() && arg[i + 1] == '$') {
+            append("$", false);
+            i += 2;
+            continue;
+        }
+        size_t end = i;
+        if (arg[i] == '$' && i + 1 < arg.size()) {
+            if (arg[i + 1] == '{') {
+                if (parser_find_matching_parameter_expansion_end(arg, i + 1, end)) {
+                    ++end;
+                } else {
+                    end = i;
+                }
+            } else if (arg[i + 1] == '(') {
+                size_t begin, close;
+                if (!parser_find_balanced_double_parens(arg, i + 1, begin, close, end)) {
+                    end = i;
+                }
+            } else if (std::isdigit(static_cast<unsigned char>(arg[i + 1])) ||
+                       parameter_utils::is_special_parameter_char(arg[i + 1]) ||
+                       arg[i + 1] == '-') {
+                end = i + 2;
+            } else if (is_valid_identifier_start(arg[i + 1])) {
+                end = i + 2;
+                while (end < arg.size() && is_valid_identifier_char(arg[end])) {
+                    ++end;
+                }
+            }
+        }
+        if (end > i) {
+            std::string value = arg.substr(i, end - i);
+            expand_env_vars(value);
+            append(value, true);
+            i = end;
+        } else {
+            append(arg.substr(i++, 1), false);
+        }
+    }
+    arg = std::move(result);
 }
 
 void VariableExpander::expand_env_vars_selective(std::string& arg) {
