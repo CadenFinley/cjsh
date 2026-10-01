@@ -30,12 +30,16 @@
 
 #include "builtin_help.h"
 #include "error_out.h"
+#include "interpreter.h"
 #include "pattern_matcher.h"
+#include "shell.h"
 #include "shell_env.h"
 #include "test_expression_utils.h"
 
+#include <regex.h>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <regex>
 #include <string>
 #include <vector>
@@ -97,6 +101,35 @@ int evaluate_expression(const std::vector<std::string>& tokens) {
             }
             return g_pattern_matcher.matches_pattern(arg1, arg2) ? 1 : 0;
         } else if (op == "=~") {
+            if (config::is_bash_mode()) {
+                regex_t regex{};
+                const int compile_status = regcomp(&regex, arg2.c_str(), REG_EXTENDED);
+                if (compile_status != 0) {
+                    std::vector<char> message(regerror(compile_status, &regex, nullptr, 0));
+                    (void)regerror(compile_status, &regex, message.data(), message.size());
+                    std::cerr << "cjsh: [[: invalid regular expression: " << message.data() << '\n';
+                    return 2;
+                }
+                std::vector<regmatch_t> matches(regex.re_nsub + 1);
+                const int result = regexec(&regex, arg1.c_str(), matches.size(), matches.data(), 0);
+                std::vector<std::string> values;
+                if (result == 0) {
+                    for (const auto& match : matches) {
+                        values.push_back(
+                            match.rm_so < 0
+                                ? ""
+                                : arg1.substr(static_cast<size_t>(match.rm_so),
+                                              static_cast<size_t>(match.rm_eo - match.rm_so)));
+                    }
+                }
+                regfree(&regex);
+                if (g_shell) {
+                    g_shell->get_shell_script_interpreter()
+                        ->get_variable_manager()
+                        .set_global_array_values("BASH_REMATCH", values);
+                }
+                return result == 0 ? 0 : (result == REG_NOMATCH ? 1 : 2);
+            }
             try {
                 std::regex re(arg2);
                 return std::regex_search(arg1, re) ? 0 : 1;

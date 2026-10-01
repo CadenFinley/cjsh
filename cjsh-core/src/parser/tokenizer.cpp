@@ -87,10 +87,13 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                 if (token_saw_escape) {
                     current_token = remove_escape_markers(current_token);
                 }
-                char quote_type = token_saw_double || (config::is_posix_mode() && token_saw_unquoted)
-                                      ? QUOTE_DOUBLE
-                                      : QUOTE_SINGLE;
-                if (config::is_posix_mode() && quote_type == QUOTE_SINGLE) {
+                char quote_type =
+                    token_saw_double || ((config::is_posix_mode() || config::is_bash_mode()) &&
+                                         token_saw_unquoted)
+                        ? QUOTE_DOUBLE
+                        : QUOTE_SINGLE;
+                if ((config::is_posix_mode() || config::is_bash_mode()) &&
+                    quote_type == QUOTE_SINGLE) {
                     current_token = strip_noenv_sentinels(current_token).first;
                 }
                 tokens.push_back(create_quote_tag(quote_type, current_token));
@@ -155,14 +158,14 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
             quote_char = c;
             if (c == '\'') {
                 token_saw_single = true;
-                if (config::is_posix_mode()) {
+                if ((config::is_posix_mode() || config::is_bash_mode())) {
                     current_token += noenv_start();
                 }
             } else {
                 token_saw_double = true;
             }
         } else if (c == quote_char && in_quotes && !in_subst_literal) {
-            if (config::is_posix_mode() && quote_char == '\'') {
+            if ((config::is_posix_mode() || config::is_bash_mode()) && quote_char == '\'') {
                 current_token += noenv_end();
             }
             in_quotes = false;
@@ -170,7 +173,8 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
         } else if (!in_quotes) {
             // Resolve tilde from source spelling, before parameter expansion and
             // quote removal. Protect only the inserted home directory.
-            if (config::is_posix_mode() && c == '~' && brace_depth == 0 && arith_depth == 0) {
+            if ((config::is_posix_mode() || config::is_bash_mode()) && c == '~' &&
+                brace_depth == 0 && arith_depth == 0) {
                 const size_t assignment_eq = current_token.find('=');
                 const bool assignment_prefix =
                     assignment_eq != std::string::npos &&
@@ -265,7 +269,7 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
             }
 
             else if (c == '[' && i + 1 < cmdline_len && cmdline[i + 1] == '[' &&
-                     (!config::is_posix_mode() ||
+                     (!(config::is_posix_mode() || config::is_bash_mode()) ||
                       (current_token.empty() &&
                        (i + 2 == cmdline_len || is_whitespace(cmdline[i + 2]))))) {
                 bracket_depth++;
@@ -289,6 +293,11 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                 (void)tokens.emplace_back(2, c);
                 tokens.back()[1] = cmdline[i + 1];
                 i++;
+            }
+
+            else if (config::is_bash_mode() && bracket_depth > 0 && !tokens.empty() &&
+                     tokens.back() == "=~" && (c == '(' || c == ')')) {
+                current_token += c;
             }
 
             else if ((c == '(' || c == ')' || c == '<' || c == '>' ||

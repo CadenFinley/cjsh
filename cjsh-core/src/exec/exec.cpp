@@ -1097,7 +1097,8 @@ bool configure_stderr_redirects(const Command& cmd, ErrorHandler&& on_error) {
 
 [[noreturn]] void exec_external_child(const std::vector<std::string>& args,
                                       const char* cached_path) {
-    if (config::script_extension_interpreter_enabled && !config::is_posix_mode()) {
+    if (config::script_extension_interpreter_enabled && !config::is_posix_mode() &&
+        !config::is_bash_mode()) {
         auto interpreter_args =
             script_dispatch::build_extension_interpreter_args(args, cached_path);
         if (interpreter_args) {

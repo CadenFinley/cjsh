@@ -2448,6 +2448,13 @@ std::string ShellScriptInterpreter::expand_all_substitutions(
 
                 if (found) {
                     std::string param_expr = result.substr(i + 2, j - (i + 2));
+                    // Bash expansion belongs to the word-expansion stage. Keep quotes and
+                    // array field boundaries intact instead of injecting values into source.
+                    if (config::is_bash_mode()) {
+                        out.append(result, i, j - i + 1);
+                        i = j;
+                        continue;
+                    }
                     std::string expanded_result = expand_parameter_expression(param_expr);
 
                     if (expanded_result.find('$') != std::string::npos) {

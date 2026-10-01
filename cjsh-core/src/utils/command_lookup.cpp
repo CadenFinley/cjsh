@@ -34,6 +34,7 @@
 #include "cjsh_filesystem.h"
 #include "interpreter.h"
 #include "shell.h"
+#include "shell_env.h"
 #include "token_constants.h"
 
 namespace command_lookup {
@@ -98,7 +99,7 @@ bool should_auto_cd_token(const std::string& token, Shell* shell, bool* director
     if (directory_result != nullptr) {
         *directory_result = false;
     }
-    if (shell == nullptr || token.empty()) {
+    if (shell == nullptr || token.empty() || config::is_bash_mode()) {
         return false;
     }
 

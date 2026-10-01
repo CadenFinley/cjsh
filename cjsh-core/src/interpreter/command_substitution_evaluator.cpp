@@ -32,6 +32,7 @@
 #include "function_ref.h"
 #include "parser_utils.h"
 #include "shell.h"
+#include "shell_env.h"
 #include "string_utils.h"
 
 #include <cstdio>
@@ -47,6 +48,10 @@ std::pair<std::string, int> execute_command_for_substitution(
     const std::string& command, const std::function<int(const std::string&)>& executor) {
     auto output = exec_utils::execute_with_stdout_capture(
         [&]() -> int {
+            if (config::is_bash_mode() && g_shell &&
+                !g_shell->get_shell_option(ShellOption::InheritErrexit)) {
+                g_shell->set_shell_option(ShellOption::Errexit, false);
+            }
             (void)std::cout.flush();
             (void)fflush(nullptr);
 
