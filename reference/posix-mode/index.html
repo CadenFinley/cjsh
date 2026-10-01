@@ -1085,6 +1085,14 @@ results unless <code>errexit</code> applies. <code>command</code> removes a buil
 errors inside <code>eval</code> or a dot-sourced file still follow the rules of those commands.
 Subshell errors remain isolated from the parent. Dot (<code>.</code>) searches <code>PATH</code> for
 names without a slash, including readable files without execute permission.</p>
+<p>Aliases expand before command operators are parsed, including chained aliases and
+the next word after an alias ending in a blank. Function definitions retain the
+aliases present when their bodies are read. A function body can be any supported
+POSIX compound command; <code>set --</code> and <code>shift</code> affect its arguments until it returns.
+<code>unset -f</code> removes functions. <code>read</code> preserves the remaining separators in its
+last variable and assigns partial input on EOF while returning failure. <code>trap -p</code>
+prints restorable condition states, and an explicit <code>exit</code> in an exit trap selects
+the final exit status.</p>
 <p>The strict language policy rejects arrays, append assignments, arithmetic commands
 (<code>((…))</code>), C-style <code>for</code>, <code>select</code>, the <code>function</code> keyword, <code>[[…]]</code>, process
 substitution, here-strings, <code>|&amp;</code>, combined output redirections, <code>;;&amp;</code>, and cjsh's
