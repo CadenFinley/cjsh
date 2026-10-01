@@ -574,6 +574,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -749,6 +753,62 @@
     
   
     Non-POSIX Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../posix-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    POSIX Mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bash-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bash Dialect
   
 
     
@@ -1161,6 +1221,17 @@
     <span class="md-ellipsis">
       
         readonly
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shopt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        shopt
       
     </span>
   </a>
@@ -2685,46 +2756,57 @@ the failure status. Successful replacement does not run exit hooks or logout fil
 <p>Mark variables as read-only.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nb">readonly</span><span class="w"> </span><span class="o">[</span>-pf<span class="o">]</span><span class="w"> </span>name<span class="o">[=</span>value<span class="o">]</span><span class="w"> </span><span class="o">[</span>name<span class="o">[=</span>value<span class="o">]</span>...<span class="o">]</span>
 </span></code></pre></div>
-<h3 id="set">set</h3>
-<p>Adjust shell options or positional parameters.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nb">set</span><span class="w"> </span><span class="o">[</span>options<span class="o">]</span><span class="w"> </span><span class="o">[</span>args...<span class="o">]</span>
+<h3 id="shopt">shopt</h3>
+<p>Inspect or change shell language options. Supported options are <code>extglob</code>, <code>globstar</code>,
+<code>huponexit</code>, <code>expand_aliases</code>, and <code>inherit_errexit</code>.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>extglob<span class="w"> </span>globstar
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nb">shopt</span><span class="w"> </span>-u<span class="w"> </span>huponexit
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="nb">shopt</span><span class="w"> </span>-p<span class="w"> </span>extglob
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="nb">shopt</span><span class="w"> </span>-q<span class="w"> </span>globstar
 </span></code></pre></div>
+<p><code>-s</code> enables, <code>-u</code> disables, <code>-p</code> prints reusable commands, <code>-q</code> queries without output,
+and <code>-o</code> selects the <code>set</code> option namespace. See <a href="../bash-mode/">Bash dialect</a> for defaults,
+compatibility boundaries, and migration from the previous option interfaces.</p>
 <ul>
-<li><code>huponexit</code> is enabled by default for interactive shells (including <code>-i -c</code>) and disabled
-  by default for noninteractive shells. When enabled, normal exit sends SIGHUP to managed jobs.
-  Use <code>set +o huponexit</code> to keep the previous interactive default, or <code>disown</code>/<code>disown -h</code>
-  to exempt individual jobs. Add the opt-out to your interactive rc file if you depended on
-  background helpers surviving shell exit. <code>set -o huponexit</code> explicitly enables it in scripts.</li>
+<li>Native interactive shells enable <code>huponexit</code> by default, including <code>-i -c</code> invocations.
+  Native noninteractive shells default to off. When enabled, normal exit sends SIGHUP to
+  managed jobs. Use <code>shopt -u huponexit</code> to keep jobs running, or <code>disown</code>/<code>disown -h</code>
+  to exempt individual jobs.</li>
+<li>Bash mode defaults <code>huponexit</code> to off and applies it only to interactive login shells.</li>
 <li>HUP cleanup resumes stopped jobs so they can handle the signal. Jobs that handle or ignore
   HUP may survive; cjsh does not escalate to SIGKILL and waits at most 100 ms for child cleanup.</li>
-<li><code>set -m</code> enables monitor mode and per-job process groups; <code>set +m</code> disables it. Interactive
-  shells start with monitor mode enabled.</li>
 </ul>
+<h3 id="set">set</h3>
+<p>Adjust shell options or positional parameters.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nb">set</span><span class="w"> </span><span class="o">[</span>options<span class="o">]</span><span class="w"> </span><span class="o">[</span>args...<span class="o">]</span>
+</span></code></pre></div>
+<p><code>set -m</code> enables monitor mode and per-job process groups; <code>set +m</code> disables it. Interactive
+shells start with monitor mode enabled.</p>
 <h3 id="coproc">coproc</h3>
 <p>Run a command asynchronously with a two-way pipe.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>coproc<span class="w"> </span><span class="nb">command</span><span class="w"> </span><span class="o">[</span>args...<span class="o">]</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>coproc<span class="w"> </span>NAME<span class="w"> </span><span class="o">{</span><span class="w"> </span>command<span class="p">;</span><span class="w"> </span><span class="o">}</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>coproc<span class="w"> </span><span class="nb">command</span><span class="w"> </span><span class="o">[</span>args...<span class="o">]</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>coproc<span class="w"> </span>NAME<span class="w"> </span><span class="o">{</span><span class="w"> </span>command<span class="p">;</span><span class="w"> </span><span class="o">}</span>
 </span></code></pre></div>
 <p>The read and write descriptors are assigned to <code>COPROC[0]</code> and <code>COPROC[1]</code>, or to the named
 array. The child PID is available as <code>COPROC_PID</code> or <code>NAME_PID</code>. Use <code>read -u fd</code> or dynamic
 descriptor redirections such as <code>&gt;&amp;${COPROC[1]}</code> to communicate with it.</p>
 <h3 id="shift">shift</h3>
 <p>Rotate positional parameters to the left.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nb">shift</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nb">shift</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
 </span></code></pre></div>
 <h2 id="aliases">Aliases</h2>
 <h3 id="alias">alias</h3>
 <p>Create or list command aliases.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nb">alias</span><span class="w"> </span><span class="o">[</span>-p<span class="o">]</span><span class="w"> </span><span class="o">[</span>name<span class="o">[=</span>value<span class="o">]</span>...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nb">alias</span><span class="w"> </span><span class="o">[</span>-p<span class="o">]</span><span class="w"> </span><span class="o">[</span>name<span class="o">[=</span>value<span class="o">]</span>...<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="unalias">unalias</h3>
 <p>Remove command aliases.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nb">unalias</span><span class="w"> </span><span class="o">[</span>-a<span class="o">]</span><span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nb">unalias</span><span class="w"> </span><span class="o">[</span>-a<span class="o">]</span><span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
 </span></code></pre></div>
 <h2 id="abbreviations">Abbreviations</h2>
 <h3 id="abbr">abbr</h3>
 <p>Create, update, or list fish-style abbreviations that expand during interactive editing.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>abbr<span class="w"> </span><span class="o">[</span><span class="nv">name</span><span class="o">=</span>expansion<span class="w"> </span>...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>abbr<span class="w"> </span><span class="o">[</span><span class="nv">name</span><span class="o">=</span>expansion<span class="w"> </span>...<span class="o">]</span>
 </span></code></pre></div>
 <ul>
 <li>Run without arguments to display all configured abbreviations</li>
@@ -2735,7 +2817,7 @@ descriptor redirections such as <code>&gt;&amp;${COPROC[1]}</code> to communicat
 </ul>
 <h3 id="unabbr">unabbr</h3>
 <p>Remove one or more fish-style abbreviations.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>unabbr<span class="w"> </span>name<span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>unabbr<span class="w"> </span>name<span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
 </span></code></pre></div>
 <ul>
 <li>Removing a non-existent abbreviation reports an error but continues processing the rest</li>
@@ -2744,46 +2826,46 @@ descriptor redirections such as <code>&gt;&amp;${COPROC[1]}</code> to communicat
 <h2 id="control-flow">Control Flow</h2>
 <h3 id="if">if</h3>
 <p>Run conditional blocks in scripts.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">if</span><span class="w"> </span>condition<span class="p">;</span><span class="w"> </span><span class="k">then</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">    </span>commands
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="o">[</span><span class="k">elif</span><span class="w"> </span>condition<span class="p">;</span><span class="w"> </span><span class="k">then</span>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">    </span>commands<span class="o">]</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="o">[</span><span class="k">else</span>
-</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="w">    </span>commands<span class="o">]</span>
-</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="k">fi</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">if</span><span class="w"> </span>condition<span class="p">;</span><span class="w"> </span><span class="k">then</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">    </span>commands
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="o">[</span><span class="k">elif</span><span class="w"> </span>condition<span class="p">;</span><span class="w"> </span><span class="k">then</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">    </span>commands<span class="o">]</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="o">[</span><span class="k">else</span>
+</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="w">    </span>commands<span class="o">]</span>
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="k">fi</span>
 </span></code></pre></div>
 <h3 id="test">test / [</h3>
 <p>Evaluate POSIX test expressions.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nb">test</span><span class="w"> </span>expression
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="o">[</span><span class="w"> </span>expression<span class="w"> </span><span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nb">test</span><span class="w"> </span>expression
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="o">[</span><span class="w"> </span>expression<span class="w"> </span><span class="o">]</span>
 </span></code></pre></div>
 <h3 id="_1">[[</h3>
 <p>Evaluate extended test expressions (bash-style).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="o">[[</span><span class="w"> </span>expression<span class="w"> </span><span class="o">]]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="o">[[</span><span class="w"> </span>expression<span class="w"> </span><span class="o">]]</span>
 </span></code></pre></div>
 <h3 id="break">break</h3>
 <p>Exit the current loop.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="k">break</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="k">break</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="continue">continue</h3>
 <p>Skip to the next loop iteration.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="k">continue</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="k">continue</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="return">return</h3>
 <p>Exit the current function with an optional status.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="k">return</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="k">return</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="_2">:</h3>
 <p>No-op command that always succeeds.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>:
 </span></code></pre></div>
 <h3 id="true">true</h3>
 <p>Always succeed and return exit status 0. Handy for conditionals or resetting <code>$?</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nb">true</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="nb">true</span>
 </span></code></pre></div>
 <h3 id="false">false</h3>
 <p>Always fail and return exit status 1. Useful for testing error paths or short-circuiting scripts.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="nb">false</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nb">false</span>
 </span></code></pre></div>
 <h2 id="job-control">Job Control</h2>
 <p>cjsh reclaims the terminal and restores its input settings when returning to the prompt,
@@ -2793,7 +2875,7 @@ next prompt using them. Pending input is preserved, and <code>fg</code> restores
 terminal settings before resuming it.</p>
 <h3 id="jobs">jobs</h3>
 <p>List background jobs.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nb">jobs</span><span class="w"> </span><span class="o">[</span>-lprs<span class="o">]</span><span class="w"> </span><span class="o">[</span>job_spec<span class="p">|</span>pid...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="nb">jobs</span><span class="w"> </span><span class="o">[</span>-lprs<span class="o">]</span><span class="w"> </span><span class="o">[</span>job_spec<span class="p">|</span>pid...<span class="o">]</span>
 </span></code></pre></div>
 <p><code>-r</code> and <code>-s</code> select running and stopped jobs. <code>-p</code> prints one process-group leader per job.</p>
 <p>While you edit a command, job stop and completion notifications appear above the prompt.
@@ -2801,45 +2883,45 @@ Your input, cursor position, and undo history are preserved. Notifications wait 
 open completion/search menu or bracketed paste finishes before the prompt is redrawn.</p>
 <h3 id="fg">fg</h3>
 <p>Bring a job to the foreground.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="nb">fg</span><span class="w"> </span><span class="o">[</span>job_spec<span class="p">|</span>pid<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="nb">fg</span><span class="w"> </span><span class="o">[</span>job_spec<span class="p">|</span>pid<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="bg">bg</h3>
 <p>Resume a job in the background.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="nb">bg</span><span class="w"> </span><span class="o">[</span>job_spec<span class="p">|</span>pid...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="nb">bg</span><span class="w"> </span><span class="o">[</span>job_spec<span class="p">|</span>pid...<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="auto-background-on-ctrlz">Auto-background on Ctrl+Z</h3>
 <p>Append <code>&amp;^</code> to a command to mark it for automatic backgrounding the first time you press
 <code>Ctrl+Z</code>.</p>
 <p>Append <code>&amp;^!</code> to auto-background on <code>Ctrl+Z</code> and discard stdout/stderr after the suspend so the
 prompt stays clean. Output is restored if you bring the job back with <code>fg</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>long_running_task<span class="w"> </span><span class="p">&amp;</span>^
-</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>long_running_task<span class="w"> </span><span class="p">&amp;</span>^!
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>long_running_task<span class="w"> </span><span class="p">&amp;</span>^
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a>long_running_task<span class="w"> </span><span class="p">&amp;</span>^!
 </span></code></pre></div>
 <h3 id="wait">wait</h3>
 <p>Wait for jobs or processes to finish.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="nb">wait</span><span class="w"> </span><span class="o">[</span>-fn<span class="o">]</span><span class="w"> </span><span class="o">[</span>-p<span class="w"> </span>variable<span class="o">]</span><span class="w"> </span><span class="o">[</span>pid<span class="p">|</span>job_spec...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="nb">wait</span><span class="w"> </span><span class="o">[</span>-fn<span class="o">]</span><span class="w"> </span><span class="o">[</span>-p<span class="w"> </span>variable<span class="o">]</span><span class="w"> </span><span class="o">[</span>pid<span class="p">|</span>job_spec...<span class="o">]</span>
 </span></code></pre></div>
 <p><code>wait -n</code> returns when the next selected job changes state, <code>-f</code> waits through stops until
 termination, and <code>-p</code> stores the selected process-group leader or PID.</p>
 <h3 id="kill">kill</h3>
 <p>Send signals to jobs or processes.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="nb">kill</span><span class="w"> </span><span class="o">[</span>-s<span class="w"> </span>signal<span class="p">|</span>-n<span class="w"> </span>signum<span class="p">|</span>-signal<span class="o">]</span><span class="w"> </span>pid<span class="p">|</span>job_spec<span class="w"> </span><span class="o">[</span>...<span class="o">]</span>
-</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="nb">kill</span><span class="w"> </span>-l
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="nb">kill</span><span class="w"> </span><span class="o">[</span>-s<span class="w"> </span>signal<span class="p">|</span>-n<span class="w"> </span>signum<span class="p">|</span>-signal<span class="o">]</span><span class="w"> </span>pid<span class="p">|</span>job_spec<span class="w"> </span><span class="o">[</span>...<span class="o">]</span>
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="nb">kill</span><span class="w"> </span>-l
 </span></code></pre></div>
 <h3 id="disown">disown</h3>
 <p>Detach jobs from the shell so they are no longer listed or sent hangup signals when cjsh exits.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="nb">disown</span><span class="w"> </span><span class="o">[</span>-arh<span class="o">]</span><span class="w"> </span><span class="o">[</span>job_spec<span class="p">|</span>pid...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="nb">disown</span><span class="w"> </span><span class="o">[</span>-arh<span class="o">]</span><span class="w"> </span><span class="o">[</span>job_spec<span class="p">|</span>pid...<span class="o">]</span>
 </span></code></pre></div>
 <ul>
 <li>With no arguments, the current job is disowned</li>
 <li><code>-a/--all</code> selects every tracked job; <code>-r/--running</code> restricts the selection to running jobs</li>
 <li><code>-h</code> leaves selected jobs in the table but excludes them from SIGHUP propagation</li>
 <li>Job specs include <code>%N</code>, <code>%+</code>, <code>%-</code>, <code>%prefix</code>, and <code>%?substring</code>; a tracked PID is also accepted</li>
-<li>Disowned jobs continue running even if <code>set -o huponexit</code> is enabled later in the session</li>
+<li>Disowned jobs continue running even if <code>shopt -s huponexit</code> is enabled later in the session</li>
 </ul>
 <h3 id="suspend">suspend</h3>
 <p>Suspend the current interactive shell until its parent resumes it with <code>fg</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="nb">suspend</span><span class="w"> </span><span class="o">[</span>-f<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="nb">suspend</span><span class="w"> </span><span class="o">[</span>-f<span class="o">]</span>
 </span></code></pre></div>
 <p>Login shells require <code>-f</code>. The command requires an owned controlling terminal and is
 unavailable in POSIX mode. It restores external terminal modes before stopping the shell;
@@ -2849,8 +2931,8 @@ or resume unrelated jobs.</p>
 <h3 id="jobname">jobname</h3>
 <p>Assign or update a friendly display name for a tracked job. The name shows up in <code>jobs</code>, <code>fg</code>, <code>bg</code>,
 and completions while the job remains in the table.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>jobname<span class="w"> </span>JOB_SPEC<span class="w"> </span>NEW_NAME
-</span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>jobname<span class="w"> </span>JOB_SPEC<span class="w"> </span><span class="o">[</span>-c<span class="p">|</span>--clear<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>jobname<span class="w"> </span>JOB_SPEC<span class="w"> </span>NEW_NAME
+</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a>jobname<span class="w"> </span>JOB_SPEC<span class="w"> </span><span class="o">[</span>-c<span class="p">|</span>--clear<span class="o">]</span>
 </span></code></pre></div>
 <ul>
 <li><code>JOB_SPEC</code> can be a <code>%job_id</code>, a PID, or any command prefix that normally resolves jobs (<code>fg</code>
@@ -2861,24 +2943,24 @@ and <code>bg</code>-style matching)</li>
 <h2 id="signal-handling">Signal Handling</h2>
 <h3 id="trap">trap</h3>
 <p>Set signal handlers or list existing traps.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="nb">trap</span><span class="w"> </span><span class="o">[</span>action<span class="o">]</span><span class="w"> </span><span class="o">[</span>signal...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="nb">trap</span><span class="w"> </span><span class="o">[</span>action<span class="o">]</span><span class="w"> </span><span class="o">[</span>signal...<span class="o">]</span>
 </span></code></pre></div>
 <h2 id="command-information">Command Information</h2>
 <h3 id="type">type</h3>
 <p>Explain how a command name will be resolved.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="nb">type</span><span class="w"> </span>name<span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="nb">type</span><span class="w"> </span>name<span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="which">which</h3>
 <p>Locate commands, including aliases, builtins, and executables in PATH.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>which<span class="w"> </span>name<span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>which<span class="w"> </span>name<span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="hash">hash</h3>
 <p>Cache command lookups or display the cache.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a><span class="nb">hash</span><span class="w"> </span><span class="o">[</span>-r<span class="o">]</span><span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a><span class="nb">hash</span><span class="w"> </span><span class="o">[</span>-r<span class="o">]</span><span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="generate-completions">generate-completions</h3>
 <p>Regenerate cached completion metadata for external commands.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>generate-completions<span class="w"> </span><span class="o">[</span>--quiet<span class="o">]</span><span class="w"> </span><span class="o">[</span>--no-force<span class="o">]</span><span class="w"> </span><span class="o">[</span>-j<span class="w"> </span>jobs<span class="o">]</span><span class="w"> </span><span class="o">[</span><span class="nb">command</span><span class="w"> </span>...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>generate-completions<span class="w"> </span><span class="o">[</span>--quiet<span class="o">]</span><span class="w"> </span><span class="o">[</span>--no-force<span class="o">]</span><span class="w"> </span><span class="o">[</span>-j<span class="w"> </span>jobs<span class="o">]</span><span class="w"> </span><span class="o">[</span><span class="nb">command</span><span class="w"> </span>...<span class="o">]</span>
 </span></code></pre></div>
 <ul>
 <li>Runs against every executable discoverable in <code>PATH</code> when no command list is supplied</li>
@@ -2892,11 +2974,11 @@ and <code>bg</code>-style matching)</li>
 </ul>
 <h3 id="builtin">builtin</h3>
 <p>Run a builtin directly, bypassing functions and PATH.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a><span class="nb">builtin</span><span class="w"> </span><span class="nb">command</span><span class="w"> </span><span class="o">[</span>args...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="nb">builtin</span><span class="w"> </span><span class="nb">command</span><span class="w"> </span><span class="o">[</span>args...<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="command">command</h3>
 <p>Execute a command while bypassing shell functions or print information about it.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="nb">command</span><span class="w"> </span><span class="o">[</span>-pVv<span class="o">]</span><span class="w"> </span>COMMAND<span class="w"> </span><span class="o">[</span>ARG...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="nb">command</span><span class="w"> </span><span class="o">[</span>-pVv<span class="o">]</span><span class="w"> </span>COMMAND<span class="w"> </span><span class="o">[</span>ARG...<span class="o">]</span>
 </span></code></pre></div>
 <p><strong>Options:</strong>
 - <code>-p</code> – Temporarily use the default <code>PATH</code> of <code>/usr/bin:/bin</code> when resolving <code>COMMAND</code>
@@ -2908,7 +2990,7 @@ the exit status of the invoked program.</p>
 <h2 id="hook-system">Hook System</h2>
 <h3 id="hook">hook</h3>
 <p>Manage shell hooks that run at key lifecycle moments.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>hook<span class="w"> </span>&lt;add<span class="p">|</span>remove<span class="p">|</span>list<span class="p">|</span>clear&gt;<span class="w"> </span><span class="o">[</span>hook_type<span class="o">]</span><span class="w"> </span><span class="o">[</span>function_name<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>hook<span class="w"> </span>&lt;add<span class="p">|</span>remove<span class="p">|</span>list<span class="p">|</span>clear&gt;<span class="w"> </span><span class="o">[</span>hook_type<span class="o">]</span><span class="w"> </span><span class="o">[</span>function_name<span class="o">]</span>
 </span></code></pre></div>
 <p>Hook types include <code>precmd</code>, <code>preexec</code>, <code>chpwd</code>, and <code>idle</code>. Idle hooks require a timeout configured
 with <code>cjshopt idle-timeout</code>; they run in the foreground and preserve pending editor input. Use
@@ -2917,18 +2999,18 @@ with <code>cjshopt idle-timeout</code>; they run in the foreground and preserve 
 <h2 id="inputoutput">Input/Output</h2>
 <h3 id="read">read</h3>
 <p>Read user input into variables.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="nb">read</span><span class="w"> </span><span class="o">[</span>options<span class="o">]</span><span class="w"> </span>name<span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="nb">read</span><span class="w"> </span><span class="o">[</span>options<span class="o">]</span><span class="w"> </span>name<span class="w"> </span><span class="o">[</span>name...<span class="o">]</span>
 </span></code></pre></div>
 <p>Use <code>read -u fd name</code> to read from a numeric file descriptor, including a descriptor published by
 <code>coproc</code>.</p>
 <h3 id="getopts">getopts</h3>
 <p>Parse positional parameters as short options.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="nb">getopts</span><span class="w"> </span>optstring<span class="w"> </span>name<span class="w"> </span><span class="o">[</span>args...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a><span class="nb">getopts</span><span class="w"> </span>optstring<span class="w"> </span>name<span class="w"> </span><span class="o">[</span>args...<span class="o">]</span>
 </span></code></pre></div>
 <h2 id="history">History</h2>
 <h3 id="history_1">history</h3>
 <p>Display command history.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a><span class="nb">history</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-58-1"><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="nb">history</span><span class="w"> </span><span class="o">[</span>n<span class="o">]</span>
 </span></code></pre></div>
 <ul>
 <li>Without arguments, displays all history entries</li>
@@ -2937,9 +3019,9 @@ with <code>cjshopt idle-timeout</code>; they run in the foreground and preserve 
 </ul>
 <h3 id="fc">fc</h3>
 <p>Fix Command - edit and re-execute commands from history (POSIX-compliant).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-58-1"><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="nb">fc</span><span class="w"> </span><span class="o">[</span>-e<span class="w"> </span>editor<span class="o">]</span><span class="w"> </span><span class="o">[</span>-lnr<span class="o">]</span><span class="w"> </span><span class="o">[</span>first<span class="w"> </span><span class="o">[</span>last<span class="o">]]</span>
-</span><span id="__span-58-2"><a id="__codelineno-58-2" name="__codelineno-58-2" href="#__codelineno-58-2"></a><span class="nb">fc</span><span class="w"> </span>-s<span class="w"> </span><span class="o">[</span><span class="nv">old</span><span class="o">=</span>new<span class="o">]</span><span class="w"> </span><span class="o">[</span>command<span class="o">]</span>
-</span><span id="__span-58-3"><a id="__codelineno-58-3" name="__codelineno-58-3" href="#__codelineno-58-3"></a><span class="nb">fc</span><span class="w"> </span><span class="o">(</span>-c<span class="p">|</span>--command<span class="o">)</span><span class="w"> </span>command_string
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-59-1"><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="nb">fc</span><span class="w"> </span><span class="o">[</span>-e<span class="w"> </span>editor<span class="o">]</span><span class="w"> </span><span class="o">[</span>-lnr<span class="o">]</span><span class="w"> </span><span class="o">[</span>first<span class="w"> </span><span class="o">[</span>last<span class="o">]]</span>
+</span><span id="__span-59-2"><a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a><span class="nb">fc</span><span class="w"> </span>-s<span class="w"> </span><span class="o">[</span><span class="nv">old</span><span class="o">=</span>new<span class="o">]</span><span class="w"> </span><span class="o">[</span>command<span class="o">]</span>
+</span><span id="__span-59-3"><a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a><span class="nb">fc</span><span class="w"> </span><span class="o">(</span>-c<span class="p">|</span>--command<span class="o">)</span><span class="w"> </span>command_string
 </span></code></pre></div>
 <p><strong>Options:</strong>
 - <code>-e editor</code> - Use specified editor (default: <code>$FCEDIT</code>, <code>$EDITOR</code>, or <code>nano</code>)
@@ -2952,27 +3034,27 @@ with <code>cjshopt idle-timeout</code>; they run in the foreground and preserve 
 - <code>first</code> - First command to edit/list (default: previous command)
 - <code>last</code> - Last command to edit/list (default: same as first)</p>
 <p><strong>Examples:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-59-1"><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="c1"># Edit the previous command in your editor</span>
-</span><span id="__span-59-2"><a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a><span class="nb">fc</span>
-</span><span id="__span-59-3"><a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a>
-</span><span id="__span-59-4"><a id="__codelineno-59-4" name="__codelineno-59-4" href="#__codelineno-59-4"></a><span class="c1"># Edit command number 53</span>
-</span><span id="__span-59-5"><a id="__codelineno-59-5" name="__codelineno-59-5" href="#__codelineno-59-5"></a><span class="nb">fc</span><span class="w"> </span><span class="m">53</span>
-</span><span id="__span-59-6"><a id="__codelineno-59-6" name="__codelineno-59-6" href="#__codelineno-59-6"></a>
-</span><span id="__span-59-7"><a id="__codelineno-59-7" name="__codelineno-59-7" href="#__codelineno-59-7"></a><span class="c1"># Edit commands 10 through 15</span>
-</span><span id="__span-59-8"><a id="__codelineno-59-8" name="__codelineno-59-8" href="#__codelineno-59-8"></a><span class="nb">fc</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="m">15</span>
-</span><span id="__span-59-9"><a id="__codelineno-59-9" name="__codelineno-59-9" href="#__codelineno-59-9"></a>
-</span><span id="__span-59-10"><a id="__codelineno-59-10" name="__codelineno-59-10" href="#__codelineno-59-10"></a><span class="c1"># List last 16 commands</span>
-</span><span id="__span-59-11"><a id="__codelineno-59-11" name="__codelineno-59-11" href="#__codelineno-59-11"></a><span class="nb">fc</span><span class="w"> </span>-l
-</span><span id="__span-59-12"><a id="__codelineno-59-12" name="__codelineno-59-12" href="#__codelineno-59-12"></a>
-</span><span id="__span-59-13"><a id="__codelineno-59-13" name="__codelineno-59-13" href="#__codelineno-59-13"></a><span class="c1"># List commands 10 through 20</span>
-</span><span id="__span-59-14"><a id="__codelineno-59-14" name="__codelineno-59-14" href="#__codelineno-59-14"></a><span class="nb">fc</span><span class="w"> </span>-l<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="m">20</span>
-</span><span id="__span-59-15"><a id="__codelineno-59-15" name="__codelineno-59-15" href="#__codelineno-59-15"></a>
-</span><span id="__span-59-16"><a id="__codelineno-59-16" name="__codelineno-59-16" href="#__codelineno-59-16"></a><span class="c1"># Edit with a specific editor</span>
-</span><span id="__span-59-17"><a id="__codelineno-59-17" name="__codelineno-59-17" href="#__codelineno-59-17"></a><span class="nb">fc</span><span class="w"> </span>-e<span class="w"> </span>nano
-</span><span id="__span-59-18"><a id="__codelineno-59-18" name="__codelineno-59-18" href="#__codelineno-59-18"></a>
-</span><span id="__span-59-19"><a id="__codelineno-59-19" name="__codelineno-59-19" href="#__codelineno-59-19"></a><span class="c1"># Use with environment variables</span>
-</span><span id="__span-59-20"><a id="__codelineno-59-20" name="__codelineno-59-20" href="#__codelineno-59-20"></a><span class="nb">export</span><span class="w"> </span><span class="nv">FCEDIT</span><span class="o">=</span>nano
-</span><span id="__span-59-21"><a id="__codelineno-59-21" name="__codelineno-59-21" href="#__codelineno-59-21"></a><span class="nb">fc</span><span class="w">  </span><span class="c1"># Will use nano as the editor</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-60-1"><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="c1"># Edit the previous command in your editor</span>
+</span><span id="__span-60-2"><a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a><span class="nb">fc</span>
+</span><span id="__span-60-3"><a id="__codelineno-60-3" name="__codelineno-60-3" href="#__codelineno-60-3"></a>
+</span><span id="__span-60-4"><a id="__codelineno-60-4" name="__codelineno-60-4" href="#__codelineno-60-4"></a><span class="c1"># Edit command number 53</span>
+</span><span id="__span-60-5"><a id="__codelineno-60-5" name="__codelineno-60-5" href="#__codelineno-60-5"></a><span class="nb">fc</span><span class="w"> </span><span class="m">53</span>
+</span><span id="__span-60-6"><a id="__codelineno-60-6" name="__codelineno-60-6" href="#__codelineno-60-6"></a>
+</span><span id="__span-60-7"><a id="__codelineno-60-7" name="__codelineno-60-7" href="#__codelineno-60-7"></a><span class="c1"># Edit commands 10 through 15</span>
+</span><span id="__span-60-8"><a id="__codelineno-60-8" name="__codelineno-60-8" href="#__codelineno-60-8"></a><span class="nb">fc</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="m">15</span>
+</span><span id="__span-60-9"><a id="__codelineno-60-9" name="__codelineno-60-9" href="#__codelineno-60-9"></a>
+</span><span id="__span-60-10"><a id="__codelineno-60-10" name="__codelineno-60-10" href="#__codelineno-60-10"></a><span class="c1"># List last 16 commands</span>
+</span><span id="__span-60-11"><a id="__codelineno-60-11" name="__codelineno-60-11" href="#__codelineno-60-11"></a><span class="nb">fc</span><span class="w"> </span>-l
+</span><span id="__span-60-12"><a id="__codelineno-60-12" name="__codelineno-60-12" href="#__codelineno-60-12"></a>
+</span><span id="__span-60-13"><a id="__codelineno-60-13" name="__codelineno-60-13" href="#__codelineno-60-13"></a><span class="c1"># List commands 10 through 20</span>
+</span><span id="__span-60-14"><a id="__codelineno-60-14" name="__codelineno-60-14" href="#__codelineno-60-14"></a><span class="nb">fc</span><span class="w"> </span>-l<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="m">20</span>
+</span><span id="__span-60-15"><a id="__codelineno-60-15" name="__codelineno-60-15" href="#__codelineno-60-15"></a>
+</span><span id="__span-60-16"><a id="__codelineno-60-16" name="__codelineno-60-16" href="#__codelineno-60-16"></a><span class="c1"># Edit with a specific editor</span>
+</span><span id="__span-60-17"><a id="__codelineno-60-17" name="__codelineno-60-17" href="#__codelineno-60-17"></a><span class="nb">fc</span><span class="w"> </span>-e<span class="w"> </span>nano
+</span><span id="__span-60-18"><a id="__codelineno-60-18" name="__codelineno-60-18" href="#__codelineno-60-18"></a>
+</span><span id="__span-60-19"><a id="__codelineno-60-19" name="__codelineno-60-19" href="#__codelineno-60-19"></a><span class="c1"># Use with environment variables</span>
+</span><span id="__span-60-20"><a id="__codelineno-60-20" name="__codelineno-60-20" href="#__codelineno-60-20"></a><span class="nb">export</span><span class="w"> </span><span class="nv">FCEDIT</span><span class="o">=</span>nano
+</span><span id="__span-60-21"><a id="__codelineno-60-21" name="__codelineno-60-21" href="#__codelineno-60-21"></a><span class="nb">fc</span><span class="w">  </span><span class="c1"># Will use nano as the editor</span>
 </span></code></pre></div>
 <p><strong>How it works:</strong>
 1. Opens the specified command(s) in your editor
@@ -2984,21 +3066,21 @@ with <code>cjshopt idle-timeout</code>; they run in the foreground and preserve 
 - <code>EDITOR</code> - Fallback editor if <code>FCEDIT</code> is not set
 - Default is <code>nano</code> if neither variable is set</p>
 <p><strong>Tip:</strong> For a better editing experience, set your preferred editor:
-</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-60-1"><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">FCEDIT</span><span class="o">=</span>vi<span class="w">     </span><span class="c1"># or nano, emacs, etc.</span>
-</span><span id="__span-60-2"><a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">EDITOR</span><span class="o">=</span>vi<span class="w">     </span><span class="c1"># fallback for other tools too</span>
+</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">FCEDIT</span><span class="o">=</span>vi<span class="w">     </span><span class="c1"># or nano, emacs, etc.</span>
+</span><span id="__span-61-2"><a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">EDITOR</span><span class="o">=</span>vi<span class="w">     </span><span class="c1"># fallback for other tools too</span>
 </span></code></pre></div><p></p>
 <h2 id="system-information">System Information</h2>
 <h3 id="times">times</h3>
 <p>Show CPU usage for the shell and its children.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a><span class="nb">times</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="nb">times</span>
 </span></code></pre></div>
 <h3 id="umask">umask</h3>
 <p>Show or set the file creation mask.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="nb">umask</span><span class="w"> </span><span class="o">[</span>mode<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="nb">umask</span><span class="w"> </span><span class="o">[</span>mode<span class="o">]</span>
 </span></code></pre></div>
 <h3 id="ulimit">ulimit</h3>
 <p>Inspect or adjust resource limits for the current shell and any processes it launches.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="nb">ulimit</span><span class="w"> </span><span class="o">[</span>-HS<span class="o">]</span><span class="w"> </span><span class="o">[</span>-a<span class="o">]</span><span class="w"> </span><span class="o">[</span>-f<span class="w"> </span><span class="p">|</span><span class="w"> </span>-n<span class="w"> </span><span class="p">|</span><span class="w"> </span>-t<span class="w"> </span><span class="p">|</span><span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>limit<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a><span class="nb">ulimit</span><span class="w"> </span><span class="o">[</span>-HS<span class="o">]</span><span class="w"> </span><span class="o">[</span>-a<span class="o">]</span><span class="w"> </span><span class="o">[</span>-f<span class="w"> </span><span class="p">|</span><span class="w"> </span>-n<span class="w"> </span><span class="p">|</span><span class="w"> </span>-t<span class="w"> </span><span class="p">|</span><span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>limit<span class="o">]</span>
 </span></code></pre></div>
 <ul>
 <li><code>-a</code> lists every supported limit along with the active hard/soft values.</li>
@@ -3010,10 +3092,10 @@ with <code>cjshopt idle-timeout</code>; they run in the foreground and preserve 
 <h2 id="theming-and-customization">Theming and Customization</h2>
 <h3 id="prompt-styling">Prompt Styling</h3>
 <p>cjsh reads the standard prompt variables, so customizing the look is as simple as exporting new values inside your configuration files:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PS1</span><span class="o">=</span><span class="s1">'[b]\u[/b] [color=#87ceeb]\w[/color]\n$ '</span>
-</span><span id="__span-64-2"><a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">RPS1</span><span class="o">=</span><span class="s1">'[ic-hint]\A[/ic-hint]'</span>
-</span><span id="__span-64-3"><a id="__codelineno-64-3" name="__codelineno-64-3" href="#__codelineno-64-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PROMPT_COMMAND</span><span class="o">=</span><span class="s1">'__update_git_info'</span>
-</span><span id="__span-64-4"><a id="__codelineno-64-4" name="__codelineno-64-4" href="#__codelineno-64-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PROMPT_EOL_MARK</span><span class="o">=</span><span class="s1">'[b reverse][color=ansi-yellow]![/color][/b]'</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PS1</span><span class="o">=</span><span class="s1">'[b]\u[/b] [color=#87ceeb]\w[/color]\n$ '</span>
+</span><span id="__span-65-2"><a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">RPS1</span><span class="o">=</span><span class="s1">'[ic-hint]\A[/ic-hint]'</span>
+</span><span id="__span-65-3"><a id="__codelineno-65-3" name="__codelineno-65-3" href="#__codelineno-65-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PROMPT_COMMAND</span><span class="o">=</span><span class="s1">'__update_git_info'</span>
+</span><span id="__span-65-4"><a id="__codelineno-65-4" name="__codelineno-65-4" href="#__codelineno-65-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PROMPT_EOL_MARK</span><span class="o">=</span><span class="s1">'[b reverse][color=ansi-yellow]![/color][/b]'</span>
 </span></code></pre></div>
 <p>Add snippets like these to <code>~/.cjshrc</code> (or any sourced config) to persist them across sessions. See <a href="../../themes/thedetails/">Prompt Markup and Styling</a> for the full markup reference plus additional examples.</p>
 <p><code>PROMPT_EOL_MARK</code> controls the marker shown when command output does not end with a newline and the
@@ -3022,7 +3104,7 @@ users and <code>#</code> for root, then forces a terminal wrap with padding/carr
 without printing a literal newline).</p>
 <h3 id="cjshopt">cjshopt</h3>
 <p>Generate config files and adjust cjsh options.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>cjshopt<span class="w"> </span>&lt;subcommand&gt;<span class="w"> </span><span class="o">[</span>options<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a>cjshopt<span class="w"> </span>&lt;subcommand&gt;<span class="w"> </span><span class="o">[</span>options<span class="o">]</span>
 </span></code></pre></div>
 <p>Available subcommands:
 - <code>style_def</code> - Define or redefine syntax highlighting styles
@@ -3036,7 +3118,7 @@ without printing a literal newline).</p>
 - <code>completion-learning</code> - Toggle automatic completion learning from man pages
 - <code>exit-confirmation</code> - Configure when <code>exit</code>, <code>quit</code>, and <code>bye</code> require confirmation
 - <code>smart-cd</code> - Toggle fuzzy auto-jumps for <code>cd</code>
-- <code>extglob</code> - Toggle Bash-style extended glob patterns (<code>?()</code>, <code>*()</code>, <code>+()</code>, <code>@()</code>, <code>!()</code>)
+- <code>dialect cjsh|posix|bash|status</code> - Select or inspect the shell language dialect
 - <code>script-extension-interpreter</code> - Toggle extension-based script runners
 - <code>line-numbers</code> - Configure line numbers in multiline input (on/off/relative/absolute)
 - <code>line-numbers-continuation</code> - Keep line numbers when a continuation prompt is set
@@ -3070,7 +3152,7 @@ without printing a literal newline).</p>
 - <code>auto-tab</code> - Configure automatic tab completion
 - <code>prompt-newline</code> - Force a blank line after each command
 - <code>right-prompt-follow-cursor</code> - Keep the inline right prompt aligned with the active cursor row
-- <code>agent-mode</code> - Configure user-provided executors for agent-assisted command writing
+- <code>agent-mode</code> - Configure user-provided executors for agent assistance
 - <code>keybind</code> - Inspect or modify key bindings (changes apply immediately; add to <code>~/.cjshrc</code> to persist)
 - <code>generate-env</code> - Create or overwrite ~/.cjshenv (use <code>--alt</code> for <code>~/.config/cjsh/.cjshenv</code>)
 - <code>generate-profile</code> - Create or overwrite ~/.cjprofile (use <code>--alt</code> for <code>~/.config/cjsh/.cjprofile</code>)
@@ -3080,10 +3162,10 @@ without printing a literal newline).</p>
 - <code>set-completion-max</code> - Limit the maximum number of completion suggestions shown</p>
 <h4 id="exit-confirmation">exit-confirmation</h4>
 <p>Control whether an exit request must be repeated on the next command line before cjsh exits.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a>cjshopt<span class="w"> </span>exit-confirmation<span class="w"> </span>smart<span class="w">   </span><span class="c1"># Confirm only when active jobs exist (default)</span>
-</span><span id="__span-66-2"><a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a>cjshopt<span class="w"> </span>exit-confirmation<span class="w"> </span>always<span class="w">  </span><span class="c1"># Confirm every exit request</span>
-</span><span id="__span-66-3"><a id="__codelineno-66-3" name="__codelineno-66-3" href="#__codelineno-66-3"></a>cjshopt<span class="w"> </span>exit-confirmation<span class="w"> </span>never<span class="w">   </span><span class="c1"># Never require confirmation</span>
-</span><span id="__span-66-4"><a id="__codelineno-66-4" name="__codelineno-66-4" href="#__codelineno-66-4"></a>cjshopt<span class="w"> </span>exit-confirmation<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current mode</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a>cjshopt<span class="w"> </span>exit-confirmation<span class="w"> </span>smart<span class="w">   </span><span class="c1"># Confirm only when active jobs exist (default)</span>
+</span><span id="__span-67-2"><a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a>cjshopt<span class="w"> </span>exit-confirmation<span class="w"> </span>always<span class="w">  </span><span class="c1"># Confirm every exit request</span>
+</span><span id="__span-67-3"><a id="__codelineno-67-3" name="__codelineno-67-3" href="#__codelineno-67-3"></a>cjshopt<span class="w"> </span>exit-confirmation<span class="w"> </span>never<span class="w">   </span><span class="c1"># Never require confirmation</span>
+</span><span id="__span-67-4"><a id="__codelineno-67-4" name="__codelineno-67-4" href="#__codelineno-67-4"></a>cjshopt<span class="w"> </span>exit-confirmation<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current mode</span>
 </span></code></pre></div>
 <p>Add the selected command to <code>~/.cjshrc</code> to persist it. <code>exit --force</code> bypasses every mode.
 In <code>always</code> mode, an active-job warning counts as the confirmation request, so the next
@@ -3092,16 +3174,16 @@ consecutive exit proceeds without another prompt.</p>
 <p>Configure user-provided AI executors without giving CJSH provider credentials. See
 <a href="../editing/#agent-assisted-command-writing">Agent-Assisted Command Writing</a> for the executor JSON
 protocol, trigger prefixes, menu behavior, and complete examples.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--command<span class="w"> </span>&lt;command&gt;<span class="w"> </span><span class="o">[</span>--system-prompt<span class="w"> </span>&lt;text&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--trigger-prefix<span class="w"> </span>&lt;prefix&gt;<span class="o">]</span>
-</span><span id="__span-67-2"><a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>status
-</span><span id="__span-67-3"><a id="__codelineno-67-3" name="__codelineno-67-3" href="#__codelineno-67-3"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>on<span class="p">|</span>off
-</span><span id="__span-67-4"><a id="__codelineno-67-4" name="__codelineno-67-4" href="#__codelineno-67-4"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>key<span class="w"> </span>&lt;key<span class="p">|</span>default<span class="p">|</span>off<span class="p">|</span>status&gt;
-</span><span id="__span-67-5"><a id="__codelineno-67-5" name="__codelineno-67-5" href="#__codelineno-67-5"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>clear<span class="w"> </span><span class="o">[</span>--default<span class="p">|</span>--trigger-prefix<span class="w"> </span>&lt;prefix&gt;<span class="p">|</span>--all<span class="o">]</span>
-</span><span id="__span-67-6"><a id="__codelineno-67-6" name="__codelineno-67-6" href="#__codelineno-67-6"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>reset
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--command<span class="w"> </span>&lt;command&gt;<span class="w"> </span><span class="o">[</span>--system-prompt<span class="w"> </span>&lt;text&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--trigger-prefix<span class="w"> </span>&lt;prefix&gt;<span class="o">]</span>
+</span><span id="__span-68-2"><a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>status
+</span><span id="__span-68-3"><a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>on<span class="p">|</span>off
+</span><span id="__span-68-4"><a id="__codelineno-68-4" name="__codelineno-68-4" href="#__codelineno-68-4"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>key<span class="w"> </span>&lt;key<span class="p">|</span>default<span class="p">|</span>off<span class="p">|</span>status&gt;
+</span><span id="__span-68-5"><a id="__codelineno-68-5" name="__codelineno-68-5" href="#__codelineno-68-5"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>clear<span class="w"> </span><span class="o">[</span>--default<span class="p">|</span>--trigger-prefix<span class="w"> </span>&lt;prefix&gt;<span class="p">|</span>--all<span class="o">]</span>
+</span><span id="__span-68-6"><a id="__codelineno-68-6" name="__codelineno-68-6" href="#__codelineno-68-6"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>reset
 </span></code></pre></div>
 <h3 id="cjsh-widget">cjsh-widget</h3>
 <p>Interact with the embedded line editor (isocline) to drive advanced key bindings.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a>cjsh-widget<span class="w"> </span>&lt;subcommand&gt;<span class="w"> </span><span class="o">[</span>...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a>cjsh-widget<span class="w"> </span>&lt;subcommand&gt;<span class="w"> </span><span class="o">[</span>...<span class="o">]</span>
 </span></code></pre></div>
 <p>Available subcommands include:
 - <code>get-buffer</code> / <code>set-buffer</code> – Read or replace the active input buffer
@@ -3114,37 +3196,37 @@ interactively. Combine them with <code>cjshopt keybind ext</code> inside <code>~
 editing behaviors.</p>
 <h4 id="completion-case">completion-case</h4>
 <p>Toggle whether tab completions treat case as significant. Synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code> are also accepted for convenience.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-70-1"><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-70-1"><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>on<span class="w">      </span><span class="c1"># Case-sensitive matching</span>
-</span><span id="__span-70-2"><a id="__codelineno-70-2" name="__codelineno-70-2" href="#__codelineno-70-2"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>off<span class="w">     </span><span class="c1"># Case-insensitive matching (default)</span>
-</span><span id="__span-70-3"><a id="__codelineno-70-3" name="__codelineno-70-3" href="#__codelineno-70-3"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current mode</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-71-1"><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>on<span class="w">      </span><span class="c1"># Case-sensitive matching</span>
+</span><span id="__span-71-2"><a id="__codelineno-71-2" name="__codelineno-71-2" href="#__codelineno-71-2"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>off<span class="w">     </span><span class="c1"># Case-insensitive matching (default)</span>
+</span><span id="__span-71-3"><a id="__codelineno-71-3" name="__codelineno-71-3" href="#__codelineno-71-3"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current mode</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> if you want the preference remembered across sessions.</p>
 <h4 id="history-search-case">history-search-case</h4>
 <p>Control whether the fuzzy history search menu (<code>Ctrl+R</code>/<code>Ctrl+S</code>) treats letter case as significant. When case sensitivity is enabled (the default), <code>make</code> and <code>Make</code> are treated as different queries. Turning it off allows uppercase queries to match lowercase history entries and vice versa. Synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, <code>false</code>, and <code>--status</code> are supported for convenience, and you can always press <code>Alt+C</code> while the menu is open to flip the setting temporarily.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-71-1"><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-72-1"><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-72-1"><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>on<span class="w">      </span><span class="c1"># Require exact casing in the fuzzy history menu (default)</span>
-</span><span id="__span-72-2"><a id="__codelineno-72-2" name="__codelineno-72-2" href="#__codelineno-72-2"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>off<span class="w">     </span><span class="c1"># Match history entries case insensitively</span>
-</span><span id="__span-72-3"><a id="__codelineno-72-3" name="__codelineno-72-3" href="#__codelineno-72-3"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-73-1"><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>on<span class="w">      </span><span class="c1"># Require exact casing in the fuzzy history menu (default)</span>
+</span><span id="__span-73-2"><a id="__codelineno-73-2" name="__codelineno-73-2" href="#__codelineno-73-2"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>off<span class="w">     </span><span class="c1"># Match history entries case insensitively</span>
+</span><span id="__span-73-3"><a id="__codelineno-73-3" name="__codelineno-73-3" href="#__codelineno-73-3"></a>cjshopt<span class="w"> </span>history-search-case<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="history-directory-history-directory-subdirs-history-directory-parents">history-directory / history-directory-subdirs / history-directory-parents</h4>
 <p>Scope arrow-key recall, fuzzy history search, and history completions to the current working
 directory. All three settings default to <code>off</code> and accept <code>on</code>, <code>off</code>, <code>status</code>, and the same synonyms
 as <code>history-search-case</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-73-1"><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>on<span class="w">             </span><span class="c1"># Use commands run in the current directory</span>
-</span><span id="__span-73-2"><a id="__codelineno-73-2" name="__codelineno-73-2" href="#__codelineno-73-2"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>off<span class="w">            </span><span class="c1"># Use history from all directories (default)</span>
-</span><span id="__span-73-3"><a id="__codelineno-73-3" name="__codelineno-73-3" href="#__codelineno-73-3"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>status<span class="w">         </span><span class="c1"># Show the current setting</span>
-</span><span id="__span-73-4"><a id="__codelineno-73-4" name="__codelineno-73-4" href="#__codelineno-73-4"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>on<span class="w">     </span><span class="c1"># Also include commands from nested directories</span>
-</span><span id="__span-73-5"><a id="__codelineno-73-5" name="__codelineno-73-5" href="#__codelineno-73-5"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>off<span class="w">    </span><span class="c1"># Exclude nested directories (default)</span>
-</span><span id="__span-73-6"><a id="__codelineno-73-6" name="__codelineno-73-6" href="#__codelineno-73-6"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the nested-directory setting</span>
-</span><span id="__span-73-7"><a id="__codelineno-73-7" name="__codelineno-73-7" href="#__codelineno-73-7"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>on<span class="w">     </span><span class="c1"># Also include commands from all ancestors up to /</span>
-</span><span id="__span-73-8"><a id="__codelineno-73-8" name="__codelineno-73-8" href="#__codelineno-73-8"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>off<span class="w">    </span><span class="c1"># Exclude ancestor directories (default)</span>
-</span><span id="__span-73-9"><a id="__codelineno-73-9" name="__codelineno-73-9" href="#__codelineno-73-9"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the ancestor-directory setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-74-1"><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>on<span class="w">             </span><span class="c1"># Use commands run in the current directory</span>
+</span><span id="__span-74-2"><a id="__codelineno-74-2" name="__codelineno-74-2" href="#__codelineno-74-2"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>off<span class="w">            </span><span class="c1"># Use history from all directories (default)</span>
+</span><span id="__span-74-3"><a id="__codelineno-74-3" name="__codelineno-74-3" href="#__codelineno-74-3"></a>cjshopt<span class="w"> </span>history-directory<span class="w"> </span>status<span class="w">         </span><span class="c1"># Show the current setting</span>
+</span><span id="__span-74-4"><a id="__codelineno-74-4" name="__codelineno-74-4" href="#__codelineno-74-4"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>on<span class="w">     </span><span class="c1"># Also include commands from nested directories</span>
+</span><span id="__span-74-5"><a id="__codelineno-74-5" name="__codelineno-74-5" href="#__codelineno-74-5"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>off<span class="w">    </span><span class="c1"># Exclude nested directories (default)</span>
+</span><span id="__span-74-6"><a id="__codelineno-74-6" name="__codelineno-74-6" href="#__codelineno-74-6"></a>cjshopt<span class="w"> </span>history-directory-subdirs<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the nested-directory setting</span>
+</span><span id="__span-74-7"><a id="__codelineno-74-7" name="__codelineno-74-7" href="#__codelineno-74-7"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>on<span class="w">     </span><span class="c1"># Also include commands from all ancestors up to /</span>
+</span><span id="__span-74-8"><a id="__codelineno-74-8" name="__codelineno-74-8" href="#__codelineno-74-8"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>off<span class="w">    </span><span class="c1"># Exclude ancestor directories (default)</span>
+</span><span id="__span-74-9"><a id="__codelineno-74-9" name="__codelineno-74-9" href="#__codelineno-74-9"></a>cjshopt<span class="w"> </span>history-directory-parents<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the ancestor-directory setting</span>
 </span></code></pre></div>
 <p>The subdirs and parents settings take effect only when directory scope is on, and work independently:</p>
 <table>
@@ -3192,11 +3274,11 @@ without directory metadata remain available in global history and are excluded f
 scope. <code>history</code>, <code>fc</code>, and <code>!</code> expansion continue to use the full history.</p>
 <h4 id="completion-spell">completion-spell</h4>
 <p>Enable, disable, or inspect spell correction inside the completion engine. When enabled, cjsh will try to fix minor typos before offering suggestions. The subcommand also accepts synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, <code>false</code>, and <code>--status</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-74-1"><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-75-1"><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-75-1"><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on<span class="w">       </span><span class="c1"># Turn on spell correction</span>
-</span><span id="__span-75-2"><a id="__codelineno-75-2" name="__codelineno-75-2" href="#__codelineno-75-2"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>status<span class="w">   </span><span class="c1"># Display the current state</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-76-1"><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on<span class="w">       </span><span class="c1"># Turn on spell correction</span>
+</span><span id="__span-76-2"><a id="__codelineno-76-2" name="__codelineno-76-2" href="#__codelineno-76-2"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>status<span class="w">   </span><span class="c1"># Display the current state</span>
 </span></code></pre></div>
 <p>Persist the choice by placing the command in <code>~/.cjshrc</code>.</p>
 <h4 id="completion-spell-enter">completion-spell-enter</h4>
@@ -3204,33 +3286,33 @@ scope. <code>history</code>, <code>fc</code>, and <code>!</code> expansion conti
 apply a spell correction before submission if there is exactly one spell-sourced correction
 candidate. The subcommand accepts synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, <code>false</code>, and
 <code>--status</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-76-1"><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-77-1"><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-77-1"><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>on<span class="w">       </span><span class="c1"># Auto-apply a single spell correction on Enter</span>
-</span><span id="__span-77-2"><a id="__codelineno-77-2" name="__codelineno-77-2" href="#__codelineno-77-2"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-78-1"><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>on<span class="w">       </span><span class="c1"># Auto-apply a single spell correction on Enter</span>
+</span><span id="__span-78-2"><a id="__codelineno-78-2" name="__codelineno-78-2" href="#__codelineno-78-2"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Persist the choice by placing the command in <code>~/.cjshrc</code>.</p>
 <h4 id="completion-learning">completion-learning</h4>
 <p>Control whether cjsh scrapes man pages on demand to learn completions for external commands. When disabled, cjsh uses cached completion files and builtin metadata only. The subcommand accepts synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, <code>false</code>, and <code>--status</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-78-1"><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a>cjshopt<span class="w"> </span>completion-learning<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-79-1"><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a>cjshopt<span class="w"> </span>completion-learning<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-79-1"><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a>cjshopt<span class="w"> </span>completion-learning<span class="w"> </span>on<span class="w">       </span><span class="c1"># Allow on-demand man-page scraping (default)</span>
-</span><span id="__span-79-2"><a id="__codelineno-79-2" name="__codelineno-79-2" href="#__codelineno-79-2"></a>cjshopt<span class="w"> </span>completion-learning<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable new man-page lookups</span>
-</span><span id="__span-79-3"><a id="__codelineno-79-3" name="__codelineno-79-3" href="#__codelineno-79-3"></a>cjshopt<span class="w"> </span>completion-learning<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-80-1"><a id="__codelineno-80-1" name="__codelineno-80-1" href="#__codelineno-80-1"></a>cjshopt<span class="w"> </span>completion-learning<span class="w"> </span>on<span class="w">       </span><span class="c1"># Allow on-demand man-page scraping (default)</span>
+</span><span id="__span-80-2"><a id="__codelineno-80-2" name="__codelineno-80-2" href="#__codelineno-80-2"></a>cjshopt<span class="w"> </span>completion-learning<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable new man-page lookups</span>
+</span><span id="__span-80-3"><a id="__codelineno-80-3" name="__codelineno-80-3" href="#__codelineno-80-3"></a>cjshopt<span class="w"> </span>completion-learning<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="smart-cd">smart-cd</h4>
 <p>Enable, disable, or inspect smart cd auto-jumps. When enabled, <code>cd</code> will auto-jump to a single
 fuzzy match (e.g., a nearby directory with a close name). Synonyms such as <code>enable</code>, <code>disable</code>,
 <code>true</code>, <code>false</code>, and <code>--status</code> are supported.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-80-1"><a id="__codelineno-80-1" name="__codelineno-80-1" href="#__codelineno-80-1"></a>cjshopt<span class="w"> </span>smart-cd<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-81-1"><a id="__codelineno-81-1" name="__codelineno-81-1" href="#__codelineno-81-1"></a>cjshopt<span class="w"> </span>smart-cd<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-81-1"><a id="__codelineno-81-1" name="__codelineno-81-1" href="#__codelineno-81-1"></a>cjshopt<span class="w"> </span>smart-cd<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable smart cd auto-jumps</span>
-</span><span id="__span-81-2"><a id="__codelineno-81-2" name="__codelineno-81-2" href="#__codelineno-81-2"></a>cjshopt<span class="w"> </span>smart-cd<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable smart cd auto-jumps</span>
-</span><span id="__span-81-3"><a id="__codelineno-81-3" name="__codelineno-81-3" href="#__codelineno-81-3"></a>cjshopt<span class="w"> </span>smart-cd<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-82-1"><a id="__codelineno-82-1" name="__codelineno-82-1" href="#__codelineno-82-1"></a>cjshopt<span class="w"> </span>smart-cd<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable smart cd auto-jumps</span>
+</span><span id="__span-82-2"><a id="__codelineno-82-2" name="__codelineno-82-2" href="#__codelineno-82-2"></a>cjshopt<span class="w"> </span>smart-cd<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable smart cd auto-jumps</span>
+</span><span id="__span-82-3"><a id="__codelineno-82-3" name="__codelineno-82-3" href="#__codelineno-82-3"></a>cjshopt<span class="w"> </span>smart-cd<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="script-extension-interpreter">script-extension-interpreter</h4>
@@ -3238,23 +3320,23 @@ fuzzy match (e.g., a nearby directory with a close name). Synonyms such as <code
 interpreter from a script's file extension when there is no shebang (for example, <code>.sh</code> → <code>sh</code>,
 <code>.bash</code> → <code>bash</code>, <code>.zsh</code> → <code>zsh</code>, <code>.ksh</code> → <code>ksh</code>). Synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>,
 <code>false</code>, and <code>--status</code> are supported.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-82-1"><a id="__codelineno-82-1" name="__codelineno-82-1" href="#__codelineno-82-1"></a>cjshopt<span class="w"> </span>script-extension-interpreter<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-83-1"><a id="__codelineno-83-1" name="__codelineno-83-1" href="#__codelineno-83-1"></a>cjshopt<span class="w"> </span>script-extension-interpreter<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-83-1"><a id="__codelineno-83-1" name="__codelineno-83-1" href="#__codelineno-83-1"></a>cjshopt<span class="w"> </span>script-extension-interpreter<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable extension-based script runners</span>
-</span><span id="__span-83-2"><a id="__codelineno-83-2" name="__codelineno-83-2" href="#__codelineno-83-2"></a>cjshopt<span class="w"> </span>script-extension-interpreter<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable extension-based script runners</span>
-</span><span id="__span-83-3"><a id="__codelineno-83-3" name="__codelineno-83-3" href="#__codelineno-83-3"></a>cjshopt<span class="w"> </span>script-extension-interpreter<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-84-1"><a id="__codelineno-84-1" name="__codelineno-84-1" href="#__codelineno-84-1"></a>cjshopt<span class="w"> </span>script-extension-interpreter<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable extension-based script runners</span>
+</span><span id="__span-84-2"><a id="__codelineno-84-2" name="__codelineno-84-2" href="#__codelineno-84-2"></a>cjshopt<span class="w"> </span>script-extension-interpreter<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable extension-based script runners</span>
+</span><span id="__span-84-3"><a id="__codelineno-84-3" name="__codelineno-84-3" href="#__codelineno-84-3"></a>cjshopt<span class="w"> </span>script-extension-interpreter<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="line-numbers">line-numbers</h4>
 <p>Enable, disable, or inspect line numbers in multiline input mode. When enabled, cjsh will display numbers on the left side of multiline input, making it easier to navigate and edit multi-line commands or scripts. You can choose between absolute numbering (the default) or relative numbering, which shows the distance to the active cursor line.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-84-1"><a id="__codelineno-84-1" name="__codelineno-84-1" href="#__codelineno-84-1"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>relative<span class="p">|</span>absolute<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-85-1"><a id="__codelineno-85-1" name="__codelineno-85-1" href="#__codelineno-85-1"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>relative<span class="p">|</span>absolute<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-85-1"><a id="__codelineno-85-1" name="__codelineno-85-1" href="#__codelineno-85-1"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable line numbers in multiline input</span>
-</span><span id="__span-85-2"><a id="__codelineno-85-2" name="__codelineno-85-2" href="#__codelineno-85-2"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>relative<span class="w"> </span><span class="c1"># Switch to relative numbering</span>
-</span><span id="__span-85-3"><a id="__codelineno-85-3" name="__codelineno-85-3" href="#__codelineno-85-3"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable line numbers in multiline input</span>
-</span><span id="__span-85-4"><a id="__codelineno-85-4" name="__codelineno-85-4" href="#__codelineno-85-4"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-86-1"><a id="__codelineno-86-1" name="__codelineno-86-1" href="#__codelineno-86-1"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable line numbers in multiline input</span>
+</span><span id="__span-86-2"><a id="__codelineno-86-2" name="__codelineno-86-2" href="#__codelineno-86-2"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>relative<span class="w"> </span><span class="c1"># Switch to relative numbering</span>
+</span><span id="__span-86-3"><a id="__codelineno-86-3" name="__codelineno-86-3" href="#__codelineno-86-3"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable line numbers in multiline input</span>
+</span><span id="__span-86-4"><a id="__codelineno-86-4" name="__codelineno-86-4" href="#__codelineno-86-4"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the setting across sessions. The subcommand also accepts synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, <code>false</code>, <code>absolute</code>, and <code>rel</code>/<code>relative</code>.</p>
 <blockquote>
@@ -3262,32 +3344,32 @@ interpreter from a script's file extension when there is no shebang (for example
 </blockquote>
 <h4 id="line-numbers-continuation">line-numbers-continuation</h4>
 <p>Control whether multiline line numbers remain visible when a continuation prompt marker (PS2) is configured. By default, configuring a continuation prompt hides the numbers; enabling this option keeps them aligned with the continuation marker instead.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-86-1"><a id="__codelineno-86-1" name="__codelineno-86-1" href="#__codelineno-86-1"></a>cjshopt<span class="w"> </span>line-numbers-continuation<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-87-1"><a id="__codelineno-87-1" name="__codelineno-87-1" href="#__codelineno-87-1"></a>cjshopt<span class="w"> </span>line-numbers-continuation<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-87-1"><a id="__codelineno-87-1" name="__codelineno-87-1" href="#__codelineno-87-1"></a>cjshopt<span class="w"> </span>line-numbers-continuation<span class="w"> </span>on<span class="w">      </span><span class="c1"># Keep line numbers even with custom continuation prompts</span>
-</span><span id="__span-87-2"><a id="__codelineno-87-2" name="__codelineno-87-2" href="#__codelineno-87-2"></a>cjshopt<span class="w"> </span>line-numbers-continuation<span class="w"> </span>off<span class="w">     </span><span class="c1"># Hide line numbers whenever a continuation prompt exists</span>
-</span><span id="__span-87-3"><a id="__codelineno-87-3" name="__codelineno-87-3" href="#__codelineno-87-3"></a>cjshopt<span class="w"> </span>line-numbers-continuation<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-88-1"><a id="__codelineno-88-1" name="__codelineno-88-1" href="#__codelineno-88-1"></a>cjshopt<span class="w"> </span>line-numbers-continuation<span class="w"> </span>on<span class="w">      </span><span class="c1"># Keep line numbers even with custom continuation prompts</span>
+</span><span id="__span-88-2"><a id="__codelineno-88-2" name="__codelineno-88-2" href="#__codelineno-88-2"></a>cjshopt<span class="w"> </span>line-numbers-continuation<span class="w"> </span>off<span class="w">     </span><span class="c1"># Hide line numbers whenever a continuation prompt exists</span>
+</span><span id="__span-88-3"><a id="__codelineno-88-3" name="__codelineno-88-3" href="#__codelineno-88-3"></a>cjshopt<span class="w"> </span>line-numbers-continuation<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the setting across sessions. Synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, <code>false</code>, and <code>--status</code> are also accepted.</p>
 <h4 id="line-numbers-replace-prompt">line-numbers-replace-prompt</h4>
 <p>Swap the final line of a multi-line prompt (the row that normally precedes your input) with the line-number gutter. This option only takes effect when line numbers are active and either no custom <code>PS2</code> is configured or <code>cjshopt line-numbers-continuation on</code> is in effect.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-88-1"><a id="__codelineno-88-1" name="__codelineno-88-1" href="#__codelineno-88-1"></a>cjshopt<span class="w"> </span>line-numbers-replace-prompt<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-89-1"><a id="__codelineno-89-1" name="__codelineno-89-1" href="#__codelineno-89-1"></a>cjshopt<span class="w"> </span>line-numbers-replace-prompt<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-89-1"><a id="__codelineno-89-1" name="__codelineno-89-1" href="#__codelineno-89-1"></a>cjshopt<span class="w"> </span>line-numbers-replace-prompt<span class="w"> </span>on<span class="w">      </span><span class="c1"># Replace the final prompt line with the numeric gutter</span>
-</span><span id="__span-89-2"><a id="__codelineno-89-2" name="__codelineno-89-2" href="#__codelineno-89-2"></a>cjshopt<span class="w"> </span>line-numbers-replace-prompt<span class="w"> </span>off<span class="w">     </span><span class="c1"># Keep the final prompt line visible</span>
-</span><span id="__span-89-3"><a id="__codelineno-89-3" name="__codelineno-89-3" href="#__codelineno-89-3"></a>cjshopt<span class="w"> </span>line-numbers-replace-prompt<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-90-1"><a id="__codelineno-90-1" name="__codelineno-90-1" href="#__codelineno-90-1"></a>cjshopt<span class="w"> </span>line-numbers-replace-prompt<span class="w"> </span>on<span class="w">      </span><span class="c1"># Replace the final prompt line with the numeric gutter</span>
+</span><span id="__span-90-2"><a id="__codelineno-90-2" name="__codelineno-90-2" href="#__codelineno-90-2"></a>cjshopt<span class="w"> </span>line-numbers-replace-prompt<span class="w"> </span>off<span class="w">     </span><span class="c1"># Keep the final prompt line visible</span>
+</span><span id="__span-90-3"><a id="__codelineno-90-3" name="__codelineno-90-3" href="#__codelineno-90-3"></a>cjshopt<span class="w"> </span>line-numbers-replace-prompt<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the setting across sessions.</p>
 <h4 id="current-line-number-highlight">current-line-number-highlight</h4>
 <p>Enable or disable highlighting of the current line number in multiline input mode. When enabled (default), the line number for the line containing the cursor is displayed in a different style than other line numbers.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-90-1"><a id="__codelineno-90-1" name="__codelineno-90-1" href="#__codelineno-90-1"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-91-1"><a id="__codelineno-91-1" name="__codelineno-91-1" href="#__codelineno-91-1"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-91-1"><a id="__codelineno-91-1" name="__codelineno-91-1" href="#__codelineno-91-1"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>on<span class="w">      </span><span class="c1"># Enable current line highlighting</span>
-</span><span id="__span-91-2"><a id="__codelineno-91-2" name="__codelineno-91-2" href="#__codelineno-91-2"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable current line highlighting</span>
-</span><span id="__span-91-3"><a id="__codelineno-91-3" name="__codelineno-91-3" href="#__codelineno-91-3"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-92-1"><a id="__codelineno-92-1" name="__codelineno-92-1" href="#__codelineno-92-1"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>on<span class="w">      </span><span class="c1"># Enable current line highlighting</span>
+</span><span id="__span-92-2"><a id="__codelineno-92-2" name="__codelineno-92-2" href="#__codelineno-92-2"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable current line highlighting</span>
+</span><span id="__span-92-3"><a id="__codelineno-92-3" name="__codelineno-92-3" href="#__codelineno-92-3"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the setting across sessions. Accepts synonyms like <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code>.</p>
 <blockquote>
@@ -3295,12 +3377,12 @@ interpreter from a script's file extension when there is no shebang (for example
 </blockquote>
 <h4 id="multiline-start-lines">multiline-start-lines</h4>
 <p>Configure how many prompt lines are preallocated when multiline input is enabled. This controls how many rows are shown before you start typing.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-92-1"><a id="__codelineno-92-1" name="__codelineno-92-1" href="#__codelineno-92-1"></a>cjshopt<span class="w"> </span>multiline-start-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-93-1"><a id="__codelineno-93-1" name="__codelineno-93-1" href="#__codelineno-93-1"></a>cjshopt<span class="w"> </span>multiline-start-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-93-1"><a id="__codelineno-93-1" name="__codelineno-93-1" href="#__codelineno-93-1"></a>cjshopt<span class="w"> </span>multiline-start-lines<span class="w"> </span><span class="m">3</span><span class="w">      </span><span class="c1"># Reserve three prompt lines in multiline mode</span>
-</span><span id="__span-93-2"><a id="__codelineno-93-2" name="__codelineno-93-2" href="#__codelineno-93-2"></a>cjshopt<span class="w"> </span>multiline-start-lines<span class="w"> </span><span class="m">1</span><span class="w">      </span><span class="c1"># Restore the default</span>
-</span><span id="__span-93-3"><a id="__codelineno-93-3" name="__codelineno-93-3" href="#__codelineno-93-3"></a>cjshopt<span class="w"> </span>multiline-start-lines<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-94-1"><a id="__codelineno-94-1" name="__codelineno-94-1" href="#__codelineno-94-1"></a>cjshopt<span class="w"> </span>multiline-start-lines<span class="w"> </span><span class="m">3</span><span class="w">      </span><span class="c1"># Reserve three prompt lines in multiline mode</span>
+</span><span id="__span-94-2"><a id="__codelineno-94-2" name="__codelineno-94-2" href="#__codelineno-94-2"></a>cjshopt<span class="w"> </span>multiline-start-lines<span class="w"> </span><span class="m">1</span><span class="w">      </span><span class="c1"># Restore the default</span>
+</span><span id="__span-94-3"><a id="__codelineno-94-3" name="__codelineno-94-3" href="#__codelineno-94-3"></a>cjshopt<span class="w"> </span>multiline-start-lines<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the setting across sessions.</p>
 <h4 id="multiline-max-lines">multiline-max-lines</h4>
@@ -3308,31 +3390,31 @@ interpreter from a script's file extension when there is no shebang (for example
 scroll to keep the cursor visible; the complete command remains editable and is submitted unchanged.
 The default is 15 rows. Completion menus, status text, and other helper rows use separate screen
 space and do not count toward this limit.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-94-1"><a id="__codelineno-94-1" name="__codelineno-94-1" href="#__codelineno-94-1"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-95-1"><a id="__codelineno-95-1" name="__codelineno-95-1" href="#__codelineno-95-1"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-95-1"><a id="__codelineno-95-1" name="__codelineno-95-1" href="#__codelineno-95-1"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span><span class="m">10</span><span class="w">     </span><span class="c1"># Show up to ten input rows</span>
-</span><span id="__span-95-2"><a id="__codelineno-95-2" name="__codelineno-95-2" href="#__codelineno-95-2"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span><span class="m">15</span><span class="w">     </span><span class="c1"># Restore the default</span>
-</span><span id="__span-95-3"><a id="__codelineno-95-3" name="__codelineno-95-3" href="#__codelineno-95-3"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the current limit</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-96-1"><a id="__codelineno-96-1" name="__codelineno-96-1" href="#__codelineno-96-1"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span><span class="m">10</span><span class="w">     </span><span class="c1"># Show up to ten input rows</span>
+</span><span id="__span-96-2"><a id="__codelineno-96-2" name="__codelineno-96-2" href="#__codelineno-96-2"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span><span class="m">15</span><span class="w">     </span><span class="c1"># Restore the default</span>
+</span><span id="__span-96-3"><a id="__codelineno-96-3" name="__codelineno-96-3" href="#__codelineno-96-3"></a>cjshopt<span class="w"> </span>multiline-max-lines<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the current limit</span>
 </span></code></pre></div>
 <p>Values are clamped to the supported range of 1 through 256. Add the command to <code>~/.cjshrc</code> to
 persist the setting across sessions.</p>
 <h4 id="per-menu-height-limits">Per-menu height limits</h4>
 <p>Set independent content-row limits with these commands:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-96-1"><a id="__codelineno-96-1" name="__codelineno-96-1" href="#__codelineno-96-1"></a>cjshopt<span class="w"> </span>completion-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
-</span><span id="__span-96-2"><a id="__codelineno-96-2" name="__codelineno-96-2" href="#__codelineno-96-2"></a>cjshopt<span class="w"> </span>history-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
-</span><span id="__span-96-3"><a id="__codelineno-96-3" name="__codelineno-96-3" href="#__codelineno-96-3"></a>cjshopt<span class="w"> </span>command-palette-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
-</span><span id="__span-96-4"><a id="__codelineno-96-4" name="__codelineno-96-4" href="#__codelineno-96-4"></a>cjshopt<span class="w"> </span>custom-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-97-1"><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>cjshopt<span class="w"> </span>completion-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-97-2"><a id="__codelineno-97-2" name="__codelineno-97-2" href="#__codelineno-97-2"></a>cjshopt<span class="w"> </span>history-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-97-3"><a id="__codelineno-97-3" name="__codelineno-97-3" href="#__codelineno-97-3"></a>cjshopt<span class="w"> </span>command-palette-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-97-4"><a id="__codelineno-97-4" name="__codelineno-97-4" href="#__codelineno-97-4"></a>cjshopt<span class="w"> </span>custom-menu-max-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>All menus default to <strong>15 rows</strong> each. Counts must be positive integers; values above <strong>256</strong> are clamped
 to 256. Expanded item previews count toward the limit, but headers and help text use separate
 rows. Menus always shrink to fit the terminal. The completion setting applies to both active
 menus and passive suggestions shown while typing.</p>
 <p>For example, add these commands to <code>~/.cjshrc</code> to persist different heights:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-97-1"><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>cjshopt<span class="w"> </span>completion-menu-max-lines<span class="w"> </span><span class="m">8</span>
-</span><span id="__span-97-2"><a id="__codelineno-97-2" name="__codelineno-97-2" href="#__codelineno-97-2"></a>cjshopt<span class="w"> </span>history-menu-max-lines<span class="w"> </span><span class="m">20</span>
-</span><span id="__span-97-3"><a id="__codelineno-97-3" name="__codelineno-97-3" href="#__codelineno-97-3"></a>cjshopt<span class="w"> </span>command-palette-max-lines<span class="w"> </span><span class="m">12</span>
-</span><span id="__span-97-4"><a id="__codelineno-97-4" name="__codelineno-97-4" href="#__codelineno-97-4"></a>cjshopt<span class="w"> </span>custom-menu-max-lines<span class="w"> </span><span class="m">16</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-98-1"><a id="__codelineno-98-1" name="__codelineno-98-1" href="#__codelineno-98-1"></a>cjshopt<span class="w"> </span>completion-menu-max-lines<span class="w"> </span><span class="m">8</span>
+</span><span id="__span-98-2"><a id="__codelineno-98-2" name="__codelineno-98-2" href="#__codelineno-98-2"></a>cjshopt<span class="w"> </span>history-menu-max-lines<span class="w"> </span><span class="m">20</span>
+</span><span id="__span-98-3"><a id="__codelineno-98-3" name="__codelineno-98-3" href="#__codelineno-98-3"></a>cjshopt<span class="w"> </span>command-palette-max-lines<span class="w"> </span><span class="m">12</span>
+</span><span id="__span-98-4"><a id="__codelineno-98-4" name="__codelineno-98-4" href="#__codelineno-98-4"></a>cjshopt<span class="w"> </span>custom-menu-max-lines<span class="w"> </span><span class="m">16</span>
 </span></code></pre></div>
 <p>Use <code>cjshopt history-menu-max-lines status</code> (or <code>--status</code>) to inspect a setting, and <code>--help</code>
 for each command's usage. Changing one limit does not change the others, the multiline input
@@ -3347,23 +3429,23 @@ existing input rows visible below the cursor when moving down and above it when 
 viewport stays fixed while the cursor is within those margins. It does not add blank rows when the
 command has less remaining content. The default is 3. This setting also controls the scroll margin
 around the selected item in completion, history, command palette, and custom menus.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-98-1"><a id="__codelineno-98-1" name="__codelineno-98-1" href="#__codelineno-98-1"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-99-1"><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-99-1"><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span><span class="m">3</span><span class="w">      </span><span class="c1"># Keep a three-row cursor margin</span>
-</span><span id="__span-99-2"><a id="__codelineno-99-2" name="__codelineno-99-2" href="#__codelineno-99-2"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span><span class="m">0</span><span class="w">      </span><span class="c1"># Disable the cursor margin</span>
-</span><span id="__span-99-3"><a id="__codelineno-99-3" name="__codelineno-99-3" href="#__codelineno-99-3"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the current margin</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-100-1"><a id="__codelineno-100-1" name="__codelineno-100-1" href="#__codelineno-100-1"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span><span class="m">3</span><span class="w">      </span><span class="c1"># Keep a three-row cursor margin</span>
+</span><span id="__span-100-2"><a id="__codelineno-100-2" name="__codelineno-100-2" href="#__codelineno-100-2"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span><span class="m">0</span><span class="w">      </span><span class="c1"># Disable the cursor margin</span>
+</span><span id="__span-100-3"><a id="__codelineno-100-3" name="__codelineno-100-3" href="#__codelineno-100-3"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>status<span class="w"> </span><span class="c1"># Show the current margin</span>
 </span></code></pre></div>
 <p>Values are clamped to the supported range of 0 through 256. Add the command to <code>~/.cjshrc</code> to
 persist the setting across sessions.</p>
 <h4 id="hint-delay">hint-delay</h4>
 <p>Configure the delay (in milliseconds) before inline hints are displayed. This controls how quickly the shell shows suggestions and hints as you type.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-100-1"><a id="__codelineno-100-1" name="__codelineno-100-1" href="#__codelineno-100-1"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span>&lt;milliseconds<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-101-1"><a id="__codelineno-101-1" name="__codelineno-101-1" href="#__codelineno-101-1"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span>&lt;milliseconds<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-101-1"><a id="__codelineno-101-1" name="__codelineno-101-1" href="#__codelineno-101-1"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">100</span><span class="w">     </span><span class="c1"># Set hint delay to 100 milliseconds</span>
-</span><span id="__span-101-2"><a id="__codelineno-101-2" name="__codelineno-101-2" href="#__codelineno-101-2"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">0</span><span class="w">       </span><span class="c1"># Show hints immediately</span>
-</span><span id="__span-101-3"><a id="__codelineno-101-3" name="__codelineno-101-3" href="#__codelineno-101-3"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current delay</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-102-1"><a id="__codelineno-102-1" name="__codelineno-102-1" href="#__codelineno-102-1"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">100</span><span class="w">     </span><span class="c1"># Set hint delay to 100 milliseconds</span>
+</span><span id="__span-102-2"><a id="__codelineno-102-2" name="__codelineno-102-2" href="#__codelineno-102-2"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">0</span><span class="w">       </span><span class="c1"># Show hints immediately</span>
+</span><span id="__span-102-3"><a id="__codelineno-102-3" name="__codelineno-102-3" href="#__codelineno-102-3"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current delay</span>
 </span></code></pre></div>
 <ul>
 <li>Accepted input: any non-negative integer</li>
@@ -3374,12 +3456,12 @@ persist the setting across sessions.</p>
 <h4 id="idle-timeout">idle-timeout</h4>
 <p>Configure how many seconds the interactive prompt waits without terminal input before running
 registered <code>idle</code> hooks. The feature is disabled by default.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-102-1"><a id="__codelineno-102-1" name="__codelineno-102-1" href="#__codelineno-102-1"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>&lt;seconds<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-103-1"><a id="__codelineno-103-1" name="__codelineno-103-1" href="#__codelineno-103-1"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>&lt;seconds<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-103-1"><a id="__codelineno-103-1" name="__codelineno-103-1" href="#__codelineno-103-1"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span><span class="m">120</span><span class="w">     </span><span class="c1"># Run idle hooks after two minutes</span>
-</span><span id="__span-103-2"><a id="__codelineno-103-2" name="__codelineno-103-2" href="#__codelineno-103-2"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable idle detection</span>
-</span><span id="__span-103-3"><a id="__codelineno-103-3" name="__codelineno-103-3" href="#__codelineno-103-3"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-104-1"><a id="__codelineno-104-1" name="__codelineno-104-1" href="#__codelineno-104-1"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span><span class="m">120</span><span class="w">     </span><span class="c1"># Run idle hooks after two minutes</span>
+</span><span id="__span-104-2"><a id="__codelineno-104-2" name="__codelineno-104-2" href="#__codelineno-104-2"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable idle detection</span>
+</span><span id="__span-104-3"><a id="__codelineno-104-3" name="__codelineno-104-3" href="#__codelineno-104-3"></a>cjshopt<span class="w"> </span>idle-timeout<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>The editor restores canonical terminal state before the hooks run, gives foreground terminal
 control to commands they launch, and restores pending input and its cursor position afterward.
@@ -3388,9 +3470,9 @@ non-interactive, <code>--secure</code>, and <code>--posix</code> sessions. See <
 screensaver example.</p>
 <h4 id="completion-auto-menu">completion-auto-menu</h4>
 <p>Show a live, unselected completion menu while typing. Disabled by default.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-104-1"><a id="__codelineno-104-1" name="__codelineno-104-1" href="#__codelineno-104-1"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>on<span class="w">      </span><span class="c1"># Show suggestions automatically</span>
-</span><span id="__span-104-2"><a id="__codelineno-104-2" name="__codelineno-104-2" href="#__codelineno-104-2"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>off<span class="w">     </span><span class="c1"># Open completions only on request (default)</span>
-</span><span id="__span-104-3"><a id="__codelineno-104-3" name="__codelineno-104-3" href="#__codelineno-104-3"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-105-1"><a id="__codelineno-105-1" name="__codelineno-105-1" href="#__codelineno-105-1"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>on<span class="w">      </span><span class="c1"># Show suggestions automatically</span>
+</span><span id="__span-105-2"><a id="__codelineno-105-2" name="__codelineno-105-2" href="#__codelineno-105-2"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>off<span class="w">     </span><span class="c1"># Open completions only on request (default)</span>
+</span><span id="__span-105-3"><a id="__codelineno-105-3" name="__codelineno-105-3" href="#__codelineno-105-3"></a>cjshopt<span class="w"> </span>completion-auto-menu<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>The menu stays passive while typing. With one available candidate, <code>Tab</code> completes it immediately.
 With multiple candidates, the first Tab activates the menu and selects the first candidate without
@@ -3417,57 +3499,57 @@ The isocline API exposes <code>ic_enable_completion_auto_menu()</code> and
 <code>ic_completion_auto_menu_is_enabled()</code> for the same setting.</p>
 <h4 id="completion-preview">completion-preview</h4>
 <p>Toggle the completion preview feature, which shows a preview of the selected completion as you navigate through completion options.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-105-1"><a id="__codelineno-105-1" name="__codelineno-105-1" href="#__codelineno-105-1"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-106-1"><a id="__codelineno-106-1" name="__codelineno-106-1" href="#__codelineno-106-1"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-106-1"><a id="__codelineno-106-1" name="__codelineno-106-1" href="#__codelineno-106-1"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on<span class="w">      </span><span class="c1"># Enable completion preview</span>
-</span><span id="__span-106-2"><a id="__codelineno-106-2" name="__codelineno-106-2" href="#__codelineno-106-2"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable completion preview</span>
-</span><span id="__span-106-3"><a id="__codelineno-106-3" name="__codelineno-106-3" href="#__codelineno-106-3"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-107-1"><a id="__codelineno-107-1" name="__codelineno-107-1" href="#__codelineno-107-1"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on<span class="w">      </span><span class="c1"># Enable completion preview</span>
+</span><span id="__span-107-2"><a id="__codelineno-107-2" name="__codelineno-107-2" href="#__codelineno-107-2"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>off<span class="w">     </span><span class="c1"># Disable completion preview</span>
+</span><span id="__span-107-3"><a id="__codelineno-107-3" name="__codelineno-107-3" href="#__codelineno-107-3"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>The subcommand accepts synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code>. Add to <code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="completion-click-accept">completion-click-accept</h4>
 <p>Control whether mouse clicks immediately accept completion hints and completion-menu entries.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-107-1"><a id="__codelineno-107-1" name="__codelineno-107-1" href="#__codelineno-107-1"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-108-1"><a id="__codelineno-108-1" name="__codelineno-108-1" href="#__codelineno-108-1"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-108-1"><a id="__codelineno-108-1" name="__codelineno-108-1" href="#__codelineno-108-1"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>on<span class="w">       </span><span class="c1"># Always accept completion entries on click</span>
-</span><span id="__span-108-2"><a id="__codelineno-108-2" name="__codelineno-108-2" href="#__codelineno-108-2"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>off<span class="w">      </span><span class="c1"># Click selects entries without accepting (default)</span>
-</span><span id="__span-108-3"><a id="__codelineno-108-3" name="__codelineno-108-3" href="#__codelineno-108-3"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-109-1"><a id="__codelineno-109-1" name="__codelineno-109-1" href="#__codelineno-109-1"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>on<span class="w">       </span><span class="c1"># Always accept completion entries on click</span>
+</span><span id="__span-109-2"><a id="__codelineno-109-2" name="__codelineno-109-2" href="#__codelineno-109-2"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>off<span class="w">      </span><span class="c1"># Click selects entries without accepting (default)</span>
+</span><span id="__span-109-3"><a id="__codelineno-109-3" name="__codelineno-109-3" href="#__codelineno-109-3"></a>cjshopt<span class="w"> </span>completion-click-accept<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p><code>off</code> is useful when you still want mouse selection/highlighting but prefer confirming with
 <code>Enter</code>, <code>Right</code>, or <code>End</code>. Add the command to <code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="menu-highlighting">menu-highlighting</h4>
 <p>Control syntax highlighting for entries rendered in completion and history search menus. The menu
 uses the same syntax highlighter and styles as the edit buffer. <strong>Disabled by default.</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-109-1"><a id="__codelineno-109-1" name="__codelineno-109-1" href="#__codelineno-109-1"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>&lt;none<span class="p">|</span>single<span class="p">|</span>all<span class="p">|</span>reverse<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-110-1"><a id="__codelineno-110-1" name="__codelineno-110-1" href="#__codelineno-110-1"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>&lt;none<span class="p">|</span>single<span class="p">|</span>all<span class="p">|</span>reverse<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-110-1"><a id="__codelineno-110-1" name="__codelineno-110-1" href="#__codelineno-110-1"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>none<span class="w">    </span><span class="c1"># Keep menu items unhighlighted (default)</span>
-</span><span id="__span-110-2"><a id="__codelineno-110-2" name="__codelineno-110-2" href="#__codelineno-110-2"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>single<span class="w">  </span><span class="c1"># Highlight only the cursor-selected item</span>
-</span><span id="__span-110-3"><a id="__codelineno-110-3" name="__codelineno-110-3" href="#__codelineno-110-3"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>all<span class="w">     </span><span class="c1"># Highlight every rendered item</span>
-</span><span id="__span-110-4"><a id="__codelineno-110-4" name="__codelineno-110-4" href="#__codelineno-110-4"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>reverse<span class="w"> </span><span class="c1"># Highlight every item except the cursor-selected item</span>
-</span><span id="__span-110-5"><a id="__codelineno-110-5" name="__codelineno-110-5" href="#__codelineno-110-5"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current mode</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-111-1"><a id="__codelineno-111-1" name="__codelineno-111-1" href="#__codelineno-111-1"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>none<span class="w">    </span><span class="c1"># Keep menu items unhighlighted (default)</span>
+</span><span id="__span-111-2"><a id="__codelineno-111-2" name="__codelineno-111-2" href="#__codelineno-111-2"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>single<span class="w">  </span><span class="c1"># Highlight only the cursor-selected item</span>
+</span><span id="__span-111-3"><a id="__codelineno-111-3" name="__codelineno-111-3" href="#__codelineno-111-3"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>all<span class="w">     </span><span class="c1"># Highlight every rendered item</span>
+</span><span id="__span-111-4"><a id="__codelineno-111-4" name="__codelineno-111-4" href="#__codelineno-111-4"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>reverse<span class="w"> </span><span class="c1"># Highlight every item except the cursor-selected item</span>
+</span><span id="__span-111-5"><a id="__codelineno-111-5" name="__codelineno-111-5" href="#__codelineno-111-5"></a>cjshopt<span class="w"> </span>menu-highlighting<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current mode</span>
 </span></code></pre></div>
 <p><code>none</code> preserves the legacy menu appearance, <code>single</code> highlights only the current selection, <code>all</code>
 highlights every visible completion/history item, and <code>reverse</code> highlights every visible item except
 the current selection. Add the command to <code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="visible-whitespace">visible-whitespace</h4>
 <p>Show or hide visible markers for whitespace characters (such as spaces) while editing commands. When enabled, spaces are rendered with a subtle middle-dot marker so you can spot trailing or double spacing issues.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-111-1"><a id="__codelineno-111-1" name="__codelineno-111-1" href="#__codelineno-111-1"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-112-1"><a id="__codelineno-112-1" name="__codelineno-112-1" href="#__codelineno-112-1"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-112-1"><a id="__codelineno-112-1" name="__codelineno-112-1" href="#__codelineno-112-1"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>on<span class="w">      </span><span class="c1"># Show whitespace markers while editing</span>
-</span><span id="__span-112-2"><a id="__codelineno-112-2" name="__codelineno-112-2" href="#__codelineno-112-2"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>off<span class="w">     </span><span class="c1"># Hide whitespace markers (default)</span>
-</span><span id="__span-112-3"><a id="__codelineno-112-3" name="__codelineno-112-3" href="#__codelineno-112-3"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-113-1"><a id="__codelineno-113-1" name="__codelineno-113-1" href="#__codelineno-113-1"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>on<span class="w">      </span><span class="c1"># Show whitespace markers while editing</span>
+</span><span id="__span-113-2"><a id="__codelineno-113-2" name="__codelineno-113-2" href="#__codelineno-113-2"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>off<span class="w">     </span><span class="c1"># Hide whitespace markers (default)</span>
+</span><span id="__span-113-3"><a id="__codelineno-113-3" name="__codelineno-113-3" href="#__codelineno-113-3"></a>cjshopt<span class="w"> </span>visible-whitespace<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to keep the preference across sessions. Synonyms like <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code> are accepted.</p>
 <h4 id="line-wrap-marker">line-wrap-marker</h4>
 <p>Set the character at the end of wrapped editor rows. The default is <code>↵</code> on macOS
 or <code>←</code> on other UTF-8 terminals. Use one printable Unicode character, or an empty
 string to hide the marker.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-113-1"><a id="__codelineno-113-1" name="__codelineno-113-1" href="#__codelineno-113-1"></a>cjshopt<span class="w"> </span>line-wrap-marker<span class="w"> </span><span class="s1">'↪'</span><span class="w">     </span><span class="c1"># Use a custom wrap marker</span>
-</span><span id="__span-113-2"><a id="__codelineno-113-2" name="__codelineno-113-2" href="#__codelineno-113-2"></a>cjshopt<span class="w"> </span>line-wrap-marker<span class="w"> </span><span class="s1">''</span><span class="w">      </span><span class="c1"># Hide the wrap marker</span>
-</span><span id="__span-113-3"><a id="__codelineno-113-3" name="__codelineno-113-3" href="#__codelineno-113-3"></a>cjshopt<span class="w"> </span>line-wrap-marker<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current marker</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-114-1"><a id="__codelineno-114-1" name="__codelineno-114-1" href="#__codelineno-114-1"></a>cjshopt<span class="w"> </span>line-wrap-marker<span class="w"> </span><span class="s1">'↪'</span><span class="w">     </span><span class="c1"># Use a custom wrap marker</span>
+</span><span id="__span-114-2"><a id="__codelineno-114-2" name="__codelineno-114-2" href="#__codelineno-114-2"></a>cjshopt<span class="w"> </span>line-wrap-marker<span class="w"> </span><span class="s1">''</span><span class="w">      </span><span class="c1"># Hide the wrap marker</span>
+</span><span id="__span-114-3"><a id="__codelineno-114-3" name="__codelineno-114-3" href="#__codelineno-114-3"></a>cjshopt<span class="w"> </span>line-wrap-marker<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current marker</span>
 </span></code></pre></div>
 <p>The marker reserves its display width (one or two columns). Disabling it lets
 input use the full terminal width before wrapping. Enter still moves output onto
@@ -3479,42 +3561,42 @@ instead of <code>on</code>. Toggle words such as <code>enable</code>, <code>disa
 no longer accepted; <code>0</code> and <code>1</code> are literal marker characters.</p>
 <h4 id="hint">hint</h4>
 <p>Enable, disable, or inspect inline hints that appear as you type commands. Hints can include suggestions, command completions, and other helpful information.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-114-1"><a id="__codelineno-114-1" name="__codelineno-114-1" href="#__codelineno-114-1"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-115-1"><a id="__codelineno-115-1" name="__codelineno-115-1" href="#__codelineno-115-1"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-115-1"><a id="__codelineno-115-1" name="__codelineno-115-1" href="#__codelineno-115-1"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable inline hints</span>
-</span><span id="__span-115-2"><a id="__codelineno-115-2" name="__codelineno-115-2" href="#__codelineno-115-2"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable inline hints</span>
-</span><span id="__span-115-3"><a id="__codelineno-115-3" name="__codelineno-115-3" href="#__codelineno-115-3"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-116-1"><a id="__codelineno-116-1" name="__codelineno-116-1" href="#__codelineno-116-1"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable inline hints</span>
+</span><span id="__span-116-2"><a id="__codelineno-116-2" name="__codelineno-116-2" href="#__codelineno-116-2"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable inline hints</span>
+</span><span id="__span-116-3"><a id="__codelineno-116-3" name="__codelineno-116-3" href="#__codelineno-116-3"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Synonyms like <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code> are supported. Persist the setting by adding the command to <code>~/.cjshrc</code>.</p>
 <h4 id="multiline-indent">multiline-indent</h4>
 <p>Configure automatic indentation in multiline input mode. When enabled, the shell will automatically indent continuation lines based on the context (e.g., after opening braces, parentheses, or control structures).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-116-1"><a id="__codelineno-116-1" name="__codelineno-116-1" href="#__codelineno-116-1"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-117-1"><a id="__codelineno-117-1" name="__codelineno-117-1" href="#__codelineno-117-1"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-117-1"><a id="__codelineno-117-1" name="__codelineno-117-1" href="#__codelineno-117-1"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable automatic indentation</span>
-</span><span id="__span-117-2"><a id="__codelineno-117-2" name="__codelineno-117-2" href="#__codelineno-117-2"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable automatic indentation</span>
-</span><span id="__span-117-3"><a id="__codelineno-117-3" name="__codelineno-117-3" href="#__codelineno-117-3"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-118-1"><a id="__codelineno-118-1" name="__codelineno-118-1" href="#__codelineno-118-1"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable automatic indentation</span>
+</span><span id="__span-118-2"><a id="__codelineno-118-2" name="__codelineno-118-2" href="#__codelineno-118-2"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable automatic indentation</span>
+</span><span id="__span-118-3"><a id="__codelineno-118-3" name="__codelineno-118-3" href="#__codelineno-118-3"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>This is particularly useful when writing shell scripts or complex commands directly in the shell. Add to <code>~/.cjshrc</code> to keep the setting. Accepts synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code>.</p>
 <h4 id="multiline">multiline</h4>
 <p>Enable or disable multiline input mode entirely. When enabled, you can enter commands that span multiple lines. When disabled, the shell treats each line as a separate command.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-118-1"><a id="__codelineno-118-1" name="__codelineno-118-1" href="#__codelineno-118-1"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-119-1"><a id="__codelineno-119-1" name="__codelineno-119-1" href="#__codelineno-119-1"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-119-1"><a id="__codelineno-119-1" name="__codelineno-119-1" href="#__codelineno-119-1"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable multiline input</span>
-</span><span id="__span-119-2"><a id="__codelineno-119-2" name="__codelineno-119-2" href="#__codelineno-119-2"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable multiline input</span>
-</span><span id="__span-119-3"><a id="__codelineno-119-3" name="__codelineno-119-3" href="#__codelineno-119-3"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-120-1"><a id="__codelineno-120-1" name="__codelineno-120-1" href="#__codelineno-120-1"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable multiline input</span>
+</span><span id="__span-120-2"><a id="__codelineno-120-2" name="__codelineno-120-2" href="#__codelineno-120-2"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable multiline input</span>
+</span><span id="__span-120-3"><a id="__codelineno-120-3" name="__codelineno-120-3" href="#__codelineno-120-3"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Disabling multiline mode may be useful for simple command execution or when working with scripts that don't require multi-line editing. Accepts synonyms like <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code>. Persist by adding to <code>~/.cjshrc</code>.</p>
 <h4 id="inline-help">inline-help</h4>
 <p>Toggle inline help messages that appear as you type commands. These messages can provide quick information about command syntax, options, and usage.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-120-1"><a id="__codelineno-120-1" name="__codelineno-120-1" href="#__codelineno-120-1"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-121-1"><a id="__codelineno-121-1" name="__codelineno-121-1" href="#__codelineno-121-1"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-121-1"><a id="__codelineno-121-1" name="__codelineno-121-1" href="#__codelineno-121-1"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable inline help messages</span>
-</span><span id="__span-121-2"><a id="__codelineno-121-2" name="__codelineno-121-2" href="#__codelineno-121-2"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable inline help messages</span>
-</span><span id="__span-121-3"><a id="__codelineno-121-3" name="__codelineno-121-3" href="#__codelineno-121-3"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-122-1"><a id="__codelineno-122-1" name="__codelineno-122-1" href="#__codelineno-122-1"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable inline help messages</span>
+</span><span id="__span-122-2"><a id="__codelineno-122-2" name="__codelineno-122-2" href="#__codelineno-122-2"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable inline help messages</span>
+</span><span id="__span-122-3"><a id="__codelineno-122-3" name="__codelineno-122-3" href="#__codelineno-122-3"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Supports synonyms such as <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code>. Add the command to <code>~/.cjshrc</code> to make the setting permanent.</p>
 <h4 id="status-hints">status-hints</h4>
@@ -3525,45 +3607,45 @@ no longer accepted; <code>0</code> and <code>1</code> are literal marker charact
 <li><code>transient</code> – show the banner whenever the status area has no other content.</li>
 <li><code>persistent</code> – always prepend the banner above any other status message.</li>
 </ul>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-122-1"><a id="__codelineno-122-1" name="__codelineno-122-1" href="#__codelineno-122-1"></a>cjshopt<span class="w"> </span>status-hints<span class="w"> </span>&lt;off<span class="p">|</span>normal<span class="p">|</span>transient<span class="p">|</span>persistent<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-123-1"><a id="__codelineno-123-1" name="__codelineno-123-1" href="#__codelineno-123-1"></a>cjshopt<span class="w"> </span>status-hints<span class="w"> </span>&lt;off<span class="p">|</span>normal<span class="p">|</span>transient<span class="p">|</span>persistent<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-123-1"><a id="__codelineno-123-1" name="__codelineno-123-1" href="#__codelineno-123-1"></a>cjshopt<span class="w"> </span>status-hints<span class="w"> </span>normal<span class="w">      </span><span class="c1"># Only surface the hints on an empty prompt</span>
-</span><span id="__span-123-2"><a id="__codelineno-123-2" name="__codelineno-123-2" href="#__codelineno-123-2"></a>cjshopt<span class="w"> </span>status-hints<span class="w"> </span>persistent<span class="w">  </span><span class="c1"># Keep the banner visible at all times</span>
-</span><span id="__span-123-3"><a id="__codelineno-123-3" name="__codelineno-123-3" href="#__codelineno-123-3"></a>cjshopt<span class="w"> </span>status-hints<span class="w"> </span>status<span class="w">      </span><span class="c1"># Show the current mode</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-124-1"><a id="__codelineno-124-1" name="__codelineno-124-1" href="#__codelineno-124-1"></a>cjshopt<span class="w"> </span>status-hints<span class="w"> </span>normal<span class="w">      </span><span class="c1"># Only surface the hints on an empty prompt</span>
+</span><span id="__span-124-2"><a id="__codelineno-124-2" name="__codelineno-124-2" href="#__codelineno-124-2"></a>cjshopt<span class="w"> </span>status-hints<span class="w"> </span>persistent<span class="w">  </span><span class="c1"># Keep the banner visible at all times</span>
+</span><span id="__span-124-3"><a id="__codelineno-124-3" name="__codelineno-124-3" href="#__codelineno-124-3"></a>cjshopt<span class="w"> </span>status-hints<span class="w"> </span>status<span class="w">      </span><span class="c1"># Show the current mode</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the mode across sessions.</p>
 <h4 id="status-line">status-line</h4>
 <p>Remove or restore the entire status row beneath the prompt, including syntax feedback and the hint banner.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-124-1"><a id="__codelineno-124-1" name="__codelineno-124-1" href="#__codelineno-124-1"></a>cjshopt<span class="w"> </span>status-line<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-125-1"><a id="__codelineno-125-1" name="__codelineno-125-1" href="#__codelineno-125-1"></a>cjshopt<span class="w"> </span>status-line<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <ul>
 <li><code>on</code> (default) – allow syntax validation text and <code>status-hints</code> output to appear.</li>
 <li><code>off</code> – suppress the status row completely; the last <code>status-hints</code> mode is remembered for when you turn it back on.</li>
 </ul>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-125-1"><a id="__codelineno-125-1" name="__codelineno-125-1" href="#__codelineno-125-1"></a>cjshopt<span class="w"> </span>status-line<span class="w"> </span>off<span class="w">     </span><span class="c1"># Hide validation output and the hint banner</span>
-</span><span id="__span-125-2"><a id="__codelineno-125-2" name="__codelineno-125-2" href="#__codelineno-125-2"></a>cjshopt<span class="w"> </span>status-line<span class="w"> </span>on<span class="w">      </span><span class="c1"># Restore the status row using the last hint mode</span>
-</span><span id="__span-125-3"><a id="__codelineno-125-3" name="__codelineno-125-3" href="#__codelineno-125-3"></a>cjshopt<span class="w"> </span>status-line<span class="w"> </span>status<span class="w">  </span><span class="c1"># Display the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-126-1"><a id="__codelineno-126-1" name="__codelineno-126-1" href="#__codelineno-126-1"></a>cjshopt<span class="w"> </span>status-line<span class="w"> </span>off<span class="w">     </span><span class="c1"># Hide validation output and the hint banner</span>
+</span><span id="__span-126-2"><a id="__codelineno-126-2" name="__codelineno-126-2" href="#__codelineno-126-2"></a>cjshopt<span class="w"> </span>status-line<span class="w"> </span>on<span class="w">      </span><span class="c1"># Restore the status row using the last hint mode</span>
+</span><span id="__span-126-3"><a id="__codelineno-126-3" name="__codelineno-126-3" href="#__codelineno-126-3"></a>cjshopt<span class="w"> </span>status-line<span class="w"> </span>status<span class="w">  </span><span class="c1"># Display the current setting</span>
 </span></code></pre></div>
 <p>Add the command to <code>~/.cjshrc</code> to persist the preference.</p>
 <h4 id="status-reporting">status-reporting</h4>
 <p>Keep the status line visible for banners and custom output, but disable cjsh’s built-in syntax/error reporting.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-126-1"><a id="__codelineno-126-1" name="__codelineno-126-1" href="#__codelineno-126-1"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-127-1"><a id="__codelineno-127-1" name="__codelineno-127-1" href="#__codelineno-127-1"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <ul>
 <li><code>on</code> (default) – run cjsh’s validation pipeline and print its summary below the prompt.</li>
 <li><code>off</code> – suppress cjsh-generated status messages while leaving <code>status-hints</code> (and any custom callbacks) intact.</li>
 </ul>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-127-1"><a id="__codelineno-127-1" name="__codelineno-127-1" href="#__codelineno-127-1"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>off<span class="w">     </span><span class="c1"># Keep hint banners but hide validation output</span>
-</span><span id="__span-127-2"><a id="__codelineno-127-2" name="__codelineno-127-2" href="#__codelineno-127-2"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>on<span class="w">      </span><span class="c1"># Re-enable syntax feedback</span>
-</span><span id="__span-127-3"><a id="__codelineno-127-3" name="__codelineno-127-3" href="#__codelineno-127-3"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>status<span class="w">  </span><span class="c1"># Display the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-128-1"><a id="__codelineno-128-1" name="__codelineno-128-1" href="#__codelineno-128-1"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>off<span class="w">     </span><span class="c1"># Keep hint banners but hide validation output</span>
+</span><span id="__span-128-2"><a id="__codelineno-128-2" name="__codelineno-128-2" href="#__codelineno-128-2"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>on<span class="w">      </span><span class="c1"># Re-enable syntax feedback</span>
+</span><span id="__span-128-3"><a id="__codelineno-128-3" name="__codelineno-128-3" href="#__codelineno-128-3"></a>cjshopt<span class="w"> </span>status-reporting<span class="w"> </span>status<span class="w">  </span><span class="c1"># Display the current setting</span>
 </span></code></pre></div>
 <p>Persist preferences by adding the command to <code>~/.cjshrc</code>.</p>
 <h4 id="status-line-callback">status-line-callback</h4>
 <p>Register a shell function that runs before each status-line refresh and can publish custom text.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-128-1"><a id="__codelineno-128-1" name="__codelineno-128-1" href="#__codelineno-128-1"></a>cjshopt<span class="w"> </span>status-line-callback<span class="w"> </span>&lt;function_name<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-129-1"><a id="__codelineno-129-1" name="__codelineno-129-1" href="#__codelineno-129-1"></a>cjshopt<span class="w"> </span>status-line-callback<span class="w"> </span>&lt;function_name<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <ul>
 <li><code>&lt;function_name&gt;</code> – invoke that shell function on every status refresh.</li>
@@ -3577,31 +3659,31 @@ no longer accepted; <code>0</code> and <code>1</code> are literal marker charact
 <li>Leave <code>CJSH_STATUS_OUTPUT</code> empty to hide callback output for that refresh.</li>
 </ul>
 <p>Example:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-129-1"><a id="__codelineno-129-1" name="__codelineno-129-1" href="#__codelineno-129-1"></a><span class="k">function</span><span class="w"> </span>my_status_banner<span class="o">()</span><span class="w"> </span><span class="o">{</span>
-</span><span id="__span-129-2"><a id="__codelineno-129-2" name="__codelineno-129-2" href="#__codelineno-129-2"></a><span class="w">    </span><span class="nb">local</span><span class="w"> </span><span class="nv">buf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
-</span><span id="__span-129-3"><a id="__codelineno-129-3" name="__codelineno-129-3" href="#__codelineno-129-3"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>-z<span class="w"> </span><span class="s2">"</span><span class="nv">$buf</span><span class="s2">"</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
-</span><span id="__span-129-4"><a id="__codelineno-129-4" name="__codelineno-129-4" href="#__codelineno-129-4"></a><span class="w">        </span><span class="nv">CJSH_STATUS_OUTPUT</span><span class="o">=</span><span class="s2">"[ic-hint]ready[/]"</span>
-</span><span id="__span-129-5"><a id="__codelineno-129-5" name="__codelineno-129-5" href="#__codelineno-129-5"></a><span class="w">        </span><span class="k">return</span>
-</span><span id="__span-129-6"><a id="__codelineno-129-6" name="__codelineno-129-6" href="#__codelineno-129-6"></a><span class="w">    </span><span class="k">fi</span>
-</span><span id="__span-129-7"><a id="__codelineno-129-7" name="__codelineno-129-7" href="#__codelineno-129-7"></a>
-</span><span id="__span-129-8"><a id="__codelineno-129-8" name="__codelineno-129-8" href="#__codelineno-129-8"></a><span class="w">    </span><span class="nv">CJSH_STATUS_OUTPUT</span><span class="o">=</span><span class="s2">"[ic-hint]chars:[/] </span><span class="si">${#</span><span class="nv">buf</span><span class="si">}</span><span class="s2">"</span>
-</span><span id="__span-129-9"><a id="__codelineno-129-9" name="__codelineno-129-9" href="#__codelineno-129-9"></a><span class="o">}</span>
-</span><span id="__span-129-10"><a id="__codelineno-129-10" name="__codelineno-129-10" href="#__codelineno-129-10"></a>
-</span><span id="__span-129-11"><a id="__codelineno-129-11" name="__codelineno-129-11" href="#__codelineno-129-11"></a>cjshopt<span class="w"> </span>status-line-callback<span class="w"> </span>my_status_banner
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-130-1"><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a><span class="k">function</span><span class="w"> </span>my_status_banner<span class="o">()</span><span class="w"> </span><span class="o">{</span>
+</span><span id="__span-130-2"><a id="__codelineno-130-2" name="__codelineno-130-2" href="#__codelineno-130-2"></a><span class="w">    </span><span class="nb">local</span><span class="w"> </span><span class="nv">buf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+</span><span id="__span-130-3"><a id="__codelineno-130-3" name="__codelineno-130-3" href="#__codelineno-130-3"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>-z<span class="w"> </span><span class="s2">"</span><span class="nv">$buf</span><span class="s2">"</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+</span><span id="__span-130-4"><a id="__codelineno-130-4" name="__codelineno-130-4" href="#__codelineno-130-4"></a><span class="w">        </span><span class="nv">CJSH_STATUS_OUTPUT</span><span class="o">=</span><span class="s2">"[ic-hint]ready[/]"</span>
+</span><span id="__span-130-5"><a id="__codelineno-130-5" name="__codelineno-130-5" href="#__codelineno-130-5"></a><span class="w">        </span><span class="k">return</span>
+</span><span id="__span-130-6"><a id="__codelineno-130-6" name="__codelineno-130-6" href="#__codelineno-130-6"></a><span class="w">    </span><span class="k">fi</span>
+</span><span id="__span-130-7"><a id="__codelineno-130-7" name="__codelineno-130-7" href="#__codelineno-130-7"></a>
+</span><span id="__span-130-8"><a id="__codelineno-130-8" name="__codelineno-130-8" href="#__codelineno-130-8"></a><span class="w">    </span><span class="nv">CJSH_STATUS_OUTPUT</span><span class="o">=</span><span class="s2">"[ic-hint]chars:[/] </span><span class="si">${#</span><span class="nv">buf</span><span class="si">}</span><span class="s2">"</span>
+</span><span id="__span-130-9"><a id="__codelineno-130-9" name="__codelineno-130-9" href="#__codelineno-130-9"></a><span class="o">}</span>
+</span><span id="__span-130-10"><a id="__codelineno-130-10" name="__codelineno-130-10" href="#__codelineno-130-10"></a>
+</span><span id="__span-130-11"><a id="__codelineno-130-11" name="__codelineno-130-11" href="#__codelineno-130-11"></a>cjshopt<span class="w"> </span>status-line-callback<span class="w"> </span>my_status_banner
 </span></code></pre></div>
 <p>Use <code>cjshopt status-reporting off</code> if you want only your callback text without cjsh validation output. Keep callback code fast because it runs frequently while editing.</p>
 <h4 id="mouse-clicking">mouse-clicking</h4>
 <p>Configure mouse capture separately for prompt editing and interactive menus.
 The default is <code>off</code>, which leaves ordinary prompt interaction to the terminal while retaining
 mouse support inside completion, history, and command-palette menus.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-130-1"><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>&lt;all-off<span class="p">|</span>off<span class="p">|</span>simple<span class="p">|</span>smart<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-131-1"><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>&lt;all-off<span class="p">|</span>off<span class="p">|</span>simple<span class="p">|</span>smart<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-131-1"><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>all-off<span class="w"> </span><span class="c1"># Never capture mouse events, including inside menus</span>
-</span><span id="__span-131-2"><a id="__codelineno-131-2" name="__codelineno-131-2" href="#__codelineno-131-2"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>off<span class="w">     </span><span class="c1"># Keep editing native; capture only in interactive menus</span>
-</span><span id="__span-131-3"><a id="__codelineno-131-3" name="__codelineno-131-3" href="#__codelineno-131-3"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>simple<span class="w">  </span><span class="c1"># Capture mouse events until manually toggled</span>
-</span><span id="__span-131-4"><a id="__codelineno-131-4" name="__codelineno-131-4" href="#__codelineno-131-4"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>smart<span class="w">   </span><span class="c1"># Auto-suspend for terminal selection and resume for editing</span>
-</span><span id="__span-131-5"><a id="__codelineno-131-5" name="__codelineno-131-5" href="#__codelineno-131-5"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-132-1"><a id="__codelineno-132-1" name="__codelineno-132-1" href="#__codelineno-132-1"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>all-off<span class="w"> </span><span class="c1"># Never capture mouse events, including inside menus</span>
+</span><span id="__span-132-2"><a id="__codelineno-132-2" name="__codelineno-132-2" href="#__codelineno-132-2"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>off<span class="w">     </span><span class="c1"># Keep editing native; capture only in interactive menus</span>
+</span><span id="__span-132-3"><a id="__codelineno-132-3" name="__codelineno-132-3" href="#__codelineno-132-3"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>simple<span class="w">  </span><span class="c1"># Capture mouse events until manually toggled</span>
+</span><span id="__span-132-4"><a id="__codelineno-132-4" name="__codelineno-132-4" href="#__codelineno-132-4"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>smart<span class="w">   </span><span class="c1"># Auto-suspend for terminal selection and resume for editing</span>
+</span><span id="__span-132-5"><a id="__codelineno-132-5" name="__codelineno-132-5" href="#__codelineno-132-5"></a>cjshopt<span class="w"> </span>mouse-clicking<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p><code>F2</code> (or any key bound to <code>toggle-mouse-reporting</code>) still toggles mouse clicking for the current
 prompt at runtime in <code>simple</code> and <code>smart</code> modes. In <code>smart</code> mode, wheel input and selections started
@@ -3619,27 +3701,27 @@ rows temporarily releases capture to the terminal. Keyboard input or a terminal 
 restores menu clicking.</p>
 <h4 id="mouse-clicking-status-line">mouse-clicking-status-line</h4>
 <p>Show or hide the status-row indicator text that appears when mouse clicking is active.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-132-1"><a id="__codelineno-132-1" name="__codelineno-132-1" href="#__codelineno-132-1"></a>cjshopt<span class="w"> </span>mouse-clicking-status-line<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-133-1"><a id="__codelineno-133-1" name="__codelineno-133-1" href="#__codelineno-133-1"></a>cjshopt<span class="w"> </span>mouse-clicking-status-line<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-133-1"><a id="__codelineno-133-1" name="__codelineno-133-1" href="#__codelineno-133-1"></a>cjshopt<span class="w"> </span>mouse-clicking-status-line<span class="w"> </span>on<span class="w">      </span><span class="c1"># Show the "Mouse clicking is enabled" indicator</span>
-</span><span id="__span-133-2"><a id="__codelineno-133-2" name="__codelineno-133-2" href="#__codelineno-133-2"></a>cjshopt<span class="w"> </span>mouse-clicking-status-line<span class="w"> </span>off<span class="w">     </span><span class="c1"># Hide the indicator text</span>
-</span><span id="__span-133-3"><a id="__codelineno-133-3" name="__codelineno-133-3" href="#__codelineno-133-3"></a>cjshopt<span class="w"> </span>mouse-clicking-status-line<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-134-1"><a id="__codelineno-134-1" name="__codelineno-134-1" href="#__codelineno-134-1"></a>cjshopt<span class="w"> </span>mouse-clicking-status-line<span class="w"> </span>on<span class="w">      </span><span class="c1"># Show the "Mouse clicking is enabled" indicator</span>
+</span><span id="__span-134-2"><a id="__codelineno-134-2" name="__codelineno-134-2" href="#__codelineno-134-2"></a>cjshopt<span class="w"> </span>mouse-clicking-status-line<span class="w"> </span>off<span class="w">     </span><span class="c1"># Hide the indicator text</span>
+</span><span id="__span-134-3"><a id="__codelineno-134-3" name="__codelineno-134-3" href="#__codelineno-134-3"></a>cjshopt<span class="w"> </span>mouse-clicking-status-line<span class="w"> </span>status<span class="w">  </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>This toggle affects only the indicator text. It does not enable or disable mouse clicking itself.</p>
 <h4 id="auto-tab">auto-tab</h4>
 <p>Configure automatic tab completion behavior. When enabled, the shell may automatically complete commands or show completions without requiring explicit tab key presses. <strong>Disabled by default.</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-134-1"><a id="__codelineno-134-1" name="__codelineno-134-1" href="#__codelineno-134-1"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-135-1"><a id="__codelineno-135-1" name="__codelineno-135-1" href="#__codelineno-135-1"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>&lt;on<span class="p">|</span>off<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-135-1"><a id="__codelineno-135-1" name="__codelineno-135-1" href="#__codelineno-135-1"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable automatic tab completion</span>
-</span><span id="__span-135-2"><a id="__codelineno-135-2" name="__codelineno-135-2" href="#__codelineno-135-2"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable automatic tab completion (default)</span>
-</span><span id="__span-135-3"><a id="__codelineno-135-3" name="__codelineno-135-3" href="#__codelineno-135-3"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-136-1"><a id="__codelineno-136-1" name="__codelineno-136-1" href="#__codelineno-136-1"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>on<span class="w">       </span><span class="c1"># Enable automatic tab completion</span>
+</span><span id="__span-136-2"><a id="__codelineno-136-2" name="__codelineno-136-2" href="#__codelineno-136-2"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>off<span class="w">      </span><span class="c1"># Disable automatic tab completion (default)</span>
+</span><span id="__span-136-3"><a id="__codelineno-136-3" name="__codelineno-136-3" href="#__codelineno-136-3"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current setting</span>
 </span></code></pre></div>
 <p>Accepts synonyms including <code>enable</code>, <code>disable</code>, <code>true</code>, and <code>false</code>. Place in <code>~/.cjshrc</code> to persist the preference across sessions.</p>
 <h4 id="keybind">keybind</h4>
 <p>Inspect or customize isocline key bindings. Changes apply immediately in the current shell, and you can add the same command to <code>~/.cjshrc</code> to persist them for future sessions.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-136-1"><a id="__codelineno-136-1" name="__codelineno-136-1" href="#__codelineno-136-1"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>&lt;subcommand&gt;<span class="w"> </span><span class="o">[</span>...<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-137-1"><a id="__codelineno-137-1" name="__codelineno-137-1" href="#__codelineno-137-1"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>&lt;subcommand&gt;<span class="w"> </span><span class="o">[</span>...<span class="o">]</span>
 </span></code></pre></div>
 <p>Key subcommands include:</p>
 <ul>
@@ -3657,7 +3739,7 @@ restores menu clicking.</p>
 <code>toggle-mouse</code>). The default binding is <code>F2</code>.</p>
 <h4 id="set-history-max">set-history-max</h4>
 <p>Adjust the number of entries stored in the persistent history file.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-137-1"><a id="__codelineno-137-1" name="__codelineno-137-1" href="#__codelineno-137-1"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span>&lt;number<span class="p">|</span>default<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-138-1"><a id="__codelineno-138-1" name="__codelineno-138-1" href="#__codelineno-138-1"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span>&lt;number<span class="p">|</span>default<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <ul>
 <li>Provide any non-negative number (0 disables history persistence entirely)</li>
@@ -3665,10 +3747,10 @@ restores menu clicking.</p>
 <li>Use <code>status</code> (or <code>--status</code>) to display the current setting</li>
 </ul>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-138-1"><a id="__codelineno-138-1" name="__codelineno-138-1" href="#__codelineno-138-1"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">0</span><span class="w">        </span><span class="c1"># Disable history persistence</span>
-</span><span id="__span-138-2"><a id="__codelineno-138-2" name="__codelineno-138-2" href="#__codelineno-138-2"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">500</span><span class="w">      </span><span class="c1"># Retain the latest 500 commands</span>
-</span><span id="__span-138-3"><a id="__codelineno-138-3" name="__codelineno-138-3" href="#__codelineno-138-3"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span>default<span class="w">  </span><span class="c1"># Go back to the default limit</span>
-</span><span id="__span-138-4"><a id="__codelineno-138-4" name="__codelineno-138-4" href="#__codelineno-138-4"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current limit</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-139-1"><a id="__codelineno-139-1" name="__codelineno-139-1" href="#__codelineno-139-1"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">0</span><span class="w">        </span><span class="c1"># Disable history persistence</span>
+</span><span id="__span-139-2"><a id="__codelineno-139-2" name="__codelineno-139-2" href="#__codelineno-139-2"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">500</span><span class="w">      </span><span class="c1"># Retain the latest 500 commands</span>
+</span><span id="__span-139-3"><a id="__codelineno-139-3" name="__codelineno-139-3" href="#__codelineno-139-3"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span>default<span class="w">  </span><span class="c1"># Go back to the default limit</span>
+</span><span id="__span-139-4"><a id="__codelineno-139-4" name="__codelineno-139-4" href="#__codelineno-139-4"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span>status<span class="w">   </span><span class="c1"># Show the current limit</span>
 </span></code></pre></div>
 <p>In startup files, limit changes are deferred until startup configuration finishes,
 so history is loaded once using the final limit and history path. Commands and
@@ -3677,7 +3759,7 @@ Changes made during a running session take effect immediately.</p>
 <h4 id="set-completion-max">set-completion-max</h4>
 <p>Limit how many completion entries are generated and displayed inside the menu each time you
 press <code>Tab</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-139-1"><a id="__codelineno-139-1" name="__codelineno-139-1" href="#__codelineno-139-1"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span>&lt;number<span class="p">|</span>default<span class="p">|</span>status&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-140-1"><a id="__codelineno-140-1" name="__codelineno-140-1" href="#__codelineno-140-1"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span>&lt;number<span class="p">|</span>default<span class="p">|</span>status&gt;
 </span></code></pre></div>
 <ul>
 <li>Provide any number greater than or equal to <strong>1</strong></li>
@@ -3685,9 +3767,9 @@ press <code>Tab</code>.</p>
 <li>Use <code>status</code> (or <code>--status</code>) to inspect the current setting</li>
 </ul>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-140-1"><a id="__codelineno-140-1" name="__codelineno-140-1" href="#__codelineno-140-1"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span><span class="m">50</span><span class="w">        </span><span class="c1"># Show at most 50 suggestions</span>
-</span><span id="__span-140-2"><a id="__codelineno-140-2" name="__codelineno-140-2" href="#__codelineno-140-2"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span>default<span class="w">   </span><span class="c1"># Restore the default cap</span>
-</span><span id="__span-140-3"><a id="__codelineno-140-3" name="__codelineno-140-3" href="#__codelineno-140-3"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span>status<span class="w">    </span><span class="c1"># Display the current limit</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-141-1"><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span><span class="m">50</span><span class="w">        </span><span class="c1"># Show at most 50 suggestions</span>
+</span><span id="__span-141-2"><a id="__codelineno-141-2" name="__codelineno-141-2" href="#__codelineno-141-2"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span>default<span class="w">   </span><span class="c1"># Restore the default cap</span>
+</span><span id="__span-141-3"><a id="__codelineno-141-3" name="__codelineno-141-3" href="#__codelineno-141-3"></a>cjshopt<span class="w"> </span>set-completion-max<span class="w"> </span>status<span class="w">    </span><span class="c1"># Display the current limit</span>
 </span></code></pre></div>
 <p>Lowering the cap trims visual noise and speeds up completion-heavy commands, especially when
 thousands of filesystem matches would otherwise be generated. Add the command to <code>~/.cjshrc</code>
@@ -3697,16 +3779,16 @@ ranked by most recent use and then frequency. For example, <code>cjshopt set-com
 up to 50 history suggestions.</p>
 <h4 id="prompt-newline">prompt-newline</h4>
 <p>Control whether cjsh prints a blank line after every command, regardless of what your prompt already emitted.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-141-1"><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a>cjshopt<span class="w"> </span>prompt-newline<span class="w"> </span>on
-</span><span id="__span-141-2"><a id="__codelineno-141-2" name="__codelineno-141-2" href="#__codelineno-141-2"></a>cjshopt<span class="w"> </span>prompt-newline<span class="w"> </span>off
-</span><span id="__span-141-3"><a id="__codelineno-141-3" name="__codelineno-141-3" href="#__codelineno-141-3"></a>cjshopt<span class="w"> </span>prompt-newline<span class="w"> </span>status
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-142-1"><a id="__codelineno-142-1" name="__codelineno-142-1" href="#__codelineno-142-1"></a>cjshopt<span class="w"> </span>prompt-newline<span class="w"> </span>on
+</span><span id="__span-142-2"><a id="__codelineno-142-2" name="__codelineno-142-2" href="#__codelineno-142-2"></a>cjshopt<span class="w"> </span>prompt-newline<span class="w"> </span>off
+</span><span id="__span-142-3"><a id="__codelineno-142-3" name="__codelineno-142-3" href="#__codelineno-142-3"></a>cjshopt<span class="w"> </span>prompt-newline<span class="w"> </span>status
 </span></code></pre></div>
 <p>Enable the toggle to keep transcripts readable when prompts have dense information; disable it for a compact display.</p>
 <h4 id="right-prompt-follow-cursor">right-prompt-follow-cursor</h4>
 <p>Make the inline right prompt (<code>RPS1</code>/<code>RPROMPT</code>) follow the cursor row while editing multi-line input. When disabled (default), the right prompt always renders on the first line even if the cursor moves down the buffer.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-142-1"><a id="__codelineno-142-1" name="__codelineno-142-1" href="#__codelineno-142-1"></a>cjshopt<span class="w"> </span>right-prompt-follow-cursor<span class="w"> </span>on
-</span><span id="__span-142-2"><a id="__codelineno-142-2" name="__codelineno-142-2" href="#__codelineno-142-2"></a>cjshopt<span class="w"> </span>right-prompt-follow-cursor<span class="w"> </span>off
-</span><span id="__span-142-3"><a id="__codelineno-142-3" name="__codelineno-142-3" href="#__codelineno-142-3"></a>cjshopt<span class="w"> </span>right-prompt-follow-cursor<span class="w"> </span>status
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-143-1"><a id="__codelineno-143-1" name="__codelineno-143-1" href="#__codelineno-143-1"></a>cjshopt<span class="w"> </span>right-prompt-follow-cursor<span class="w"> </span>on
+</span><span id="__span-143-2"><a id="__codelineno-143-2" name="__codelineno-143-2" href="#__codelineno-143-2"></a>cjshopt<span class="w"> </span>right-prompt-follow-cursor<span class="w"> </span>off
+</span><span id="__span-143-3"><a id="__codelineno-143-3" name="__codelineno-143-3" href="#__codelineno-143-3"></a>cjshopt<span class="w"> </span>right-prompt-follow-cursor<span class="w"> </span>status
 </span></code></pre></div>
 <p>Enabling the toggle keeps status blocks such as clocks or Git metadata aligned with the active input line, which is especially helpful for long pipelines that wrap across multiple rows.</p>
 

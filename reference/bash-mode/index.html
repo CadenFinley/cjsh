@@ -9,13 +9,13 @@
         <meta name="author" content="Caden Finley">
       
       
-        <link rel="canonical" href="https://cadenfinley.github.io/cjsh/getting-started/quick-start/">
+        <link rel="canonical" href="https://cadenfinley.github.io/cjsh/reference/bash-mode/">
       
       
-        <link rel="prev" href="../..">
+        <link rel="prev" href="../posix-mode/">
       
       
-        <link rel="next" href="../what-to-know/">
+        <link rel="next" href="../hooks/">
       
       
         
@@ -26,7 +26,7 @@
     
     
       
-        <title>Quick Start - CJ's Shell Documentation</title>
+        <title>Bash Dialect - CJ's Shell Documentation</title>
       
     
     
@@ -87,7 +87,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#quick-start" class="md-skip">
+        <a href="#bash-dialect" class="md-skip">
           Skip to content
         </a>
       
@@ -125,7 +125,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Quick Start
+              Bash Dialect
             
           </span>
         </div>
@@ -258,13 +258,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../getting-started/quick-start/" class="md-tabs__link">
           
   
   
@@ -282,11 +280,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../reference/features/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../features/" class="md-tabs__link">
           
   
   
@@ -400,10 +400,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -417,22 +415,21 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked="">
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2">
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
             
   
   
@@ -450,7 +447,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -465,37 +462,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Quick Start
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
         
   
   
@@ -511,126 +481,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Installation
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Installation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#as-a-package" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        As a package
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="As a package">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#homebrew-macoslinux" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Homebrew (macOS/Linux)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#arch-linux-aur" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Arch Linux (AUR)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#manual-building-and-installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Manual building and installation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-info" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Build info
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next Steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -643,7 +493,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../what-to-know/" class="md-nav__link">
+      <a href="../../getting-started/what-to-know/" class="md-nav__link">
         
   
   
@@ -671,7 +521,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../development/" class="md-nav__link">
+      <a href="../../getting-started/development/" class="md-nav__link">
         
   
   
@@ -703,8 +553,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -730,21 +582,22 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked="">
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3">
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
             
   
   
@@ -762,7 +615,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -780,7 +633,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/features/" class="md-nav__link">
+      <a href="../features/" class="md-nav__link">
         
   
   
@@ -808,7 +661,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/editing/" class="md-nav__link">
+      <a href="../editing/" class="md-nav__link">
         
   
   
@@ -836,7 +689,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/completions/" class="md-nav__link">
+      <a href="../completions/" class="md-nav__link">
         
   
   
@@ -864,7 +717,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/language-compatibility/" class="md-nav__link">
+      <a href="../language-compatibility/" class="md-nav__link">
         
   
   
@@ -892,7 +745,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/non-posix-features/" class="md-nav__link">
+      <a href="../non-posix-features/" class="md-nav__link">
         
   
   
@@ -920,7 +773,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/posix-mode/" class="md-nav__link">
+      <a href="../posix-mode/" class="md-nav__link">
         
   
   
@@ -945,10 +798,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../reference/bash-mode/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bash Dialect
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -964,6 +844,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#options-and-flag-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Options and flag migration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#initial-behavior-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Initial behavior differences
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#startup-and-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -976,7 +920,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/hooks/" class="md-nav__link">
+      <a href="../hooks/" class="md-nav__link">
         
   
   
@@ -1004,7 +948,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/commands/" class="md-nav__link">
+      <a href="../commands/" class="md-nav__link">
         
   
   
@@ -1168,10 +1112,10 @@
     
     
       <li class="md-path__item">
-        <a href="./" class="md-path__link">
+        <a href="../features/" class="md-path__link">
           
   <span class="md-ellipsis">
-    Getting Started
+    Reference
   </span>
 
         </a>
@@ -1194,7 +1138,7 @@
 
 
 <!--
-  quick-start.md
+  bash-mode.md
 
   This file is part of cjsh, CJ's Shell
 
@@ -1219,72 +1163,121 @@
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
---><h1 id="quick-start">Quick Start</h1>
-<p>This guide gets you running cjsh, a POSIX-based interactive shell with integrated modern features, as quickly as possible.</p>
-<h2 id="prerequisites">Prerequisites</h2>
+--><h1 id="bash-dialect">Bash dialect</h1>
+<p>The experimental Bash dialect targets Bash 5.3 script behavior. It is an incremental
+compatibility mode, not a claim that arbitrary Bash scripts or <code>.bashrc</code> files work.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cjsh<span class="w"> </span>--bash<span class="w"> </span>script.sh
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>cjsh<span class="w"> </span>--dialect<span class="w"> </span>bash<span class="w"> </span>-c<span class="w"> </span><span class="s1">'false | true; printf "%s\n" "${PIPESTATUS[@]}"'</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>cjshopt<span class="w"> </span>dialect<span class="w"> </span>bash
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>cjshopt<span class="w"> </span>dialect<span class="w"> </span>status
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>cjshopt<span class="w"> </span>dialect<span class="w"> </span>cjsh
+</span></code></pre></div>
+<p><code>cjshopt dialect cjsh|posix|bash</code> and the invocation flags share one setting. The
+default is <code>cjsh</code>; invocation as <code>sh</code> selects <code>posix</code>. Explicit flags are processed
+in order, so the last dialect flag wins. Runtime changes affect subsequent execution
+and word expansion; they do not reparse an already-read compound command or reload
+startup files. Use a separate command or <code>eval</code> when newly selected syntax needs to
+be parsed. Subshells inherit the selection and changes there do not affect the parent.</p>
+<p>Explicit shell-option choices survive dialect changes. Unspecified defaults follow
+the dialect. Leaving POSIX mode restores the native feature settings that it disabled.
+<code>cjshopt dialect</code> is available in POSIX mode so the selection remains reversible.</p>
+<h2 id="options-and-flag-migration">Options and flag migration</h2>
+<p>Short flags now have consistent meanings in every dialect:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Meaning</th>
+<th>Former native shortcut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-C</code></td>
+<td>noclobber</td>
+<td>Use <code>--no-colors</code></td>
+</tr>
+<tr>
+<td><code>-v</code></td>
+<td>verbose</td>
+<td>Use <code>--version</code></td>
+</tr>
+<tr>
+<td><code>-h</code></td>
+<td>hashall</td>
+<td>Use <code>--help</code></td>
+</tr>
+<tr>
+<td><code>-m</code></td>
+<td>monitor</td>
+<td>Use <code>--minimal</code></td>
+</tr>
+<tr>
+<td><code>-s</code></td>
+<td>read stdin</td>
+<td>Use <code>--secure</code></td>
+</tr>
+<tr>
+<td><code>-O NAME</code> / <code>+O NAME</code></td>
+<td>enable/disable a shopt option</td>
+<td>Use <code>--no-completions</code></td>
+</tr>
+<tr>
+<td><code>-H</code> / <code>+H</code></td>
+<td>enable/disable history expansion</td>
+<td>Use <code>--no-history-expansion</code></td>
+</tr>
+</tbody>
+</table>
+<p>Use <code>set</code> for execution options and <code>shopt</code> for extended language options:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">set</span><span class="w"> </span>-o<span class="w"> </span>pipefail
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>extglob<span class="w"> </span>globstar
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nb">shopt</span><span class="w"> </span>-u<span class="w"> </span>huponexit
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nb">shopt</span><span class="w"> </span>-p<span class="w"> </span>extglob
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nb">shopt</span><span class="w"> </span>-q<span class="w"> </span>globstar
+</span></code></pre></div>
+<p>The initial <code>shopt</code> registry contains <code>extglob</code>, <code>globstar</code>, <code>huponexit</code>,
+<code>expand_aliases</code>, and <code>inherit_errexit</code>. <code>-s</code>, <code>-u</code>, <code>-p</code>, <code>-q</code>, and <code>-o</code> are supported;
+<code>shopt -o</code> selects the <code>set</code> option namespace. Unknown options fail. <code>shopt</code> is
+available in the cjsh and Bash dialects and rejected in strict POSIX mode.</p>
+<p>Replace <code>cjshopt extglob on|off|status</code> with <code>shopt -s|-u|-p extglob</code>, and replace
+<code>set -o/+o globstar</code> and <code>set -o/+o huponexit</code> with <code>shopt -s/-u</code>. Editor and UI
+configuration continues to use <code>cjshopt</code>.</p>
+<h2 id="initial-behavior-differences">Initial behavior differences</h2>
+<p>Only the Bash dialect enables the following compatibility changes:</p>
 <ul>
-<li>A C compiler and C++ compiler (for example GCC or clang)</li>
-<li>CMake 3.25 or newer</li>
-<li>Ninja (the configured CMake presets use the Ninja generator)</li>
-<li>Python 3 to include the Python test suites when building from source</li>
+<li><code>PIPESTATUS</code> is an indexed array rather than cjsh's space-separated scalar.</li>
+<li>Quoted array <code>[@]</code> expansion preserves individual and empty arguments.</li>
+<li>Command substitutions clear <code>errexit</code> unless <code>shopt -s inherit_errexit</code> is set.</li>
+<li>Noninteractive alias expansion defaults to off; <code>shopt -s expand_aliases</code> enables it.</li>
+<li><code>[[ value =~ expression ]]</code> uses POSIX extended regular expressions and publishes
+  captures in <code>BASH_REMATCH</code>. Invalid expressions return status 2.</li>
+<li>Native errexit severity settings do not change Bash-mode exit decisions.</li>
+<li>Automatic directory changes and extension-based interpreter selection are disabled.</li>
+<li><code>huponexit</code> defaults to off.</li>
 </ul>
-<p>cjsh vendors its line editor dependency (<code>cjsh-isocline</code>) in this repository, so you do not need to install a separate shell framework or plugin stack.</p>
-<h2 id="installation">Installation</h2>
-<p>cjsh can be downloaded or built in multiple different ways.</p>
-<h3 id="as-a-package">As a package</h3>
-<p>cjsh is available through multiple package managers:</p>
-<h4 id="homebrew-macoslinux">Homebrew (macOS/Linux)</h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="w">    </span>brew<span class="w"> </span>tap<span class="w"> </span>CadenFinley/tap
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span>brew<span class="w"> </span>install<span class="w"> </span>cjsh
+<p>The native dialect retains its previous defaults and language behavior. The flag
+standardization and option-interface migration apply to both dialects.</p>
+<h2 id="startup-and-boundaries">Startup and boundaries</h2>
+<p>Bash mode uses cjsh's native startup files and <code>CJSH_ENV</code>. It does not automatically
+load <code>.bashrc</code>, <code>.bash_profile</code>, or <code>BASH_ENV</code>, and changing dialect at runtime does
+not source additional files. POSIX mode continues to use <code>/etc/profile</code> and
+<code>~/.profile</code> for login shells and <code>ENV</code> for interactive shells.</p>
+<p>Further work includes the wider <code>shopt</code> matrix (<code>nullglob</code>, <code>failglob</code>, <code>dotglob</code>,
+<code>lastpipe</code>, etc.), Bash's <code>set -o posix</code> behavior, parse-time alias/extglob rules,
+remaining array and quoting edge cases, special Bash variables, trap inheritance,
+programmable completion, and Readline bindings. The existing strict POSIX dialect
+is distinct from Bash's own POSIX option. Bash version variables are not fabricated.</p>
+<h2 id="verification">Verification</h2>
+<p><code>tests/bash/test_bash_mode.py</code> compares the same fixtures through <code>-c</code>, files, stdin,
+<code>eval</code>, and sourcing. It checks stdout, status, diagnostics, and filesystem effects
+in isolated environments. Native-mode tests protect existing cjsh behavior and
+exercise runtime mode changes. The differential suite requires a Bash 5.3 reference;
+other versions produce an explicit skip rather than silently changing the oracle.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">CJSH_BASH_REFERENCE</span><span class="o">=</span>/path/to/bash-5.3<span class="w"> </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>-L<span class="w"> </span>bash<span class="w"> </span>--output-on-failure
 </span></code></pre></div>
-<h4 id="arch-linux-aur">Arch Linux (AUR)</h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="w">    </span><span class="c1"># Using yay</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span>yay<span class="w"> </span>-S<span class="w"> </span>cjsh
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="c1"># Using paru</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span>paru<span class="w"> </span>-S<span class="w"> </span>cjsh
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="c1"># Or manually</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span>git<span class="w"> </span>clone<span class="w"> </span>https://aur.archlinux.org/cjsh.git
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nb">cd</span><span class="w"> </span>cjsh
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span>makepkg<span class="w"> </span>-si
-</span></code></pre></div>
-<p>Hopefully more package managers to come as cjsh gets bigger.</p>
-<h3 id="manual-building-and-installation">Manual building and installation</h3>
-<p>cjsh is super easy to download and install. Everything is hosted on the github repo at: <code>https://github.com/CadenFinley/cjsh</code></p>
-<p>The master branch holds the most recent commits and may not always be stable and may have breaking changes with no backwards compatibility. For the most stable release, stick to using the latest tagged release from the public GitHub releases.</p>
-<p>cjsh is still in active, rapid development so even the latest release can still have breaking changes with no backwards compatibilities, although they will always be noted in the release if they exist.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="w">    </span><span class="c1"># First clone the repo</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/CadenFinley/cjsh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>cjsh
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="c1"># Configure a Release build (outputs to ./build/release)</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>cmake<span class="w"> </span>--preset<span class="w"> </span>release
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="c1"># Compile using all available cores</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span>cmake<span class="w"> </span>--build<span class="w"> </span>--preset<span class="w"> </span>release<span class="w"> </span>--parallel
-</span></code></pre></div>
-<p>After building, the <code>cjsh</code> executable will be in <code>build/release/</code>. You can run it directly with <code>./build/release/cjsh</code>.</p>
-<p>Run the automated tests through CTest from the repository root:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>ctest<span class="w"> </span>--preset<span class="w"> </span>release<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span>
-</span></code></pre></div>
-<p>See the <a href="../development/#test">development testing guide</a> for selecting suites,
-serial runs, and individual-test counts.</p>
-<h2 id="build-info">Build info</h2>
-<p>By default the commands above produce an optimized Release build.</p>
-<ul>
-<li>Use <code>cmake --preset debug</code> to build with sanitizers and full debug info.</li>
-<li>Use <code>cmake --preset minimal</code> for the ultra-small binary profile.</li>
-<li>Additional presets are available: <code>relwithdebinfo</code> and <code>minsizerel</code>.</li>
-<li>List all presets with <code>cmake --list-presets</code>.</li>
-<li><code>cmake --build --preset release --target clean</code> removes the build artifacts for the release preset.</li>
-<li>Disable compile database emission with <code>-DCJSH_GENERATE_COMPILE_COMMANDS=OFF</code> if your tooling does not need it.</li>
-<li>Install the binary anywhere with <code>cmake --install build/release --config Release --prefix ~/.local</code> (adjust the prefix as desired).</li>
-<li>Export <code>CJSH_STRIP_BINARY=0</code> before configuring to keep symbols in non-Debug builds.</li>
-</ul>
-<p>As before, git revision information is embedded automatically; use <code>CJSH_GIT_HASH_OVERRIDE</code> if you need to pin a custom value.</p>
-<hr>
-<h2 id="next-steps">Next Steps</h2>
-<p>Now that you have cjsh installed, run <code>cjsh --help</code> to review invocation flags, type <code>help</code> inside the shell for the built-in quick reference, and check out <a href="../what-to-know/">What You Need to Know</a> to learn about all the powerful features available out of the box and how to configure them to suit your workflow.</p>
+<p><code>CJSH_BASH_VERSION</code> can pin a patch level, such as <code>5.3.20</code>. Linux x86_64 CI builds
+the Bash 5.3 release as its reference.</p>
 
 
 

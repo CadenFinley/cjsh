@@ -574,6 +574,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1454,6 +1458,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../posix-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    POSIX Mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bash-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bash Dialect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hooks/" class="md-nav__link">
         
   
@@ -2191,7 +2251,8 @@ line, alongside case sensitivity, and are restored when you accept or cancel the
 <p>History search results are sorted newest-first by default. Press <code>Alt+S</code> inside the menu to cycle the current menu through available sort arrangements such as command text and metadata keys present in the matching history entries. This only changes the open menu; the default sort can be changed by callers through the isocline history search sort API.</p>
 <h2 id="agent-assisted-command-writing">Agent-Assisted Command Writing</h2>
 <p>CJSH can pass the current editor buffer to any command-line AI executor and present the returned
-commands in an isocline selection menu. CJSH does not choose a provider or store API keys. Press
+commands in an isocline selection menu, or print an informational answer to a general question
+directly to stdout. CJSH does not choose a provider or store API keys. Press
 <code>Tab</code> to place the chosen command in a fresh editor buffer for inspection, or <code>Enter</code> to submit it
 immediately. In either case, the original natural-language request remains visible on the preceding
 prompt line. If <code>PS1_FINAL</code> or <code>RPS1_FINAL</code> is configured, those final-prompt values restyle the
@@ -2203,9 +2264,11 @@ preserved request; the generated command still uses the normal active <code>PS1<
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span>--command<span class="w"> </span><span class="s1">'copilot --reasoning-effort low --prompt'</span>
 </span></code></pre></div>
 <p>With that example, type <code>: describe what the command should do</code> and press <code>Enter</code>. The trigger
-prefix is removed before the request is sent. While an enabled trigger prefix matches, the syntax
-highlighter styles the prefix and the remaining natural-language request with <code>agent-prefix</code> and
-<code>agent-request</code>; it does not interpret request punctuation as shell syntax. Both styles can be
+prefix is removed before the request is sent. You can also ask a general question, such as
+<code>: what is the difference between a process and a thread?</code>. Text answers appear below the request,
+followed by a fresh, empty prompt, without opening a command menu. While an enabled trigger prefix
+matches, the syntax highlighter styles the prefix and the remaining natural-language request with
+<code>agent-prefix</code> and <code>agent-request</code>; it does not interpret request punctuation as shell syntax. Both styles can be
 changed with <code>cjshopt style_def</code>. A transient <code>Running [0s]: &lt;configured command&gt;</code> status
 shows the selected executor's configured command and arguments, with elapsed seconds updating
 while it runs. A soft, left-to-right text shimmer animates the entire status line, including the
@@ -2220,33 +2283,45 @@ submits an empty editor buffer and immediately advances to a fresh prompt.</p>
 <p>The executor command is parsed into an executable and arguments; shell operators are not evaluated.
 CJSH appends one final argument containing its embedded protocol and safety prompt, runtime context,
 the optional user-configured system prompt as additional instructions, and the current input as the
-command request. Runtime context is generated for each request and includes local and UTC time,
+user request. Runtime context is generated for each request and includes local and UTC time,
 working directory, hostname, operating system and kernel, architecture, CJSH version and mode, and
 the previous command's exit status. CJSH does not copy arbitrary environment variables or credentials
-into the prompt. The embedded prompt always takes precedence and requires one to three command
-suggestions. The executor must print a JSON array, although the parser tolerates surrounding
-explanatory text or a Markdown fence:</p>
+into the prompt. The embedded prompt always takes precedence and requires one JSON response.
+For command requests, the executor prints an array of one to three suggestions. The parser tolerates
+surrounding explanatory text or a Markdown fence:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="p">[</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="p">{</span><span class="nt">"command"</span><span class="p">:</span><span class="w"> </span><span class="s2">"find . -name '*.log' -delete"</span><span class="p">,</span><span class="w"> </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Delete log files recursively"</span><span class="p">},</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="p">{</span><span class="nt">"command"</span><span class="p">:</span><span class="w"> </span><span class="s2">"find . -name '*.log' -print"</span><span class="p">,</span><span class="w"> </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Preview matching log files"</span><span class="p">}</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="p">]</span>
 </span></code></pre></div>
+<p>For general questions and informational replies, the executor prints a JSON object with a non-empty
+<code>text</code> string. CJSH writes its decoded contents to stdout, preserving newlines and indentation:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span><span class="nt">"text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"A process has its own address space. Threads within a process share that address space."</span><span class="p">}</span>
+</span></code></pre></div>
+<p>If the agent encounters an error, it prints a JSON object with a non-empty <code>error</code> string:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="p">{</span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"The provider is unavailable. Please try again later."</span><span class="p">}</span>
+</span></code></pre></div>
+<p>CJSH reports these errors, executor failures, and invalid responses through <code>error_out</code> on stderr,
+including the usual error formatting and <code>CJSH_ERROR_LOG</code> support. Executor stderr is captured
+separately from its JSON response and included in failure diagnostics. The request remains visible
+above a fresh prompt; no error menu needs to be dismissed. An object must contain exactly one
+<code>text</code> or <code>error</code> field. Answers and error messages are never inserted or executed as shell commands.</p>
 <p>Omit <code>--trigger-prefix</code> to configure the fallback executor. Multiple prefix executors are supported;
-the longest matching prefix wins. Press <code>Alt+A</code> to invoke agent writing on any current buffer (using
-the matching prefix, then the fallback, then the first configured executor), or choose <strong>Write
-command with agent</strong> from the command palette. Change the key with
+the longest matching prefix wins. Press <code>Alt+A</code> to invoke the agent on any current buffer (using
+the matching prefix, then the fallback, then the first configured executor), or choose <strong>Ask agent</strong>
+from the command palette. Change the key with
 <code>cjshopt agent-mode key &lt;key&gt;</code>, for example <code>cjshopt agent-mode key F3</code>.
 An explicit <code>cjshopt keybind ext</code> command on the same key takes precedence.</p>
 <p>Useful controls:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>status
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>on
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>off
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>key<span class="w"> </span>default
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>key<span class="w"> </span>off
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>clear<span class="w"> </span>--trigger-prefix<span class="w"> </span><span class="s1">': '</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>clear<span class="w"> </span>--default
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>clear<span class="w"> </span>--all
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>reset
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>status
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>on
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>off
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>key<span class="w"> </span>default
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>key<span class="w"> </span>off
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>clear<span class="w"> </span>--trigger-prefix<span class="w"> </span><span class="s1">': '</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>clear<span class="w"> </span>--default
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>clear<span class="w"> </span>--all
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>cjshopt<span class="w"> </span>agent-mode<span class="w"> </span>reset
 </span></code></pre></div>
 <p>Start CJSH with <code>--no-agent</code> to keep agent mode disabled even while executor definitions load from
 <code>~/.cjshrc</code>. It can still be deliberately enabled later with <code>cjshopt agent-mode on</code>. Persist the
@@ -2260,12 +2335,12 @@ above a fresh, empty prompt, including when the browser command fails. Like agen
 command writing, this honors <code>PS1_FINAL</code> and <code>RPS1_FINAL</code> for the preserved request. The search
 text is never submitted as a shell command.</p>
 <p>Configure the browser in <code>~/.cjshrc</code>, like your editor:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">BROWSER</span><span class="o">=</span><span class="s1">'firefox --new-window'</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># macOS example:</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># export BROWSER='open -a "Firefox"'</span>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># Optional: replace the default Google search URL prefix.</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CJSH_BROWSER_SEARCH_URL</span><span class="o">=</span><span class="s1">'https://duckduckgo.com/?q='</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">BROWSER</span><span class="o">=</span><span class="s1">'firefox --new-window'</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># macOS example:</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># export BROWSER='open -a "Firefox"'</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="c1"># Optional: replace the default Google search URL prefix.</span>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CJSH_BROWSER_SEARCH_URL</span><span class="o">=</span><span class="s1">'https://duckduckgo.com/?q='</span>
 </span></code></pre></div>
 <p>When <code>BROWSER</code> is unset or empty, CJSH uses <code>open</code> on macOS and <code>xdg-open</code> on other systems.
 The browser setting is parsed into an executable and optional quoted arguments, just like an
@@ -2283,7 +2358,7 @@ one word. To disable the browser shortcut, add <code>cjshopt keybind add none al
 - <code>vim</code>: Inherits the <code>emacs</code> profile and adds Vim-inspired navigation with <code>Alt+H/J/K/L</code> and
   <code>Alt+W</code>. This is not a modal Vi/Vim editing mode.</p>
 <p><strong>Set Profile:</strong>
-</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>emacs<span class="p">|</span>vim
+</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>emacs<span class="p">|</span>vim
 </span></code></pre></div><p></p>
 <h3 id="common-key-bindings-emacs-profile">Common Key Bindings (Emacs Profile)</h3>
 <h4 id="cursor-movement">Cursor Movement</h4>
@@ -2338,35 +2413,35 @@ action.</p>
 <li><code>Enter</code>: Execute command</li>
 <li><code>F1</code>: Show help / key binding cheat sheet</li>
 <li><code>F2</code>: Toggle mouse clicking for the current prompt</li>
-<li><code>Alt+A</code>: Invoke agent-assisted command writing (when enabled)</li>
+<li><code>Alt+A</code>: Invoke agent assistance (when enabled)</li>
 <li><code>Alt+O</code>: Search the buffer on the web or open its URL in the browser</li>
 <li><code>Esc</code>: Cancel an open menu or search; at the main prompt, clear non-empty input</li>
 </ul>
 <h3 id="custom-key-bindings">Custom Key Bindings</h3>
 <p>You can inspect and customize key bindings through the <code>cjshopt keybind</code> subcommands:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># List all current key bindings (safe at runtime)</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>list
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># Show available key binding profiles</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span>list
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="c1"># Add Vim-inspired navigation bindings (add to ~/.cjshrc to persist)</span>
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>vim
-</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>
-</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="c1"># Replace bindings for an action (changes apply immediately; add to ~/.cjshrc to persist)</span>
-</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span><span class="nb">set</span><span class="w"> </span>cursor-left<span class="w"> </span>ctrl-h<span class="p">|</span>left
-</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>
-</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a><span class="c1"># Add bindings without removing existing ones (changes apply immediately; add to ~/.cjshrc to persist)</span>
-</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>add<span class="w"> </span>delete-word-end<span class="w"> </span>alt-d
-</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>
-</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="c1"># Remove specific key bindings (changes apply immediately; add to ~/.cjshrc to persist)</span>
-</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>clear<span class="w"> </span>ctrl-h<span class="w"> </span>ctrl-b
-</span><span id="__span-23-18"><a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a>
-</span><span id="__span-23-19"><a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a><span class="c1"># Remove all custom bindings for an action (changes apply immediately; add to ~/.cjshrc to persist)</span>
-</span><span id="__span-23-20"><a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>clear-action<span class="w"> </span>delete-word-end
-</span><span id="__span-23-21"><a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a>
-</span><span id="__span-23-22"><a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a><span class="c1"># Restore default bindings (changes apply immediately; add to ~/.cjshrc to persist)</span>
-</span><span id="__span-23-23"><a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>reset
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># List all current key bindings (safe at runtime)</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>list
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Show available key binding profiles</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span>list
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="c1"># Add Vim-inspired navigation bindings (add to ~/.cjshrc to persist)</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>vim
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="c1"># Replace bindings for an action (changes apply immediately; add to ~/.cjshrc to persist)</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span><span class="nb">set</span><span class="w"> </span>cursor-left<span class="w"> </span>ctrl-h<span class="p">|</span>left
+</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>
+</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="c1"># Add bindings without removing existing ones (changes apply immediately; add to ~/.cjshrc to persist)</span>
+</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>add<span class="w"> </span>delete-word-end<span class="w"> </span>alt-d
+</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>
+</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a><span class="c1"># Remove specific key bindings (changes apply immediately; add to ~/.cjshrc to persist)</span>
+</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>clear<span class="w"> </span>ctrl-h<span class="w"> </span>ctrl-b
+</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a>
+</span><span id="__span-25-19"><a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="c1"># Remove all custom bindings for an action (changes apply immediately; add to ~/.cjshrc to persist)</span>
+</span><span id="__span-25-20"><a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>clear-action<span class="w"> </span>delete-word-end
+</span><span id="__span-25-21"><a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a>
+</span><span id="__span-25-22"><a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a><span class="c1"># Restore default bindings (changes apply immediately; add to ~/.cjshrc to persist)</span>
+</span><span id="__span-25-23"><a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>reset
 </span></code></pre></div>
 <p><strong>Key Specification Format:</strong>
 - <code>ctrl-&lt;key&gt;</code>: Control key combinations (e.g., <code>ctrl-a</code>)
@@ -2376,20 +2451,20 @@ action.</p>
 - <code>&lt;key&gt;</code>: Regular keys (e.g., <code>tab</code>, <code>enter</code>)</p>
 <h2 id="command-driven-key-bindings">Command-Driven Key Bindings</h2>
 <p>Use the extended key binding namespace to trigger shell commands directly from key presses:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># List custom command key bindings (safe at runtime)</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span>list
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Bind Ctrl+G to run a command (add to ~/.cjshrc)</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span><span class="nb">set</span><span class="w"> </span>ctrl-g<span class="w"> </span>--title<span class="w"> </span><span class="s1">'Accept line'</span><span class="w"> </span><span class="s1">'cjsh-widget accept'</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="c1"># Add a palette-only command with a title used for command palette lookup</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span><span class="nb">set</span><span class="w"> </span>palette:uuid<span class="w"> </span>--title<span class="w"> </span><span class="s1">'Generate UUID'</span><span class="w"> </span><span class="s1">'uuidgen'</span>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="c1"># Remove a command binding</span>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span>clear<span class="w"> </span>ctrl-g
-</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>
-</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="c1"># Clear every custom command binding</span>
-</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span>reset
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># List custom command key bindings (safe at runtime)</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span>list
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Bind Ctrl+G to run a command (add to ~/.cjshrc)</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span><span class="nb">set</span><span class="w"> </span>ctrl-g<span class="w"> </span>--title<span class="w"> </span><span class="s1">'Accept line'</span><span class="w"> </span><span class="s1">'cjsh-widget accept'</span>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="c1"># Add a palette-only command with a title used for command palette lookup</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span><span class="nb">set</span><span class="w"> </span>palette:uuid<span class="w"> </span>--title<span class="w"> </span><span class="s1">'Generate UUID'</span><span class="w"> </span><span class="s1">'uuidgen'</span>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>
+</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="c1"># Remove a command binding</span>
+</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span>clear<span class="w"> </span>ctrl-g
+</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a>
+</span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a><span class="c1"># Clear every custom command binding</span>
+</span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>ext<span class="w"> </span>reset
 </span></code></pre></div>
 <p>Command key bindings typically leverage the <code>cjsh-widget</code> builtin to read or modify editor state.
 Changes apply immediately in the current shell; add the same commands to <code>~/.cjshrc</code> to persist them.</p>
@@ -2444,8 +2519,8 @@ Use the <code>--no-colors</code> flag or set <code>TERM=dumb</code> to disable a
 - <code>[#RRGGBB]...[/]</code>: Hex RGB colors
 - <code>[on color]...[/]</code>: Background colors</p>
 <p><strong>Style Combinations:</strong>
-</p><div class="language-text highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>[b red on blue]Bold red text on blue background[/]
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>[i #ff00ff]Italic magenta text[/]
+</p><div class="language-text highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>[b red on blue]Bold red text on blue background[/]
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>[i #ff00ff]Italic magenta text[/]
 </span></code></pre></div><p></p>
 <h2 id="advanced-features">Advanced Features</h2>
 <h3 id="spell-correction">Spell Correction</h3>
@@ -2453,21 +2528,21 @@ Use the <code>--no-colors</code> flag or set <code>TERM=dumb</code> to disable a
 <p><strong>How It Works:</strong>
 When no exact match is found, cjsh attempts to find the closest match using edit distance algorithms.</p>
 <p><strong>Configuration:</strong>
-</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Enable/disable spell correction (enabled by default)</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Enable/disable Enter-triggered spell autocorrection (disabled by default)</span>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Enable/disable spell correction (enabled by default)</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># Enable/disable Enter-triggered spell autocorrection (disabled by default)</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
 </span></code></pre></div><p></p>
 <h3 id="heredoc-support">Heredoc Support</h3>
 <p>Full editing capabilities when entering heredocs:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>cat<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s"># You get full editing features here:</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="s"># - Syntax highlighting</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="s"># - Multiline editing</span>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="s"># - History access</span>
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="s"># - All normal key bindings</span>
-</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="s">EOF</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>cat<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="s"># You get full editing features here:</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="s"># - Syntax highlighting</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="s"># - Multiline editing</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="s"># - History access</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="s"># - All normal key bindings</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="s">EOF</span>
 </span></code></pre></div>
 <p><strong>Features:</strong>
 - Each line is edited with full isocline capabilities
@@ -2516,20 +2591,20 @@ Commands can pre-populate the input buffer (used by <code>fc</code> command for 
 - <code>ic-bracematch</code>: Bracket match highlighting
 - <code>ic-whitespace-char</code>: Visible whitespace markers</p>
 <h3 id="style-syntax">Style Syntax</h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>&lt;style-name&gt;<span class="w"> </span><span class="s2">"&lt;bbcode-style&gt;"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>&lt;style-name&gt;<span class="w"> </span><span class="s2">"&lt;bbcode-style&gt;"</span>
 </span></code></pre></div>
 <p><strong>Examples:</strong>
-</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Make errors bright red and bold</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>ic-error<span class="w"> </span><span class="s2">"bold red"</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># Use custom RGB color for commands</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>system<span class="w"> </span><span class="s2">"#00ff00"</span>
-</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>
-</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="c1"># Style keywords with italic blue</span>
-</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>keyword<span class="w"> </span><span class="s2">"italic blue"</span>
-</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>
-</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="c1"># Combine multiple attributes</span>
-</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>string<span class="w"> </span><span class="s2">"italic #ffaa00"</span>
+</p><div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Make errors bright red and bold</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>ic-error<span class="w"> </span><span class="s2">"bold red"</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># Use custom RGB color for commands</span>
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>system<span class="w"> </span><span class="s2">"#00ff00"</span>
+</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>
+</span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="c1"># Style keywords with italic blue</span>
+</span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>keyword<span class="w"> </span><span class="s2">"italic blue"</span>
+</span><span id="__span-31-9"><a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a>
+</span><span id="__span-31-10"><a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="c1"># Combine multiple attributes</span>
+</span><span id="__span-31-11"><a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>string<span class="w"> </span><span class="s2">"italic #ffaa00"</span>
 </span></code></pre></div><p></p>
 <p><strong>Style Attributes:</strong>
 - Colors: <code>red</code>, <code>blue</code>, <code>green</code>, <code>yellow</code>, <code>cyan</code>, <code>magenta</code>, <code>white</code>, <code>black</code>
@@ -2542,48 +2617,48 @@ Commands can pre-populate the input buffer (used by <code>fc</code> command for 
 <h2 id="configuration-examples">Configuration Examples</h2>
 <h3 id="complete-editing-configuration">Complete Editing Configuration</h3>
 <p>Here's a comprehensive example for <code>~/.cjshrc</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Multiline settings</span>
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>on
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>on
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>relative
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>on
-</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>
-</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># Completion settings</span>
-</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on
-</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>off
-</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>off<span class="w">  </span><span class="c1"># Case-insensitive completions</span>
-</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on
-</span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>off
-</span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a>
-</span><span id="__span-30-14"><a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a><span class="c1"># Hint settings</span>
-</span><span id="__span-30-15"><a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>on
-</span><span id="__span-30-16"><a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">100</span><span class="w">  </span><span class="c1"># 100ms delay before showing hints</span>
-</span><span id="__span-30-17"><a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a>
-</span><span id="__span-30-18"><a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a><span class="c1"># Help settings</span>
-</span><span id="__span-30-19"><a id="__codelineno-30-19" name="__codelineno-30-19" href="#__codelineno-30-19"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>on
-</span><span id="__span-30-20"><a id="__codelineno-30-20" name="__codelineno-30-20" href="#__codelineno-30-20"></a>
-</span><span id="__span-30-21"><a id="__codelineno-30-21" name="__codelineno-30-21" href="#__codelineno-30-21"></a><span class="c1"># History</span>
-</span><span id="__span-30-22"><a id="__codelineno-30-22" name="__codelineno-30-22" href="#__codelineno-30-22"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">10000</span>
-</span><span id="__span-30-23"><a id="__codelineno-30-23" name="__codelineno-30-23" href="#__codelineno-30-23"></a>
-</span><span id="__span-30-24"><a id="__codelineno-30-24" name="__codelineno-30-24" href="#__codelineno-30-24"></a><span class="c1"># Key bindings</span>
-</span><span id="__span-30-25"><a id="__codelineno-30-25" name="__codelineno-30-25" href="#__codelineno-30-25"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>emacs
-</span><span id="__span-30-26"><a id="__codelineno-30-26" name="__codelineno-30-26" href="#__codelineno-30-26"></a>
-</span><span id="__span-30-27"><a id="__codelineno-30-27" name="__codelineno-30-27" href="#__codelineno-30-27"></a><span class="c1"># Syntax highlighting styles</span>
-</span><span id="__span-30-28"><a id="__codelineno-30-28" name="__codelineno-30-28" href="#__codelineno-30-28"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>keyword<span class="w"> </span><span class="s2">"bold blue"</span>
-</span><span id="__span-30-29"><a id="__codelineno-30-29" name="__codelineno-30-29" href="#__codelineno-30-29"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>system<span class="w"> </span><span class="s2">"green"</span>
-</span><span id="__span-30-30"><a id="__codelineno-30-30" name="__codelineno-30-30" href="#__codelineno-30-30"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>ic-error<span class="w"> </span><span class="s2">"bold red"</span>
-</span><span id="__span-30-31"><a id="__codelineno-30-31" name="__codelineno-30-31" href="#__codelineno-30-31"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>string<span class="w"> </span><span class="s2">"#ffaa00"</span>
-</span><span id="__span-30-32"><a id="__codelineno-30-32" name="__codelineno-30-32" href="#__codelineno-30-32"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>comment<span class="w"> </span><span class="s2">"italic #888888"</span>
-</span><span id="__span-30-33"><a id="__codelineno-30-33" name="__codelineno-30-33" href="#__codelineno-30-33"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>operator<span class="w"> </span><span class="s2">"bold"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Multiline settings</span>
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>on
+</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>cjshopt<span class="w"> </span>multiline-indent<span class="w"> </span>on
+</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>relative
+</span><span id="__span-32-5"><a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a>cjshopt<span class="w"> </span>current-line-number-highlight<span class="w"> </span>on
+</span><span id="__span-32-6"><a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>
+</span><span id="__span-32-7"><a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="c1"># Completion settings</span>
+</span><span id="__span-32-8"><a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>on
+</span><span id="__span-32-9"><a id="__codelineno-32-9" name="__codelineno-32-9" href="#__codelineno-32-9"></a>cjshopt<span class="w"> </span>auto-tab<span class="w"> </span>off
+</span><span id="__span-32-10"><a id="__codelineno-32-10" name="__codelineno-32-10" href="#__codelineno-32-10"></a>cjshopt<span class="w"> </span>completion-case<span class="w"> </span>off<span class="w">  </span><span class="c1"># Case-insensitive completions</span>
+</span><span id="__span-32-11"><a id="__codelineno-32-11" name="__codelineno-32-11" href="#__codelineno-32-11"></a>cjshopt<span class="w"> </span>completion-spell<span class="w"> </span>on
+</span><span id="__span-32-12"><a id="__codelineno-32-12" name="__codelineno-32-12" href="#__codelineno-32-12"></a>cjshopt<span class="w"> </span>completion-spell-enter<span class="w"> </span>off
+</span><span id="__span-32-13"><a id="__codelineno-32-13" name="__codelineno-32-13" href="#__codelineno-32-13"></a>
+</span><span id="__span-32-14"><a id="__codelineno-32-14" name="__codelineno-32-14" href="#__codelineno-32-14"></a><span class="c1"># Hint settings</span>
+</span><span id="__span-32-15"><a id="__codelineno-32-15" name="__codelineno-32-15" href="#__codelineno-32-15"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>on
+</span><span id="__span-32-16"><a id="__codelineno-32-16" name="__codelineno-32-16" href="#__codelineno-32-16"></a>cjshopt<span class="w"> </span>hint-delay<span class="w"> </span><span class="m">100</span><span class="w">  </span><span class="c1"># 100ms delay before showing hints</span>
+</span><span id="__span-32-17"><a id="__codelineno-32-17" name="__codelineno-32-17" href="#__codelineno-32-17"></a>
+</span><span id="__span-32-18"><a id="__codelineno-32-18" name="__codelineno-32-18" href="#__codelineno-32-18"></a><span class="c1"># Help settings</span>
+</span><span id="__span-32-19"><a id="__codelineno-32-19" name="__codelineno-32-19" href="#__codelineno-32-19"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>on
+</span><span id="__span-32-20"><a id="__codelineno-32-20" name="__codelineno-32-20" href="#__codelineno-32-20"></a>
+</span><span id="__span-32-21"><a id="__codelineno-32-21" name="__codelineno-32-21" href="#__codelineno-32-21"></a><span class="c1"># History</span>
+</span><span id="__span-32-22"><a id="__codelineno-32-22" name="__codelineno-32-22" href="#__codelineno-32-22"></a>cjshopt<span class="w"> </span>set-history-max<span class="w"> </span><span class="m">10000</span>
+</span><span id="__span-32-23"><a id="__codelineno-32-23" name="__codelineno-32-23" href="#__codelineno-32-23"></a>
+</span><span id="__span-32-24"><a id="__codelineno-32-24" name="__codelineno-32-24" href="#__codelineno-32-24"></a><span class="c1"># Key bindings</span>
+</span><span id="__span-32-25"><a id="__codelineno-32-25" name="__codelineno-32-25" href="#__codelineno-32-25"></a>cjshopt<span class="w"> </span>keybind<span class="w"> </span>profile<span class="w"> </span><span class="nb">set</span><span class="w"> </span>emacs
+</span><span id="__span-32-26"><a id="__codelineno-32-26" name="__codelineno-32-26" href="#__codelineno-32-26"></a>
+</span><span id="__span-32-27"><a id="__codelineno-32-27" name="__codelineno-32-27" href="#__codelineno-32-27"></a><span class="c1"># Syntax highlighting styles</span>
+</span><span id="__span-32-28"><a id="__codelineno-32-28" name="__codelineno-32-28" href="#__codelineno-32-28"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>keyword<span class="w"> </span><span class="s2">"bold blue"</span>
+</span><span id="__span-32-29"><a id="__codelineno-32-29" name="__codelineno-32-29" href="#__codelineno-32-29"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>system<span class="w"> </span><span class="s2">"green"</span>
+</span><span id="__span-32-30"><a id="__codelineno-32-30" name="__codelineno-32-30" href="#__codelineno-32-30"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>ic-error<span class="w"> </span><span class="s2">"bold red"</span>
+</span><span id="__span-32-31"><a id="__codelineno-32-31" name="__codelineno-32-31" href="#__codelineno-32-31"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>string<span class="w"> </span><span class="s2">"#ffaa00"</span>
+</span><span id="__span-32-32"><a id="__codelineno-32-32" name="__codelineno-32-32" href="#__codelineno-32-32"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>comment<span class="w"> </span><span class="s2">"italic #888888"</span>
+</span><span id="__span-32-33"><a id="__codelineno-32-33" name="__codelineno-32-33" href="#__codelineno-32-33"></a>cjshopt<span class="w"> </span>style_def<span class="w"> </span>operator<span class="w"> </span><span class="s2">"bold"</span>
 </span></code></pre></div>
 <h3 id="minimal-configuration">Minimal Configuration</h3>
 <p>For a minimal, fast setup (<code>--minimal</code> disables colors, completions and completion learning, syntax highlighting, smart <code>cd</code>, rc sourcing, the title line, history expansion, the status line, multiline line numbers, the startup time banner, error suggestions, prompt vars, and special lifecycle handlers):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Use the --minimal flag at startup, or configure selectively:</span>
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>on
-</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>off
-</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>off
-</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>off
-</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>off
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Use the --minimal flag at startup, or configure selectively:</span>
+</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>cjshopt<span class="w"> </span>multiline<span class="w"> </span>on
+</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a>cjshopt<span class="w"> </span>line-numbers<span class="w"> </span>off
+</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>cjshopt<span class="w"> </span>completion-preview<span class="w"> </span>off
+</span><span id="__span-33-5"><a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a>cjshopt<span class="w"> </span>hint<span class="w"> </span>off
+</span><span id="__span-33-6"><a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a>cjshopt<span class="w"> </span>inline-help<span class="w"> </span>off
 </span></code></pre></div>
 <h2 id="performance-considerations">Performance Considerations</h2>
 <h3 id="optimization-tips">Optimization Tips</h3>

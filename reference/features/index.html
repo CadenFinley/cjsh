@@ -574,6 +574,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -921,6 +925,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../posix-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    POSIX Mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bash-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bash Dialect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hooks/" class="md-nav__link">
         
   
@@ -1178,12 +1238,12 @@ POSIX, Bash, or Zsh behavior is not identical.</p>
 <li><strong>POSIX+ extensions</strong> – <code>[[ … ]]</code>, arithmetic contexts, indexed and associative arrays,
     namerefs, coprocesses, brace expansion (including strides), case fall-through, here-strings,
     and process substitution are supported. Extended globs are enabled with
-    <code>cjshopt extglob on</code>. History expansion stays interactive-only by default.</li>
+    <code>shopt -s extglob</code>. History expansion stays interactive-only by default.</li>
 <li><strong>Job control</strong> – Background jobs, <code>fg</code>, <code>bg</code>, <code>jobs</code>, <code>wait</code>, <code>disown</code>, and <code>trap</code> integrate with
     terminal process groups so <code>SIGTTIN</code>/<code>SIGTTOU</code> retain their normal kernel semantics. Monitor
     mode is enabled for interactive shells and toggled with <code>set -m</code> / <code>set +m</code>. Append <code>&amp;^</code> to a command
     to auto-background it on <code>Ctrl+Z</code>, or <code>&amp;^!</code> to auto-background and discard stdout/stderr after
-    the suspend. <code>set -o huponexit</code> controls whether exiting shells hang up or leave running jobs
+    the suspend. <code>shopt -s huponexit</code> controls whether exiting shells hang up or leave running jobs
     alone (default: off, so long-lived helpers keep running until you explicitly stop them).</li>
 </ul>
 <h2 id="interactive-layer">Interactive Layer</h2>
@@ -1208,9 +1268,10 @@ POSIX, Bash, or Zsh behavior is not identical.</p>
 <li><strong>Custom key bindings</strong> – An Emacs-inspired default profile, an optional <code>vim</code> profile that adds
     <code>Alt+H/J/K/L/W</code> navigation, and fine-grained overrides via <code>cjshopt keybind</code> (including
     command-driven bindings through <code>cjsh-widget</code>). The <code>vim</code> profile is not a modal Vi/Vim mode.</li>
-<li><strong>Agent-assisted command writing</strong> – Route editor text to user-configured AI executors through
+<li><strong>Agent assistance</strong> – Route editor text to user-configured AI executors through
     <code>cjshopt agent-mode</code>, select their JSON command suggestions in an isocline menu, and review the
-    result before execution. CJSH does not manage provider credentials.</li>
+    result before execution. General questions receive text answers on stdout; errors use CJSH's
+    standard error reporting on stderr. CJSH does not manage provider credentials.</li>
 <li><strong>Browser shortcut</strong> – Press <code>Alt+O</code> to search the current buffer on the web or open its URL,
     using <code>$BROWSER</code> or the system launcher, then continue at a fresh, empty prompt.</li>
 <li><strong>Mouse-aware editing</strong> – Configure capture with <code>cjshopt mouse-clicking</code>: <code>all-off</code> disables it
@@ -1265,8 +1326,8 @@ for full details.</p>
 <li><code>cjshopt agent-mode …</code> for user-provided command-writing executors</li>
 <li><code>cjshopt keybind …</code> and <code>cjshopt keybind ext …</code> for keymap management</li>
 <li><code>cjshopt set-history-max</code> to adjust persistent history size (0 or more entries; no upper limit)</li>
-<li><code>set -o huponexit</code> mirrors bash's option for sending SIGHUP to background jobs when the
-    shell exits (off by default so long-running helpers stick around)</li>
+<li><code>shopt -s huponexit</code> sends SIGHUP to background jobs on exit. Native interactive shells
+    enable it by default; Bash mode defaults to off and applies it only to interactive login shells.</li>
 </ul>
 </li>
 <li><strong>Generated config skeletons</strong> – <code>cjshopt generate-env</code>, <code>cjshopt generate-profile</code>,
@@ -1310,37 +1371,47 @@ for full details.</p>
 falls back to the default search paths.</p>
 <p>Persistent caches (history, generated completions, etc.) live under <code>~/.cache/cjsh/</code>.</p>
 <h2 id="command-line-flags">Command-line Flags</h2>
-<p><code>cjsh</code> accepts these switches (short/long forms shown where available):</p>
+<p><code>cjsh</code> uses the same short-option meanings in every dialect. <code>-v</code> is verbose,
+<code>-h</code> is hashall, <code>-C</code> is noclobber, <code>-m</code> is monitor, <code>-s</code> reads stdin, <code>-H</code>
+enables history expansion, and <code>-O NAME</code> enables a <code>shopt</code> option. Use the long
+options for the former native shortcuts (help, version, colors, minimal mode,
+secure mode, completions, and disabling history expansion).</p>
 <ul>
-<li><code>-h, --help</code> – usage information</li>
-<li><code>-v, --version</code> – print the version banner and exit</li>
+<li><code>--dialect cjsh|posix|bash</code> selects the language dialect; <code>--bash</code> selects the
+  experimental <a href="../bash-mode/">Bash dialect</a>. <code>cjshopt dialect</code> changes it at runtime.</li>
+</ul>
+<p>Other switches:</p>
+<ul>
+<li><code>--help</code> – usage information</li>
+<li><code>--version</code> – print the version banner and exit</li>
 <li><code>-l, --login</code> – treat the shell as a login shell (source <code>~/.cjprofile</code>)</li>
 <li><code>-i, --interactive</code> – force interactive behavior even if stdin is not a tty</li>
 <li><code>-c, --command &lt;string&gt;</code> – execute a single command and exit (disables history expansion)</li>
 <li><code>--no-exec</code> – read commands but do not execute them</li>
 <li><code>--no-system-paths</code> – skip automatic PATH setup from <code>/etc/paths</code> and <code>/etc/paths.d</code></li>
-<li><code>--posix</code> – enable POSIX mode and reject non-POSIX syntax and non-POSIX builtins</li>
-<li><code>-m, --minimal</code> – disable colors, completions and completion learning, syntax
+<li><code>--posix</code> – select <a href="../posix-mode/">POSIX.1-2024 mode</a>, with strict extension restrictions. All dialects use standard short-option
+  meanings (<code>-v</code> verbose, <code>-C</code> noclobber, <code>-m</code> monitor, <code>-s</code> stdin, <code>-h</code> hashall)</li>
+<li><code>--minimal</code> – disable colors, completions and completion learning, syntax
   highlighting, rc sourcing, smart cd, the title line, history expansion, the status line,
   multiline line numbers, the startup time banner, error suggestions, prompt vars, and special
   lifecycle handlers; normal PATH setup and native env/profile loading still apply</li>
-<li><code>-C, --no-colors</code></li>
+<li><code>--no-colors</code></li>
 <li><code>-L, --no-titleline</code></li>
 <li><code>-U, --show-startup-time</code></li>
 <li><code>-N, --no-source</code></li>
-<li><code>-O, --no-completions</code></li>
+<li><code>--no-completions</code></li>
 <li><code>--no-script-extension-interpreter</code></li>
 <li><code>--no-smart-cd</code></li>
 <li><code>--no-completion-learning</code> – keep completions enabled but skip on-demand man-page scraping</li>
 <li><code>-S, --no-syntax-highlighting</code></li>
 <li><code>--no-error-suggestions</code></li>
-<li><code>--no-agent</code> – disable agent-assisted command writing, including configured activation keys,
+<li><code>--no-agent</code> – disable agent assistance, including configured activation keys,
   trigger prefixes, and its command-palette entry</li>
 <li><code>--no-prompt-vars</code></li>
-<li><code>-H, --no-history-expansion</code></li>
+<li><code>--no-history-expansion</code></li>
 <li><code>--no-history</code> – disable history recording (also disables history expansion)</li>
 <li><code>-W, --no-sh-warning</code> – suppress the reminder shown when cjsh is invoked via <code>sh</code></li>
-<li><code>-s, --secure</code> – skip <code>~/.cjshenv</code>, <code>~/.cjprofile</code>, <code>~/.cjshrc</code>, and <code>~/.cjlogout</code>, disable
+<li><code>--secure</code> – skip <code>~/.cjshenv</code>, <code>~/.cjprofile</code>, <code>~/.cjshrc</code>, and <code>~/.cjlogout</code>, disable
   history persistence and smart cd, and ignore special lifecycle handlers</li>
 </ul>
 <h2 id="built-in-tooling-highlights">Built-in Tooling Highlights</h2>

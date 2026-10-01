@@ -15,7 +15,7 @@
         <link rel="prev" href="../language-compatibility/">
       
       
-        <link rel="next" href="../hooks/">
+        <link rel="next" href="../posix-mode/">
       
       
         
@@ -574,6 +574,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -915,6 +919,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../posix-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    POSIX Mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bash-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bash Dialect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hooks/" class="md-nav__link">
         
   
@@ -1207,9 +1267,9 @@ necessary.</p>
 <li><strong>Arrays and namerefs</strong> – <code>declare -a</code>, <code>declare -A</code>, and <code>declare -n</code> provide indexed arrays,
   associative arrays, and reference variables.</li>
 <li><strong>Extended globs</strong> – <code>?()</code>, <code>*()</code>, <code>+()</code>, <code>@()</code>, and <code>!()</code> work in pathname expansion,
-  <code>[[ … ]]</code>, <code>case</code>, and parameter patterns after <code>cjshopt extglob on</code>.</li>
-<li><strong>Case fall-through</strong> – <code>;&amp;</code> executes the following clause body and <code>;;&amp;</code> resumes pattern
-  testing at the following clause.</li>
+  <code>[[ … ]]</code>, <code>case</code>, and parameter patterns after <code>shopt -s extglob</code>.</li>
+<li><strong>Case pattern continuation</strong> – <code>;;&amp;</code> resumes pattern testing at the following clause.
+  <code>;&amp;</code> executes the following clause body and is standard in POSIX.1-2024.</li>
 <li><strong>Coprocesses</strong> – <code>coproc command</code> and <code>coproc NAME { command; }</code> expose two-way descriptors in
   <code>COPROC</code>/<code>NAME</code> and a waitable <code>COPROC_PID</code>/<code>NAME_PID</code>. <code>read -u fd</code> reads from a descriptor.</li>
 <li><strong>Here-strings</strong> – Feed a single string into a command's stdin.</li>

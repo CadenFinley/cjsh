@@ -574,6 +574,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -829,6 +833,62 @@
     
   
     Non-POSIX Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../posix-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    POSIX Mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bash-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bash Dialect
   
 
     
@@ -1134,12 +1194,12 @@ is the source of truth for the extensions that are intentionally supported.</p>
 <tr>
 <td>Extended globs</td>
 <td>Supported, opt-in</td>
-<td>Run <code>cjshopt extglob on</code> to enable <code>?()</code>, <code>*()</code>, <code>+()</code>, <code>@()</code>, and <code>!()</code> in pathname expansion, <code>[[ … ]]</code>, <code>case</code>, and parameter patterns. It is off by default and forced off in POSIX mode.</td>
+<td>Run <code>shopt -s extglob</code> to enable <code>?()</code>, <code>*()</code>, <code>+()</code>, <code>@()</code>, and <code>!()</code> in pathname expansion, <code>[[ … ]]</code>, <code>case</code>, and parameter patterns. It is off by default and forced off in POSIX mode.</td>
 </tr>
 <tr>
 <td>Case continuation</td>
-<td>Supported extension</td>
-<td><code>;&amp;</code> executes the next clause body without testing its pattern. <code>;;&amp;</code> continues testing subsequent patterns. Both are rejected in POSIX mode.</td>
+<td>POSIX.1-2024 and extension</td>
+<td><code>;&amp;</code> executes the next clause body without testing its pattern and is available in POSIX mode. <code>;;&amp;</code> continues testing subsequent patterns and is rejected in POSIX mode.</td>
 </tr>
 <tr>
 <td>Brace range strides</td>
@@ -1170,20 +1230,22 @@ function bodies and control-flow blocks.</p>
 keywords only where a command can begin. Using those words as arguments, in
 quotes, or in comments does not complete an unfinished block.</p>
 <h2 id="configuration">Configuration</h2>
-<p>CJSH intentionally uses its own option interface rather than implementing Bash's <code>shopt</code> builtin:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cjshopt<span class="w"> </span>extglob<span class="w"> </span>on
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>cjshopt<span class="w"> </span>extglob<span class="w"> </span>off
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>cjshopt<span class="w"> </span>extglob<span class="w"> </span>status
+<p>Language options use <code>shopt</code>; editor configuration and dialect selection use <code>cjshopt</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>extglob
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">shopt</span><span class="w"> </span>-u<span class="w"> </span>extglob
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">shopt</span><span class="w"> </span>-p<span class="w"> </span>extglob
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>cjshopt<span class="w"> </span>dialect<span class="w"> </span>bash
 </span></code></pre></div>
 <p>Add the desired command to <code>~/.cjshrc</code> to apply it to future interactive sessions.</p>
 <h2 id="known-boundaries">Known boundaries</h2>
 <ul>
-<li><code>--posix</code> is a compatibility mode, not a standards certification.</li>
+<li><a href="../posix-mode/"><code>--posix</code></a> targets POSIX.1-2024, with explicit extension restrictions and dedicated mode tests. It is not a standards certification.</li>
 <li>Only one coprocess connection is retained by the parent shell at a time. Starting another
   coprocess closes the parent's previous coprocess descriptors.</li>
 <li>Associative-array enumeration is deterministic and key-sorted in CJSH. Scripts should not depend
   on Bash or Zsh producing the same enumeration order.</li>
-<li>Bash-specific <code>shopt</code> names and the wider Bash option matrix are not aliases for <code>cjshopt</code>.</li>
+<li>The experimental <a href="../bash-mode/">Bash dialect</a> implements a tested subset of Bash 5.3
+  behavior. The initial <code>shopt</code> registry is deliberately limited; unknown options fail.</li>
 <li>Zsh-only parameter modifiers, glob qualifiers, option dialect, modules, and completion language
   are outside the Bash-style compatibility surface listed above.</li>
 </ul>
