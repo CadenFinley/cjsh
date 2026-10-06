@@ -210,11 +210,17 @@ else
 fi
 
 echo "Testing signal handling during execution..."
-"$CJSH_PATH" -c "sleep 10" &
+signal_ready=$(mktemp "${TMPDIR:-/tmp}/cjsh-edge-signal.XXXXXX")
+"$CJSH_PATH" -c 'printf ready > "$1"; sleep 10' cjsh "$signal_ready" &
 shell_pid=$!
-sleep 0.1
+# Wait for command execution instead of racing sanitizer or shell startup.
+attempts=0
+while [ ! -s "$signal_ready" ] && kill -0 "$shell_pid" 2>/dev/null && [ "$attempts" -lt 80 ]; do
+    sleep 0.05
+    attempts=$((attempts + 1))
+done
 
-if kill -0 $shell_pid 2>/dev/null; then
+if [ -s "$signal_ready" ] && kill -0 "$shell_pid" 2>/dev/null; then
     kill -TERM $shell_pid 2>/dev/null
     # Graceful job cleanup can itself take 100 ms; sanitizer teardown adds
     # overhead. Wait for the observable exit with a bounded deadline.
@@ -231,8 +237,11 @@ if kill -0 $shell_pid 2>/dev/null; then
         fail_test "signal handling (process did not terminate)"
     fi
 else
-    fail_test "signal handling (process exited too quickly)"
+    kill -9 "$shell_pid" 2>/dev/null
+    fail_test "signal handling (command did not become ready)"
 fi
+wait "$shell_pid" 2>/dev/null
+rm -f "$signal_ready"
 
 echo "Testing resource exhaustion simulation..."
 "$CJSH_PATH" -c "

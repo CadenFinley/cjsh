@@ -294,26 +294,29 @@ void Exec::wait_for_job(int job_id) {
     int stop_signal = 0;
     std::unordered_set<pid_t> stopped_pids;
 
+    const auto process_wait_signals = [&] {
+        // This waiter owns the foreground children's status reports. Reaping
+        // a stop elsewhere could leave us waiting for a child that cannot run.
+        if (g_shell) {
+            (void)g_shell->process_pending_signals(false);
+        } else if (auto* signal_handler = SignalHandler::instance()) {
+            (void)signal_handler->process_pending_signals(this, false);
+        }
+    };
     while (!remaining_pids.empty()) {
+        // Signals received during launch will not interrupt a later waitpid.
+        process_wait_signals();
+        if (cjsh_env::exit_requested()) {
+            last_exit_code = SignalHandler::termination_signal() != 0
+                                 ? 128 + SignalHandler::termination_signal()
+                                 : 0;
+            return;
+        }
         const pid_t wait_target = process_group ? -job_pgid : remaining_pids.front();
         pid = waitpid(wait_target, &status, WUNTRACED | WCONTINUED);
 
         if (pid == -1) {
             if (errno == EINTR) {
-                // This waiter owns the foreground children's status reports.
-                // Reaping a stop in general signal processing would leave the
-                // next waitpid blocked on a child that cannot run until `fg`.
-                if (g_shell) {
-                    (void)g_shell->process_pending_signals(false);
-                } else if (auto* signal_handler = SignalHandler::instance()) {
-                    (void)signal_handler->process_pending_signals(this, false);
-                }
-                if (cjsh_env::exit_requested()) {
-                    last_exit_code = SignalHandler::termination_signal() != 0
-                                         ? 128 + SignalHandler::termination_signal()
-                                         : 0;
-                    return;
-                }
                 continue;
             }
             if (errno == ECHILD) {

@@ -613,7 +613,8 @@ bool buffer_requires_additional_input(const std::string& buffer) {
         return false;
     }
 
-    const auto& lines = parser->prepare_interactive_input(buffer);
+    // Validation can parse function bodies and replace the parser's cache.
+    const auto lines = parser->prepare_interactive_input(buffer);
     if (lines.empty()) {
         return false;
     }

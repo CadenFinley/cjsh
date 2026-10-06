@@ -21,6 +21,10 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Fixed
 
+- Preserve interactive input while validating function bodies, preventing parser-cache invalidation from crashing the shell.
+- Process signals received during foreground process launch before waiting for the child, so TERM can exit the shell promptly.
+- Wait for redirected agent replies before checking stdout in interactive tests, including executors that pause while the editor is quiet.
+- Wait for command execution before sending TERM in the signal regression test, avoiding startup races in sanitizer builds.
 - Reject `in` as a likely mistyped `for` or `select` loop variable in normal mode while preserving POSIX-mode compatibility. Diagnose unexpected `then` keywords at the malformed conditional header, including an `f`-instead-of-`if` hint, before reporting a later unmatched `fi`.
 - Keep arrow keys in the editor while automatic completion suggestions are passive, except for Down at the end of the input buffer, which activates the menu.
 - Preserve backslash-escaped spaces and tabs in command paths and arguments through field splitting, including pipelines and commands such as `Start\ VM.command`.

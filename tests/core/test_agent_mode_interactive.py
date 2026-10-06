@@ -234,6 +234,19 @@ class Session:
                 return
         raise AssertionError(f"expected command to create {path}: {bytes(self.output)!r}")
 
+    def wait_for_stdout(self, fd: int, needle: bytes, timeout: float = 4.0) -> None:
+        deadline = time.monotonic() + timeout
+        output = b""
+        while time.monotonic() < deadline:
+            self.pump()
+            # The shell shares this file description. Leave its write offset alone.
+            output = os.pread(fd, os.fstat(fd).st_size, 0)
+            if needle in output:
+                return
+            if self.process.poll() is not None:
+                break
+        raise AssertionError(f"missing {needle!r} in stdout: {output!r}")
+
     def wait_for_quiet_prompt(self, start: int = 0, timeout: float = 4.0) -> None:
         deadline = time.monotonic() + timeout
         quiet_since: float | None = None
@@ -291,7 +304,8 @@ def main() -> int:
                 "  fail) printf '%s\\n' '{\"error\":\"The request could not be completed.\"}'; "
                 "printf 'Provider authentication failed.\\nCheck your credentials.\\n' >&2; exit 7 ;;\n"
                 "  malformed) printf 'not JSON output\\n'; exit 0 ;;\n"
-                "  answer) printf '%s\\n' '{\"text\":\"A shell runs commands.\\n"
+                # A quiet editor while the executor runs does not prove completion.
+                "  answer) sleep 0.4; printf '%s\\n' '{\"text\":\"A shell runs commands.\\n"
                 "  It also supports pipes and redirection. ✓\\n\"}'; exit 0 ;;\n"
                 "  error) printf '%s\\n' '{\"error\":\"The provider is unavailable.\\n"
                 "Please try again later.\"}'; exit 0 ;;\n"
@@ -780,10 +794,8 @@ def main() -> int:
                 output_session.wait_for(PROMPT_INPUT_START)
                 output_start = len(output_session.output)
                 output_session.enter_text(b":answer what is a shell?")
+                output_session.wait_for_stdout(stdout_capture.fileno(), answer)
                 output_session.wait_for_quiet_prompt(start=output_start)
-                stdout_capture.seek(0)
-                if answer not in stdout_capture.read():
-                    raise AssertionError("informational answer was not written to stdout")
                 if b"A shell runs commands." in output_session.output:
                     raise AssertionError("informational answer leaked onto stderr")
                 error_start = len(output_session.output)
@@ -792,8 +804,10 @@ def main() -> int:
                     b"agent-mode: runtime error: The provider is unavailable.", start=error_start
                 )
                 output_session.wait_for_quiet_prompt(start=error_start)
-                stdout_capture.seek(0)
-                if b"The provider is unavailable." in stdout_capture.read():
+                stdout_output = os.pread(
+                    stdout_capture.fileno(), os.fstat(stdout_capture.fileno()).st_size, 0
+                )
+                if b"The provider is unavailable." in stdout_output:
                     raise AssertionError("agent error leaked onto stdout")
             finally:
                 output_session.close()

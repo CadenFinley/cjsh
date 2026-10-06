@@ -113,6 +113,21 @@ class InteractiveTests(unittest.TestCase):
         session.wait_for_normalized(b"(echo) - Write arguments to standard output", start)
         self.assertIn(b"\x1b[37m(echo)", bytes(session.output[start:]))
 
+    def test_function_validation_preserves_following_commands(self):
+        session = self.session()
+        session.run_command(b"cjshopt status-line off")
+        result = self.home / "function-result"
+        for definition in (
+            b"cacheprobe() { :; }",
+            b"cacheprobe() { nestedprobe() { :; }; nestedprobe; }",
+            b"cacheprobe() ( : )",
+        ):
+            session.run_command(
+                definition + b'\ncacheprobe\nprintf "%s\\n" complete > "$HOME/function-result"'
+            )
+            self.assertEqual(result.read_text(), "complete\n")
+            result.unlink()
+
     def test_palette_tracks_binding_changes_between_prompts(self):
         # Keep the custom entry below the initial viewport so the search must find it.
         session = self.session(terminal_size=(24, 80))
