@@ -31,6 +31,8 @@
 #ifndef IC_TTY_H
 #define IC_TTY_H
 
+#include <stddef.h>
+#include <stdint.h>
 #include "common.h"
 #include "keycodes.h"
 

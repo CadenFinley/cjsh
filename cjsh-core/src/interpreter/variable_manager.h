@@ -29,10 +29,12 @@
 #ifndef CJSH_CORE_SRC_INTERPRETER_VARIABLE_MANAGER_H
 #define CJSH_CORE_SRC_INTERPRETER_VARIABLE_MANAGER_H
 
+#include <cstddef>
 #include <map>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 class VariableManager {

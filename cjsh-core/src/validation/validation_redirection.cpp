@@ -31,7 +31,7 @@
 #include "error_out.h"
 #include "parser_utils.h"
 #include "redirection_utils.h"
-#include "shell_env.h"
+#include "shell_dialect.h"
 #include "string_utils.h"
 #include "validation_common.h"
 

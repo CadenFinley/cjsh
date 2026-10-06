@@ -35,7 +35,7 @@
 
 #include "cjsh_filesystem.h"
 #include "quote_state.h"
-#include "shell_env.h"
+#include "shell_dialect.h"
 
 const char QUOTE_PREFIX = '\x1F';
 const char QUOTE_SINGLE = 'S';
@@ -58,11 +58,10 @@ std::string remove_escape_markers(const std::string& value) {
     std::string result;
     result.reserve(value.size());
     for (size_t i = 0; i < value.size(); ++i) {
-        if (value[i] == QUOTE_PREFIX) {
-            if (++i == value.size()) {
-                break;
-            }
+        if ((value[i] == QUOTE_PREFIX) && (++i == value.size())) {
+            break;
         }
+
         result += value[i];
     }
     return result;

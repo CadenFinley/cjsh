@@ -38,6 +38,7 @@
 #include "interpreter.h"
 #include "parser_utils.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 
 int local_command(const std::vector<std::string>& args, Shell* shell) {

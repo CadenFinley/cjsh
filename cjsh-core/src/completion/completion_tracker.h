@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_COMPLETION_COMPLETION_TRACKER_H
 #define CJSH_CORE_SRC_COMPLETION_COMPLETION_TRACKER_H
 
+#include <cstddef>
 #include <string>
 #include <unordered_set>
 

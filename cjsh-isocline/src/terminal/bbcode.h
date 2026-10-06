@@ -33,8 +33,10 @@
 
 #include <stdarg.h>
 
+#include "attr.h"
 #include "common.h"
 #include "term.h"
+#include "tty.h"
 
 struct bbcode_s;
 typedef struct bbcode_s bbcode_t;

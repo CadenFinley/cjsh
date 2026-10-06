@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_COMPLETION_COMPLETION_UTILS_H
 #define CJSH_CORE_SRC_COMPLETION_COMPLETION_UTILS_H
 
+#include <cstddef>
 #include <string>
 #include <vector>
 

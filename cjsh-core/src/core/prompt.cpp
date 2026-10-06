@@ -61,6 +61,7 @@
 #include "numeric_utils.h"
 #include "parser.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "string_utils.h"
 #include "token_constants.h"

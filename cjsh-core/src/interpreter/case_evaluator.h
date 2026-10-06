@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_INTERPRETER_CASE_EVALUATOR_H
 #define CJSH_CORE_SRC_INTERPRETER_CASE_EVALUATOR_H
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>

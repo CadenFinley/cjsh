@@ -48,12 +48,14 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "error_out.h"
 #include "numeric_utils.h"
 #include "readonly_command.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "signal_handler.h"
 

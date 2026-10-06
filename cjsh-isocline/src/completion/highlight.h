@@ -34,7 +34,7 @@
 #include "attr.h"
 #include "bbcode.h"
 #include "common.h"
-#include "term.h"
+#include "isocline.h"
 
 //-------------------------------------------------------------
 // Syntax highlighting

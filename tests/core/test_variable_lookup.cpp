@@ -41,6 +41,7 @@
 #include "pattern_matcher.h"
 #include "shell.h"
 #include "shell_env.h"
+#include "variable_manager.h"
 
 std::unique_ptr<Shell> g_shell;
 
@@ -350,7 +351,9 @@ bool test_pattern_matching() {
         for (const auto& text : texts) {
             if (matcher.matches_pattern(text, pattern) !=
                 (fnmatch(pattern.c_str(), text.c_str(), 0) == 0)) {
-                return expect(false, ("pattern " + pattern + " against " + text).c_str());
+                const std::string message =
+                    std::string("pattern ").append(pattern).append(" against ").append(text);
+                return expect(false, message.c_str());
             }
         }
     }
@@ -521,7 +524,7 @@ bool test_pattern_endpoints_and_expansion() {
         for (const auto& second : atoms) {
             patterns.push_back(first + second);
             for (const auto& third : atoms) {
-                patterns.push_back(first + second + third);
+                patterns.push_back(std::string(first).append(second).append(third));
             }
         }
     }
@@ -571,16 +574,22 @@ bool test_pattern_endpoints_and_expansion() {
                             }
                         }
                     }
-                    ok = expect((*ends)[begin] == expected,
-                                ("endpoint semantics: " + pattern + " on " + text).c_str()) &&
-                         ok;
+                    const std::string message = std::string("endpoint semantics: ")
+                                                    .append(pattern)
+                                                    .append(" on ")
+                                                    .append(text);
+                    ok = expect((*ends)[begin] == expected, message.c_str()) && ok;
                 }
             }
             for (const char* op : {"#", "##", "%", "%%", "/", "//", "/#", "/%"}) {
                 const std::string expression =
-                    std::string("v") + op + pattern + (op[0] == '/' ? "/XY" : "");
+                    std::string("v").append(op).append(pattern).append(op[0] == '/' ? "/XY" : "");
+                const std::string message = std::string("expansion semantics: ")
+                                                .append(expression)
+                                                .append(" on ")
+                                                .append(text);
                 ok = expect(optimized.expand(expression) == reference.expand(expression),
-                            ("expansion semantics: " + expression + " on " + text).c_str()) &&
+                            message.c_str()) &&
                      ok;
             }
         }

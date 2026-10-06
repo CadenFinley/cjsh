@@ -29,6 +29,7 @@
 #include "parameter_expansion_evaluator.h"
 #include "parser_utils.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "string_utils.h"
 
@@ -38,6 +39,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace {
 bool is_literal_pattern(const std::string& pattern) {

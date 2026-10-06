@@ -29,10 +29,13 @@
 #include "shopt_command.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <iomanip>
 #include <iostream>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "shell.h"
 #include "shell_env.h"

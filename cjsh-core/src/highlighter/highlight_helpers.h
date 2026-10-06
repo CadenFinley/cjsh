@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_HIGHLIGHTER_HIGHLIGHT_HELPERS_H
 #define CJSH_CORE_SRC_HIGHLIGHTER_HIGHLIGHT_HELPERS_H
 
+#include <cstddef>
 #include <string>
 #include <vector>
 

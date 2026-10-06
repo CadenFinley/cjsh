@@ -29,7 +29,7 @@
 #include "test_command.h"
 #include "builtin_help.h"
 #include "error_out.h"
-#include "shell_env.h"
+#include "shell_dialect.h"
 #include "test_expression_utils.h"
 
 #include <sys/stat.h>

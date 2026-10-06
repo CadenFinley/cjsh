@@ -307,15 +307,23 @@ bool test_literal_control_keywords() {
     };
     bool ok = true;
     for (const auto& [header, closer] : blocks) {
-        for (const auto& argument : {closer, "'" + closer + "'", "\"text " + closer + " text\"",
-                                     "\\" + closer, "ok # " + closer, "\"; " + closer + "\""}) {
-            const std::string unfinished = header + " echo " + argument;
+        for (const auto& argument :
+             {closer, std::string("'").append(closer).append("'"),
+              std::string("\"text ").append(closer).append(" text\""), "\\" + closer,
+              "ok # " + closer, std::string("\"; ").append(closer).append("\"")}) {
+            std::string unfinished = header;
+            unfinished += " echo ";
+            unfinished += argument;
             ok = expect(interpreter->needs_additional_input({unfinished}),
                         ("literal keyword should not close a block: " + unfinished).c_str()) &&
                  ok;
         }
-        const std::string closed =
-            header + " echo '" + closer + "'" + (closer == "esac" ? ";; " : "; ") + closer;
+        std::string closed = header;
+        closed += " echo '";
+        closed += closer;
+        closed += '\'';
+        closed += closer == "esac" ? ";; " : "; ";
+        closed += closer;
         ok = expect(!interpreter->needs_additional_input({closed}),
                     ("a real terminator should close the block: " + closed).c_str()) &&
              ok;

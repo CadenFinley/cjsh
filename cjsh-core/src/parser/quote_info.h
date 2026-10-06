@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_PARSER_QUOTE_INFO_H
 #define CJSH_CORE_SRC_PARSER_QUOTE_INFO_H
 
+#include <cstddef>
 #include <string>
 #include <vector>
 

@@ -29,7 +29,12 @@
 #ifndef IC_EDITLINE_VIEWPORT_H
 #define IC_EDITLINE_VIEWPORT_H
 
-#include "common.h"
+#include <stddef.h>
+#include <sys/types.h>
+
+#if defined(_MSC_VER)
+#include "common.h"  // Provides ssize_t on MSVC.
+#endif
 
 typedef struct editline_viewport_s {
     ssize_t input_first_row;

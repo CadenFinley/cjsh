@@ -36,6 +36,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -55,7 +56,6 @@
 #include "expansion_engine.h"
 #include "flags.h"
 #include "history_expansion.h"
-#include "interpreter.h"
 #include "interpreter_utils.h"
 #include "job_control.h"
 #include "parser_utils.h"
@@ -63,6 +63,7 @@
 #include "readonly_command.h"
 #include "redirection_utils.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "string_utils.h"
 #include "tokenizer.h"

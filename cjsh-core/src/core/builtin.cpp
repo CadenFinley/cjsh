@@ -33,6 +33,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "alias_abbr_commands.h"
@@ -70,6 +71,7 @@
 #include "runtime_commands.h"
 #include "set_command.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "shopt_command.h"
 #include "source_command.h"

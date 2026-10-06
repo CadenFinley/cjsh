@@ -43,10 +43,12 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 #include "isocline/isocline.h"
 #include "keybindings.h"
+#include "shell_dialect.h"
 #include "signal_handler.h"
 
 #ifdef __APPLE__

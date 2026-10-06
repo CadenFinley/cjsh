@@ -32,7 +32,6 @@
 #include "function_ref.h"
 #include "parser_utils.h"
 #include "shell.h"
-#include "shell_env.h"
 #include "string_utils.h"
 
 #include <cstdio>

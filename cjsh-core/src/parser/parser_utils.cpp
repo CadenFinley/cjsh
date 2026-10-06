@@ -29,7 +29,6 @@
 #include "parser_utils.h"
 #include "function_evaluator.h"
 #include "interpreter_utils.h"
-#include "quote_info.h"
 #include "quote_state.h"
 #include "string_utils.h"
 
@@ -1242,7 +1241,10 @@ std::vector<std::string> merge_command_group_lines(const std::vector<std::string
                 if (lead == std::string::npos) {
                     continue;
                 }
-                if (!function_evaluator::parse_function_header(source + '\n' + next_line)) {
+                std::string combined_header = source;
+                combined_header += '\n';
+                combined_header += next_line;
+                if (!function_evaluator::parse_function_header(combined_header)) {
                     next = result.size();
                 }
                 break;

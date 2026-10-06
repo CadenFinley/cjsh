@@ -30,7 +30,6 @@
 #define CJSH_CORE_SRC_CORE_BUILTIN_H
 
 #include <limits.h>
-#include <unistd.h>
 
 #include <functional>
 #include <string>

@@ -42,6 +42,7 @@
 #include "cjsh_filesystem.h"
 #include "error_out.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "suggestion_utils.h"
 

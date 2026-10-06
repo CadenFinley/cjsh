@@ -36,6 +36,7 @@
 #include "interpreter.h"
 #include "loop_evaluator.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 
 std::unique_ptr<Shell> g_shell;

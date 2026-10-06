@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_INTERPRETER_PATTERN_MATCHER_H
 #define CJSH_CORE_SRC_INTERPRETER_PATTERN_MATCHER_H
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>

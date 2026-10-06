@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_BUILTIN_BUILTIN_OPTION_PARSER_H
 #define CJSH_CORE_SRC_BUILTIN_BUILTIN_OPTION_PARSER_H
 
+#include <cstddef>
 #include <functional>
 #include <optional>
 #include <string>

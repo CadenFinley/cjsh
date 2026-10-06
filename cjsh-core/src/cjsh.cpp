@@ -36,6 +36,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "builtin.h"
 #include "cjsh_filesystem.h"
@@ -47,6 +48,7 @@
 #include "pipeline_status_utils.h"
 #include "prompt.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "signal_handler.h"
 #include "trap_command.h"

@@ -30,6 +30,7 @@
 #define CJSH_CORE_SRC_CORE_AGENT_MODE_H
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -44,7 +45,7 @@ struct Suggestion {
     std::string description;
 };
 
-enum class ResponseType {
+enum class ResponseType : std::uint8_t {
     Suggestions,
     Text,
     Error

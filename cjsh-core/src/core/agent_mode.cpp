@@ -63,6 +63,7 @@
 #include "keycodes.h"
 #include "prompt.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "signal_handler.h"
 #include "status_line.h"

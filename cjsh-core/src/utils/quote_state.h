@@ -30,6 +30,7 @@
 #define CJSH_CORE_SRC_UTILS_QUOTE_STATE_H
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 

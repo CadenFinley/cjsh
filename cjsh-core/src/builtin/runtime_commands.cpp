@@ -34,6 +34,7 @@
 #include "double_bracket_command.h"
 #include "error_out.h"
 #include "internal_subshell_command.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 
 namespace runtime_commands {

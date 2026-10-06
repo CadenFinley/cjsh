@@ -32,6 +32,7 @@
 #define IC_STRINGBUF_H
 
 #include <stdarg.h>
+#include <stdint.h>
 
 #include "common.h"
 

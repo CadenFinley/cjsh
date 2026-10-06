@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_CORE_FLAGS_H
 #define CJSH_CORE_SRC_CORE_FLAGS_H
 
+#include <cstddef>
 #include <string>
 #include <utility>
 #include <vector>

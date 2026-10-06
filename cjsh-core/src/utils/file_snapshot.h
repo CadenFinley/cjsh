@@ -42,7 +42,7 @@ namespace cjsh_filesystem {
 struct FileSnapshot {
     struct stat info{};
     int error = 0;
-    std::chrono::system_clock::time_point observed_at{};
+    std::chrono::system_clock::time_point observed_at;
 
     static FileSnapshot read(const std::filesystem::path& path) {
         FileSnapshot snapshot;

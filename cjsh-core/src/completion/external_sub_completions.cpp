@@ -27,9 +27,11 @@
 */
 
 #include "external_sub_completions.h"
+#include <sys/stat.h>
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>

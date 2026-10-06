@@ -29,7 +29,6 @@
 #ifndef CJSH_CORE_SRC_UTILS_NUMERIC_UTILS_H
 #define CJSH_CORE_SRC_UTILS_NUMERIC_UTILS_H
 
-#include <string>
 #include <string_view>
 
 namespace numeric_utils {

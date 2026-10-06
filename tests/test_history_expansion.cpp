@@ -26,6 +26,7 @@
   SOFTWARE.
 */
 
+#include <algorithm>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -122,30 +123,26 @@ static bool test_quick_substitution_valid_forms() {
         {"^alpha^^", "echo  alpha beta"},
         {"^alpha^alpha^", "echo alpha alpha beta"},
     };
-    for (const auto& [command, expected] : cases) {
+    return std::all_of(cases.begin(), cases.end(), [test_name](const auto& entry) {
+        const auto& [command, expected] = entry;
         const auto result = HistoryExpansion::expand(command, {"echo alpha alpha beta"});
         EXPECT_FALSE(result.has_error, test_name, "valid substitution should succeed");
         EXPECT_TRUE(result.was_expanded, test_name, "valid substitution should expand");
-        if (!expect_streq(result.expanded_command, expected, test_name,
-                          "only the first match should be replaced")) {
-            return false;
-        }
-    }
-    return true;
+        return expect_streq(result.expanded_command, expected, test_name,
+                            "only the first match should be replaced");
+    });
 }
 
 static bool test_quick_substitution_preserves_suffix() {
     const char* test_name = "quick_substitution_preserves_suffix";
-    for (const std::string suffix : {" extra", " && echo done", "^^"}) {
+    const std::vector<std::string> suffixes = {" extra", " && echo done", "^^"};
+    return std::all_of(suffixes.begin(), suffixes.end(), [test_name](const std::string& suffix) {
         const auto result = HistoryExpansion::expand("^alpha^beta^" + suffix, {"echo alpha"});
         EXPECT_FALSE(result.has_error, test_name, "substitution with suffix should succeed");
         EXPECT_TRUE(result.was_expanded, test_name, "substitution with suffix should expand");
-        if (!expect_streq(result.expanded_command, "echo beta" + suffix, test_name,
-                          "text after the closing caret must not be discarded")) {
-            return false;
-        }
-    }
-    return true;
+        return expect_streq(result.expanded_command, "echo beta" + suffix, test_name,
+                            "text after the closing caret must not be discarded");
+    });
 }
 
 static bool test_quick_substitution_errors() {
@@ -245,16 +242,14 @@ static bool test_committed_history_errors_preserve_input() {
             return false;
         }
     }
-    for (const std::string command :
-         {"!-2", "!1", "!missing", "!?missing?", "!!:9", "^missing^new^"}) {
+    const std::vector<std::string> commands = {"!-2",        "!1",   "!missing",
+                                               "!?missing?", "!!:9", "^missing^new^"};
+    return std::all_of(commands.begin(), commands.end(), [test_name](const std::string& command) {
         const auto result = HistoryExpansion::expand(command, {"echo only"});
         EXPECT_TRUE(result.has_error, test_name, command.c_str());
         EXPECT_FALSE(result.was_expanded, test_name, command.c_str());
-        if (!expect_streq(result.expanded_command, command, test_name, command.c_str())) {
-            return false;
-        }
-    }
-    return true;
+        return expect_streq(result.expanded_command, command, test_name, command.c_str());
+    });
 }
 
 static bool test_literal_history_syntax_is_not_reexpanded() {

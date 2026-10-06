@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_HIGHLIGHTER_TOKEN_CLASSIFIER_H
 #define CJSH_CORE_SRC_HIGHLIGHTER_TOKEN_CLASSIFIER_H
 
+#include <cstddef>
 #include <string>
 
 namespace token_classifier {

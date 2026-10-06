@@ -29,9 +29,12 @@
 #ifndef CJSH_CORE_SRC_PARSER_VARIABLE_EXPANDER_H
 #define CJSH_CORE_SRC_PARSER_VARIABLE_EXPANDER_H
 
+#include <cstddef>
+#include <exception>
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 class Shell;

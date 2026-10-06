@@ -35,7 +35,6 @@
 #include <stdint.h>
 
 #include "common.h"
-#include "env.h"
 #include "stringbuf.h"
 
 ic_private void ic_typeahead_filter_escape_sequences_into(const char* input, size_t input_len,

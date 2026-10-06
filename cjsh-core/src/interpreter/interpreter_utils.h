@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_INTERPRETER_INTERPRETER_UTILS_H
 #define CJSH_CORE_SRC_INTERPRETER_INTERPRETER_UTILS_H
 
+#include <cstddef>
 #include <string>
 #include <vector>
 

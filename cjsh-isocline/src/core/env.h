@@ -32,12 +32,14 @@
 #define IC_ENV_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "bbcode.h"
 #include "common.h"
 #include "completions.h"
 #include "history.h"
 #include "isocline.h"
+#include "keybindings.h"
 #include "stringbuf.h"
 #include "term.h"
 #include "tty.h"

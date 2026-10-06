@@ -27,6 +27,7 @@
 */
 
 #include "cjsh_completions.h"
+#include <sys/stat.h>
 #include <iterator>
 #include "isocline.h"
 
@@ -1401,7 +1402,7 @@ const HistoryCache* cached_history_records(bool ranked) {
     constexpr size_t max_bytes = 8 * 1024 * 1024;
     constexpr size_t max_records = 10000;
     static HistoryCache cache;
-    const auto path = cjsh_filesystem::g_cjsh_history_path();
+    const auto& path = cjsh_filesystem::g_cjsh_history_path();
     const auto snapshot = cjsh_filesystem::FileSnapshot::read(path);
     if (!cache.observed || cache.path != path || !cache.snapshot.can_reuse_cached_data(snapshot)) {
         cache.path = path;

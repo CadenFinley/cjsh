@@ -42,6 +42,7 @@
 #include "interpreter.h"
 #include "numeric_utils.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "string_utils.h"
 

@@ -29,14 +29,13 @@
 #ifndef CJSH_CORE_SRC_CORE_SHELL_ENV_H
 #define CJSH_CORE_SRC_CORE_SHELL_ENV_H
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#include "shell_dialect.h"
 
 struct passwd;
 class Shell;

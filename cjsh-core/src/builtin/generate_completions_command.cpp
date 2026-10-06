@@ -137,7 +137,7 @@ void print_target_result_line(const std::string& target_name, bool generated, bo
     if (!is_root_target) {
         std::cout << " (subcommand cache)";
     }
-    std::cout << std::endl;
+    std::cout << '\n' << std::flush;
 }
 
 class GenerateCompletionsProgressDisplay {

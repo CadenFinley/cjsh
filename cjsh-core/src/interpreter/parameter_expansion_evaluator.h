@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_INTERPRETER_PARAMETER_EXPANSION_EVALUATOR_H
 #define CJSH_CORE_SRC_INTERPRETER_PARAMETER_EXPANSION_EVALUATOR_H
 
+#include <cstddef>
 #include <functional>
 #include <optional>
 #include <string>

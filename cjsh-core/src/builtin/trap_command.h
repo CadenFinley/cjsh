@@ -30,6 +30,7 @@
 #define CJSH_CORE_SRC_BUILTIN_TRAP_COMMAND_H
 
 #include <string>
+#include <utility>
 #include <vector>
 
 class Shell;

@@ -30,16 +30,19 @@
 
 #include "builtin_help.h"
 
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include <unistd.h>
 #include "builtin.h"
 #include "error_out.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 
 int source_command(const std::vector<std::string>& args) {
@@ -81,7 +84,7 @@ int source_command(const std::vector<std::string>& args) {
                              args[1];
             if (access(candidate.c_str(), R_OK) == 0 &&
                 !std::filesystem::is_directory(candidate, status_ec)) {
-                target_path = candidate;
+                target_path = std::move(candidate);
                 break;
             }
             if (end == std::string::npos) {

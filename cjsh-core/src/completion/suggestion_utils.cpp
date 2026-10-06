@@ -32,6 +32,7 @@
 #include <cctype>
 #include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <system_error>

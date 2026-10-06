@@ -35,6 +35,7 @@
 #include <time.h>
 
 #include "common.h"
+#include "isocline.h"
 
 //-------------------------------------------------------------
 // History

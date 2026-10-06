@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_INTERPRETER_CONDITIONAL_EVALUATOR_H
 #define CJSH_CORE_SRC_INTERPRETER_CONDITIONAL_EVALUATOR_H
 
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <vector>

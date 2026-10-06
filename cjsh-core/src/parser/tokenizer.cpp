@@ -40,6 +40,7 @@
 
 #include "parser_utils.h"
 #include "quote_info.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 
 namespace {
@@ -309,7 +310,7 @@ std::vector<std::string> Tokenizer::tokenize_command(const std::string& cmdline)
                       (c == '&' && arith_depth == 0 && brace_depth == 0 && bracket_depth == 0) ||
                       (c == '|' && arith_depth == 0 && brace_depth == 0 && bracket_depth == 0))) {
                 const bool before_redirection =
-                    (c == '<' || c == '>') && !(i + 1 < cmdline_len && cmdline[i + 1] == '(');
+                    (c == '<' || c == '>') && (i + 1 >= cmdline_len || cmdline[i + 1] != '(');
                 flush_current_token(before_redirection);
 
                 bool handled_special = false;

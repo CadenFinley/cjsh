@@ -51,6 +51,7 @@
 #include "job_control.h"
 #include "parser_utils.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 
 namespace {

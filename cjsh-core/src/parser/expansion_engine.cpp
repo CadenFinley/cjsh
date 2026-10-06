@@ -55,6 +55,7 @@
 #include "pattern_matcher.h"
 #include "quote_info.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 
 namespace {

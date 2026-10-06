@@ -31,7 +31,7 @@
 
 #include "interpreter_utils.h"
 #include "parser_utils.h"
-#include "shell_env.h"
+#include "shell_dialect.h"
 #include "validation_common.h"
 
 #include <algorithm>

@@ -46,6 +46,7 @@
 #include "parser.h"
 #include "shell.h"
 #include "shell_env.h"
+#include "tokenizer.h"
 #include "variable_expander.h"
 
 std::unique_ptr<Shell> g_shell;
@@ -366,7 +367,7 @@ void test_simple_glob_matches_libc() {
 void test_redirection_path_expansion() {
     namespace fs = std::filesystem;
     const fs::path original_cwd = fs::current_path();
-    const fs::path user_home = cjsh_filesystem::g_user_home_path();
+    const fs::path& user_home = cjsh_filesystem::g_user_home_path();
     VariableExpander expander(g_shell.get(), cjsh_env::env_vars());
     Command plain;
     plain.output_file = "relative-output";

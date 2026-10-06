@@ -40,7 +40,6 @@
 
 #include "attr.h"
 #include "common.h"
-#include "stringbuf.h"
 #include "tty.h"
 
 struct term_s;

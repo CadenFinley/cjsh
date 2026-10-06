@@ -39,6 +39,7 @@
 #include <system_error>
 #include <unordered_map>
 #include <utility>
+#include "shell_dialect.h"
 #if defined(__APPLE__)
 #include <crt_externs.h>
 #endif

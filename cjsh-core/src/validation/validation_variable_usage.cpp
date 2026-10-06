@@ -27,6 +27,7 @@
 */
 
 #include <algorithm>
+#include <cstddef>
 #include <iterator>
 #include "error_out.h"
 #include "interpreter.h"

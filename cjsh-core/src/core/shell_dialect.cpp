@@ -30,7 +30,9 @@
 
 #include <array>
 #include <cstdlib>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "shell_env.h"
 

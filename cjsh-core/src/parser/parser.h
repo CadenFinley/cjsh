@@ -29,12 +29,14 @@
 #ifndef CJSH_CORE_SRC_PARSER_PARSER_H
 #define CJSH_CORE_SRC_PARSER_PARSER_H
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 class Shell;
@@ -122,7 +124,7 @@ class Parser {
 
     HistoryExpansionResult perform_history_expansion(const std::string& command) const;
 
-    std::vector<std::string> parse_into_lines(const std::string& scripts);
+    std::vector<std::string> parse_into_lines(const std::string& source);
     const std::vector<std::string>& prepare_interactive_input(const std::string& script);
     bool awaiting_here_document() const {
         return incomplete_here_document;

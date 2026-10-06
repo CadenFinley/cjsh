@@ -33,7 +33,7 @@
 #include "interpreter_utils.h"
 #include "parser_utils.h"
 #include "quote_state.h"
-#include "shell_env.h"
+#include "shell_dialect.h"
 #include "string_utils.h"
 
 #include <algorithm>

@@ -29,6 +29,7 @@
 #ifndef CJSH_CORE_SRC_INTERPRETER_HISTORY_EXPANSION_H
 #define CJSH_CORE_SRC_INTERPRETER_HISTORY_EXPANSION_H
 
+#include <cstddef>
 #include <string>
 #include <vector>
 

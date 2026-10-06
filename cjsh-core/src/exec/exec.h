@@ -159,7 +159,7 @@ struct CommandOutput {
     std::string output;
     int exit_code;
     bool success;
-    std::string error_output{};
+    std::string error_output;
 };
 
 CommandOutput execute_with_stdout_capture(const std::function<int()>& child_executor,

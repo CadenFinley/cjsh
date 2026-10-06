@@ -54,9 +54,9 @@
 #include "pipeline_status_utils.h"
 #include "quote_state.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "signal_handler.h"
-#include "token_constants.h"
 
 using shell_script_interpreter::detail::strip_inline_comment;
 using shell_script_interpreter::detail::trim;

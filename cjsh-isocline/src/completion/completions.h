@@ -32,6 +32,7 @@
 #define IC_COMPLETIONS_H
 
 #include "common.h"
+#include "isocline.h"
 #include "stringbuf.h"
 
 //-------------------------------------------------------------

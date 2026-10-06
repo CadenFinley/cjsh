@@ -36,6 +36,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <ios>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -1168,7 +1169,7 @@ static bool test_empty_prompt_history_ranking() {
 static bool test_history_file_refresh() {
     const char* test_name = "history_file_refresh";
     namespace fs = std::filesystem;
-    const auto history_path = cjsh_filesystem::g_cjsh_history_path();
+    const auto& history_path = cjsh_filesystem::g_cjsh_history_path();
     const auto expect_history = [&](const std::vector<std::string>& expected) {
         (void)run_completion_generation("", &cjsh_default_completer, 256);
         const bool ok = generated_completion_replacements() == expected;
@@ -1887,10 +1888,12 @@ static bool test_collect_transpositions_only() {
     const auto& match = transpositions.at("Git");
     EXPECT_TRUE(match.is_transposition && match.distance == 1 && match.shared_prefix_len == 1,
                 test_name, "normalized transpositions retain their ranking");
-    for (const auto& [candidate, result] : all) {
-        EXPECT_TRUE((transpositions.count(candidate) != 0) == result.is_transposition, test_name,
-                    "the first pass agrees with filtering the full candidate set");
-    }
+    EXPECT_TRUE(std::all_of(all.begin(), all.end(),
+                            [&transpositions](const auto& entry) {
+                                return (transpositions.count(entry.first) != 0) ==
+                                       entry.second.is_transposition;
+                            }),
+                test_name, "the first pass agrees with filtering the full candidate set");
     return true;
 }
 
@@ -2394,7 +2397,7 @@ static bool test_hints_defer_documentation_fetch() {
 static bool test_passive_documentation_refresh() {
     const char* test_name = "passive_documentation_refresh";
     namespace fs = std::filesystem;
-    const auto root = cjsh_filesystem::g_cjsh_generated_completions_path();
+    const auto& root = cjsh_filesystem::g_cjsh_generated_completions_path();
     fs::create_directories(root);
     for (const char* name : {"doccache-created", "doccache-repaired", "doccache-symlink"}) {
         const auto file = root / (std::string(name) + ".txt");

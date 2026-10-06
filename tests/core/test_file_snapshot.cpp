@@ -26,6 +26,8 @@
   SOFTWARE.
 */
 
+#include <sys/stat.h>
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 

@@ -30,6 +30,7 @@
 #define CJSH_CORE_SRC_COMPLETION_COMPLETION_SPELL_H
 
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <unordered_map>
