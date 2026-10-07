@@ -38,14 +38,22 @@
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS  // for msvc
 #endif
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 700
+#endif
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#define _DARWIN_C_SOURCE
+#endif
 #include "../completion/completers.c"
 #include "../completion/completions.c"
 #include "../completion/highlight.c"
 #include "../edit/editline.c"
 #include "../edit/history.c"
 #include "../edit/isocline_readline.c"
+#include "../edit/isocline_typeahead.c"
 #include "../edit/prompt_line_replacement.c"
 #include "../edit/undo.c"
 #include "../keybinding/isocline_keybindings.c"
@@ -58,6 +66,7 @@
 #include "../terminal/tty_esc.c"
 #include "../terminal/unicode.c"
 #include "../utils/stringbuf.c"
+#include "../utils/fuzzy_match.c"
 #include "common.c"
 #include "isocline_env.c"
 #include "isocline_options.c"
