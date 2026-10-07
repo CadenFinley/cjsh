@@ -979,9 +979,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         }
     }
 
-    // POSIX noexec still validates syntax but must return before command expansion,
-    // function invocation, or the quick execution path can produce side effects.
-    if (config::is_posix_mode() && g_shell->get_shell_option(ShellOption::Noexec)) {
+    // Both dialects validate syntax without allowing expansion, function invocation,
+    // or the quick execution path to produce side effects under noexec.
+    if (g_shell->get_shell_option(ShellOption::Noexec)) {
         return 0;
     }
     if (auto simple_result = try_execute_simple_block(lines)) {

@@ -171,7 +171,9 @@ Other switches:
 - `-l, --login` – treat the shell as a login shell (source `~/.cjprofile`)
 - `-i, --interactive` – force interactive behavior even if stdin is not a tty
 - `-c, --command <string>` – execute a single command and exit (disables history expansion)
-- `--no-exec` – read commands but do not execute them
+- `-n, --no-exec` – check syntax without executing commands or loading startup files in
+  non-interactive shells, in either dialect. Interactive shells warn and ignore this
+  option (including `set -n` and `set -o noexec`); commands and startup files run normally.
 - `--no-system-paths` – skip automatic PATH setup from `/etc/paths` and `/etc/paths.d`
 - `--posix` – select [POSIX.1-2024 mode](posix-mode.md), with strict extension restrictions. All dialects use standard short-option
   meanings (`-v` verbose, `-C` noclobber, `-m` monitor, `-s` stdin, `-h` hashall)

@@ -48,6 +48,7 @@ std::string get_usage() {
         << "  -c, --command COMMAND      Execute the specified command and exit\n"
         << "                             (disables history expansion)\n"
         << "  -n, --no-exec             Check syntax without execution or startup files\n"
+        << "                           Ignored with a warning in interactive mode\n"
         << "      --no-config           Skip all automatic startup/logout files\n"
         << "      --config-dir DIR      Native config root (overrides CJSH_CONFIG_HOME)\n"
         << "      --no-system-paths     Skip PATH setup from /etc/paths and /etc/paths.d\n"

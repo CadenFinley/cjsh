@@ -330,6 +330,88 @@ class StartupTests(unittest.TestCase):
         for flag in ("--minimal", "--secure"):
             self.assertEqual(self.run_shell(flag, "-c", "echo executed").stdout, "executed\n")
 
+    def test_interactive_noexec_warns_and_stays_disabled(self):
+        warning = "noexec is ignored in interactive mode"
+        for dialect in ([], ["--posix"]):
+            for flags in (["-in"], ["-ni"], ["--no-exec", "-i"],
+                          ["-i", "-o", "noexec"]):
+                with self.subTest(dialect=dialect, flags=flags):
+                    r = self.run_shell(*dialect, *flags, "--no-config", "-c",
+                                       'case $- in *n*) echo enabled;; esac\n'
+                                       'echo executed; exit 7')
+                    self.assertEqual(r.returncode, 7, r.stderr)
+                    self.assertEqual(r.stdout, "executed\n")
+                    self.assertEqual(r.stderr.count(warning), 1, r.stderr)
+                    self.assertIn("warning", r.stderr.lower())
+            for command in ("set -n", "set -o noexec"):
+                with self.subTest(dialect=dialect, command=command):
+                    r = self.run_shell(*dialect, "-i", "--no-config", "-c",
+                                       command + '; echo "$?"; '
+                                       'case $- in *n*) echo enabled;; esac\n'
+                                       'set +n; echo executed; exit 7')
+                    self.assertEqual(r.returncode, 7, r.stderr)
+                    self.assertEqual(r.stdout, "0\nexecuted\n")
+                    self.assertEqual(r.stderr.count(warning), 1, r.stderr)
+            r = self.run_shell(*dialect, "-i", "--no-config", "+n", "-c",
+                               "set +o noexec; echo executed")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(r.stdout, "executed\n")
+            self.assertNotIn(warning, r.stderr)
+
+    def test_interactive_noexec_preserves_startup_files(self):
+        self.trace_files(self.home)
+        r = self.run_shell("-inl", "--no-titleline", "--no-history", "-c", "echo executed")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "executed\n")
+        self.assertEqual(self.read_trace(), ["env", "profile", "rc", "logout"])
+        env_file = self.home / "posix-env"
+        env_file.write_text('echo posix-env >> "$HOME/trace"\n')
+        self.env["ENV"] = str(env_file)
+        r = self.run_shell("--posix", "-in", "-c", "echo executed")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "executed\n")
+        self.assertEqual(self.read_trace(), ["posix-env"])
+
+    def test_noexec_automatic_interactivity(self):
+        for dialect in ([], ["--posix"]):
+            with self.subTest(dialect=dialect):
+                with mock.patch.dict(os.environ, self.env, clear=True):
+                    session = IdleHookSession(self.binary, str(self.home), argv=[
+                        self.binary, *dialect, "-n", "--no-config", "--no-titleline",
+                        "--no-prompt-vars", "--no-agent", "--no-history",
+                        "--no-completions", "--no-syntax-highlighting"])
+                self.addCleanup(session.close)
+                session.wait_for_prompt(0)
+                warning = b"noexec is ignored in interactive mode"
+                self.assertEqual(bytes(session.output).count(warning), 1)
+                session.run_command(b'set -n')
+                self.assertEqual(bytes(session.output).count(warning), 2)
+                session.run_command(b'echo usable > "$HOME/noexec-pty"')
+                self.assertEqual((self.home / "noexec-pty").read_text(), "usable\n")
+                session.run_command(b'set +n')
+                self.assertEqual(bytes(session.output).count(warning), 2)
+                session.write(b"exit 7\r")
+                self.assertEqual(session.wait_for_exit(), 7)
+
+    def test_noexec_avoids_side_effects_in_both_dialects(self):
+        for dialect in ([], ["--posix"]):
+            for flags in (["-n"], ["--no-exec"], ["-o", "noexec"]):
+                with self.subTest(dialect=dialect, flags=flags):
+                    r = self.run_shell(*dialect, *flags, "-c",
+                                       'echo "${missing:?must not expand}"; '
+                                       'echo "$(touch "$HOME/substitution")"; '
+                                       'echo bad > "$HOME/redirection"; '
+                                       'while true; do echo bad; done')
+                    self.assertEqual(r.returncode, 0, r.stderr)
+                    self.assertEqual(r.stdout, "")
+                    self.assertEqual(r.stderr, "")
+                    self.assertFalse((self.home / "substitution").exists())
+                    self.assertFalse((self.home / "redirection").exists())
+            r = self.run_shell(*dialect, "-n", "+n", "-c", "echo executed")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(r.stdout, "executed\n")
+            self.assertEqual(r.stderr, "")
+
     def test_native_configuration_precedence_and_bypass(self):
         alt = self.home / ".config/cjsh"
         override = self.home / "override root"

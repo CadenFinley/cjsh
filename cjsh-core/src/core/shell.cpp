@@ -894,6 +894,18 @@ void Shell::apply_startup_options(const std::vector<std::pair<std::string, bool>
 // shared configuration or require terminal checks instead of a plain flag update.
 void Shell::set_shell_option(ShellOption option, bool value) {
     explicit_shell_options[to_index(option)] = true;
+    if (option == ShellOption::Noexec && config::interactive_mode) {
+        if (value) {
+            print_error({ErrorType::UNKNOWN_ERROR,
+                         ErrorSeverity::WARNING,
+                         "warning",
+                         "noexec is ignored in interactive mode",
+                         {"Use cjsh -n script to check syntax without executing commands."}});
+        }
+        value = false;
+        // An ignored startup -n must not suppress startup files or PATH setup.
+        config::no_exec = false;
+    }
     if (option == ShellOption::Extglob) {
         config::extglob_enabled = value && !config::is_posix_mode();
     } else if (option == ShellOption::HistExpand) {
