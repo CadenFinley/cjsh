@@ -1775,12 +1775,30 @@
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># Configure the input and menu scroll margin (default: 3)</span>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>cjshopt<span class="w"> </span>multiline-bottom-lines<span class="w"> </span>&lt;count<span class="p">|</span>status&gt;
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># Show or hide input and menu scrollbars (default: on)</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>cjshopt<span class="w"> </span>scrollbars<span class="w"> </span>on<span class="p">|</span>off<span class="p">|</span>status
 </span></code></pre></div><p></p>
 <p>When a command exceeds the viewport limit, the visible rows scroll with the cursor while the full
 command remains available for editing and submission. Completion menus and other helper rows are
 laid out separately below the input viewport. The symmetric cursor margin keeps the viewport fixed
 while the cursor moves within it, uses only rows that exist in the command, and never pads the
 display with blank lines.</p>
+<p>A scrollbar appears beside the input whenever rows are hidden by <code>multiline-max-lines</code>, the
+terminal height, or space reserved for helper/menu rows. It follows the visible input rows,
+including wrapped lines, and disappears when the whole input fits. With prompt mouse capture
+enabled, click the track to page or drag the thumb to scroll while keeping the cursor visible.
+In <code>simple</code> and <code>smart</code> mouse mode, each wheel event moves the cursor one rendered row and scrolls
+the input viewport when the pointer is over it and its scrollbar is visible. The cursor keeps
+moving through the visible rows when the scrollbar reaches its top or bottom limit, stopping at
+the first or last input row. In <code>smart</code> mode, another upward wheel event while the cursor is on
+the first input row releases capture for terminal scrolling. Wheel input outside the input
+viewport also releases smart capture. <code>F2</code> disables input wheel navigation along with prompt
+mouse capture; <code>off</code> and <code>all-off</code> leave input wheel scrolling to the terminal.
+Submitting the command removes the input scrollbar.</p>
+<p><code>cjshopt scrollbars off</code> hides both input and menu scrollbars while preserving keyboard scrolling.
+Add the command to <code>~/.cjshrc</code> to persist it. Embedding applications can use
+<code>ic_enable_scrollbars(bool)</code> and query <code>ic_scrollbars_are_enabled()</code>.</p>
 <p>All menus default to at most 15 content rows. These limits include expanded item previews, and
 menus shrink to fit the terminal. Headers and help text use separate rows.
 Use the per-menu <code>cjshopt</code> commands above to set independent limits, and add them to <code>~/.cjshrc</code>
