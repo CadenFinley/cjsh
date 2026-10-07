@@ -577,10 +577,6 @@ std::vector<std::string> Tokenizer::merge_redirection_tokens(
     return result;
 }
 
-std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input) {
-    return split_by_ifs(input, cjsh_env::get_ifs_delimiters());
-}
-
 std::vector<std::string> Tokenizer::split_by_ifs(const std::string& input, const std::string& ifs,
                                                  const std::vector<bool>* expanded_bytes) {
     std::vector<std::string> result;

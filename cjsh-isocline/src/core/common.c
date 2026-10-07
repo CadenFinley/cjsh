@@ -65,14 +65,6 @@ ic_private void ic_memcpy(void* dest, const void* src, ssize_t n) {
     memcpy(dest, src, to_size_t(n));
 }
 
-ic_private void ic_memset(void* dest, uint8_t value, ssize_t n) {
-    assert(dest != NULL);
-    if (dest == NULL || n <= 0) {
-        return;
-    }
-    memset(dest, (int8_t)value, to_size_t(n));
-}
-
 ic_private bool ic_strcpy(char* dest, ssize_t dest_size /* including 0 */, const char* src) {
     assert(dest != NULL && src != NULL);
     if (dest == NULL || src == NULL || dest_size <= 0) {

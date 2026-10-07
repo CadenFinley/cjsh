@@ -518,7 +518,7 @@ std::vector<std::string> ShellScriptInterpreter::parse_into_lines(const std::str
 
 ShellScriptInterpreter::SyntaxError::SyntaxError(size_t line_num, const std::string& msg,
                                                  const std::string& line_content)
-    : position({line_num, 0, 0, 0}),
+    : position({line_num, 0, 0}),
       severity(ErrorSeverity::ERROR),
       category(ErrorCategory::SYNTAX),
       error_code("SYN001"),

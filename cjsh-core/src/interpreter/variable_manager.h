@@ -156,7 +156,7 @@ class VariableManager {
     bool assign_array_words(IndexedArray& target_array, const std::vector<std::string>& words,
                             bool append);
     bool assign_associative_words(AssociativeArray& target_array,
-                                  const std::vector<std::string>& words, bool append);
+                                  const std::vector<std::string>& words);
     std::string normalize_associative_key(const std::string& key) const;
     std::string resolve_nameref_reference(const std::string& reference) const;
     bool has_global_scalar_binding(const std::string& name) const;

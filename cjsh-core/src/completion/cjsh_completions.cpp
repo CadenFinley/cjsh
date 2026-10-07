@@ -308,11 +308,6 @@ CompletionEntry inspect_completion_entry(const std::filesystem::directory_entry&
     return result;
 }
 
-bool is_executable_or_script_entry(const std::filesystem::directory_entry& entry) {
-    const auto info = inspect_completion_entry(entry, CompletionInspection::Runnable);
-    return info.directory || info.runnable;
-}
-
 template <typename Container, typename Extractor>
 void process_command_candidates(
     ic_completion_env_t* cenv, const Container& container, const std::string& prefix,

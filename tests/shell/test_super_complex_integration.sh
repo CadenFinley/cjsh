@@ -79,19 +79,6 @@ expect_exit() {
   fi
 }
 
-expect_contains() {
-  desc=$1
-  script=$2
-  expected_substring=$3
-  TOTAL=$((TOTAL + 1))
-  output=$("$CJSH_PATH" -c "$script" 2>&1)
-  if echo "$output" | grep -q "$expected_substring"; then
-    pass "$desc"
-  else
-    fail "$desc" "output containing '$expected_substring'" "$output"
-  fi
-}
-
 expect_not_crash() {
   desc=$1
   script=$2
@@ -505,22 +492,6 @@ log_message() {
             fi
             ;;
     esac
-}
-
-hash_string() {
-    input="$1"
-    hash=5381
-    
-    i=1
-    length=${#input}
-    while [ $i -le "$length" ]; do
-        char=$(printf "%s" "$input" | cut -c "$i")
-        char_val=$(printf "%d" "'$char" 2>/dev/null || echo 65)
-        hash=$(( (hash * 33 + char_val) % 1000000 ))
-        i=$((i + 1))
-    done
-    
-    echo "$hash"
 }
 
 cache_put() {

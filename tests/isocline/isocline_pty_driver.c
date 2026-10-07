@@ -512,37 +512,6 @@ static int run_history_probe_case(const char* scenario) {
     return 0;
 }
 
-static bool queue_raw_bytes(const uint8_t* bytes, size_t count) {
-    if (bytes == NULL && count > 0) {
-        return false;
-    }
-    return ic_push_raw_input(bytes, count);
-}
-
-#if !defined(_WIN32)
-typedef struct delayed_raw_feed_s {
-    const uint8_t* bytes;
-    size_t count;
-    unsigned int delay_us;
-} delayed_raw_feed_t;
-
-static void* delayed_raw_feed_thread(void* arg) {
-    delayed_raw_feed_t* feed = (delayed_raw_feed_t*)arg;
-    if (feed == NULL) {
-        return NULL;
-    }
-
-    struct timespec req = {
-        .tv_sec = feed->delay_us / 1000000u,
-        .tv_nsec = (long)((feed->delay_us % 1000000u) * 1000u),
-    };
-    (void)nanosleep(&req, NULL);
-
-    (void)ic_push_raw_input(feed->bytes, feed->count);
-    return NULL;
-}
-#endif
-
 #if !defined(_WIN32)
 static int run_paste_wakeup_case(void) {
     ic_env_t* env = ic_get_env();
@@ -810,12 +779,6 @@ static int run_case(const char* scenario) {
         initial_input = "abcdef";
     } else if (strcmp(scenario, "redo_cleared_by_new_edit") == 0) {
         initial_input = "ab";
-    } else if (strcmp(scenario, "resize_reflow_initial_input") == 0) {
-        initial_input = "abcdefghij";
-    } else if (strcmp(scenario, "shell_prompt_wrap_boundary") == 0) {
-        prompt_text = "pty> CJsShell git:(master) x ";
-        prompt_marker = "";
-        continuation_prompt_marker = "> ";
     } else if (strcmp(scenario, "multiline_initial_ctrl_j") == 0) {
         initial_input = "ab";
     } else if (strcmp(scenario, "multiline_backslash_submit_with_following_content") == 0) {
@@ -1308,7 +1271,6 @@ static int run_case(const char* scenario) {
                strcmp(scenario, "ctrl_w_delete_word") == 0 ||
                strcmp(scenario, "backspace_twice_typed") == 0 ||
                strcmp(scenario, "ctrl_w_then_type") == 0 ||
-               strcmp(scenario, "resize_reflow_typed_input") == 0 ||
                strcmp(scenario, "multiline_ctrl_j_insert_newline") == 0 ||
                strcmp(scenario, "multiline_backslash_continuation") == 0 ||
                strcmp(scenario, "multiline_backslash_continuation_retained") == 0 ||

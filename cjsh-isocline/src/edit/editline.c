@@ -2546,24 +2546,6 @@ static void edit_cursor_prev_word(ic_env_t* env, editor_t* eb) {
     edit_refresh_hint(env, eb);
 }
 
-static ic_maybe_unused void edit_cursor_next_ws_word(ic_env_t* env, editor_t* eb) {
-    ssize_t end = sbuf_find_ws_word_end(eb->input, eb->pos);
-    if (end < 0) {
-        return;
-    }
-    eb->pos = end;
-    edit_refresh_hint(env, eb);
-}
-
-static ic_maybe_unused void edit_cursor_prev_ws_word(ic_env_t* env, editor_t* eb) {
-    ssize_t start = sbuf_find_ws_word_start(eb->input, eb->pos);
-    if (start < 0) {
-        return;
-    }
-    eb->pos = start;
-    edit_refresh_hint(env, eb);
-}
-
 static void edit_cursor_to_start(ic_env_t* env, editor_t* eb) {
     eb->pos = 0;
     edit_refresh_hint(env, eb);
@@ -2777,31 +2759,6 @@ static void edit_delete_to_start_of_line(ic_env_t* env, editor_t* eb) {
     edit_refresh(env, eb);
 }
 
-static ic_maybe_unused void edit_delete_line(ic_env_t* env, editor_t* eb) {
-    ssize_t start = 0;
-    ssize_t end = 0;
-    if (!edit_get_line_bounds(eb, &start, &end)) {
-        return;
-    }
-    editor_start_modify(eb);
-    // delete newline as well so no empty line is left;
-    bool goright = false;
-    if (start > 0 && sbuf_char_at(eb->input, start - 1) == '\n') {
-        start--;
-        // afterwards, move to start of next line if it exists (so the cursor
-        // stays on the same row)
-        goright = true;
-    } else if (sbuf_char_at(eb->input, end) == '\n') {
-        end++;
-    }
-    sbuf_delete_from_to(eb->input, start, end);
-    eb->pos = start;
-    if (goright) {
-        edit_cursor_right(env, eb);
-    }
-    edit_refresh(env, eb);
-}
-
 static void edit_delete_to_start_of_word(ic_env_t* env, editor_t* eb) {
     edit_delete_to_boundary(env, eb, sbuf_find_word_start, true);
 }
@@ -2812,25 +2769,6 @@ static void edit_delete_to_end_of_word(ic_env_t* env, editor_t* eb) {
 
 static void edit_delete_to_start_of_ws_word(ic_env_t* env, editor_t* eb) {
     edit_delete_to_boundary(env, eb, sbuf_find_ws_word_start, true);
-}
-
-static ic_maybe_unused void edit_delete_to_end_of_ws_word(ic_env_t* env, editor_t* eb) {
-    edit_delete_to_boundary(env, eb, sbuf_find_ws_word_end, false);
-}
-
-static ic_maybe_unused void edit_delete_word(ic_env_t* env, editor_t* eb) {
-    ssize_t start = sbuf_find_word_start(eb->input, eb->pos);
-    if (start < 0) {
-        return;
-    }
-    ssize_t end = sbuf_find_word_end(eb->input, eb->pos);
-    if (end < 0) {
-        return;
-    }
-    editor_start_modify(eb);
-    sbuf_delete_from_to(eb->input, start, end);
-    eb->pos = start;
-    edit_refresh(env, eb);
 }
 
 static void edit_swap_char(ic_env_t* env, editor_t* eb) {

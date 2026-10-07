@@ -43,7 +43,6 @@ size_t find_inline_comment_start(const std::string& s, size_t start = 0,
 std::string strip_inline_comment(const std::string& s);
 std::string process_line_for_validation(const std::string& line);
 std::vector<std::string> split_ampersand(const std::string& s);
-std::string to_lower_copy(std::string value);
 bool is_readable_file(const std::string& path);
 
 bool is_control_flow_exit_code(int code);

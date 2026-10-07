@@ -1414,58 +1414,6 @@ std::string get_command_summary(const std::string& command, bool allow_fetch) {
     return summary;
 }
 
-bool regenerate_external_completion_cache(
-    const std::string& command, bool force_refresh, bool include_subcommands,
-    const ::CompletionCacheProgressCallback& progress_callback,
-    const ::CompletionCacheCancelCallback& cancel_callback) {
-    if (command.empty()) {
-        return false;
-    }
-
-    std::vector<std::string> pending_targets = {command};
-    std::unordered_set<std::string> visited_targets;
-    bool root_generated = false;
-
-    while (!pending_targets.empty()) {
-        if (cancel_callback && cancel_callback()) {
-            break;
-        }
-
-        std::string current_target = pending_targets.back();
-        pending_targets.pop_back();
-
-        if (current_target.empty()) {
-            continue;
-        }
-
-        std::string normalized_target = normalize_key(current_target);
-        if (!visited_targets.insert(normalized_target).second) {
-            continue;
-        }
-
-        CompletionCacheTargetResult result = regenerate_external_completion_cache_target(
-            current_target, force_refresh, include_subcommands);
-        bool current_generated = result.generated;
-        if (current_target == command) {
-            root_generated = current_generated;
-        }
-
-        if (progress_callback) {
-            progress_callback(current_target, current_generated, current_target == command);
-        }
-
-        if (cancel_callback && cancel_callback()) {
-            break;
-        }
-
-        for (auto& discovered_target : result.discovered_targets) {
-            pending_targets.push_back(std::move(discovered_target));
-        }
-    }
-
-    return root_generated;
-}
-
 CompletionCacheTargetResult regenerate_external_completion_cache_target(const std::string& target,
                                                                         bool force_refresh,
                                                                         bool discover_subcommands) {

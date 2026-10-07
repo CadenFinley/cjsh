@@ -117,7 +117,6 @@ const char* separator_token_text(SeparatorToken token) {
 struct TokenInfo {
     std::string text;
     size_t start;
-    size_t end;
 };
 
 std::vector<TokenInfo> tokenize_shell_segment(const std::string& text, size_t start, size_t end) {
@@ -139,7 +138,7 @@ std::vector<TokenInfo> tokenize_shell_segment(const std::string& text, size_t st
         if (i + 3 <= end) {
             const std::string three_chars = text.substr(i, 3);
             if (three_chars == "&^!") {
-                tokens.push_back({three_chars, i, i + 3});
+                tokens.push_back({three_chars, i});
                 i += 3;
                 continue;
             }
@@ -148,7 +147,7 @@ std::vector<TokenInfo> tokenize_shell_segment(const std::string& text, size_t st
         if (i + 2 <= end) {
             const std::string two_chars = text.substr(i, 2);
             if (two_chars == "&&" || two_chars == "||" || two_chars == ";;" || two_chars == "&^") {
-                tokens.push_back({two_chars, i, i + 2});
+                tokens.push_back({two_chars, i});
                 i += 2;
                 continue;
             }
@@ -156,7 +155,7 @@ std::vector<TokenInfo> tokenize_shell_segment(const std::string& text, size_t st
 
         if (text[i] == '\n' || text[i] == ';' || text[i] == '|' || text[i] == '&' ||
             text[i] == '(' || text[i] == ')' || text[i] == '{' || text[i] == '}') {
-            tokens.push_back({std::string(1, text[i]), i, i + 1});
+            tokens.push_back({std::string(1, text[i]), i});
             ++i;
             continue;
         }
@@ -181,7 +180,7 @@ std::vector<TokenInfo> tokenize_shell_segment(const std::string& text, size_t st
             }
             ++i;
         }
-        tokens.push_back({text.substr(token_start, i - token_start), token_start, i});
+        tokens.push_back({text.substr(token_start, i - token_start), token_start});
     }
 
     return tokens;
@@ -572,7 +571,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                             }
                         }
                     } else {
-                        errors.push_back(SyntaxError({display_line, i, i + 2, 0},
+                        errors.push_back(SyntaxError({display_line, i, i + 2},
                                                      ErrorSeverity::CRITICAL, ErrorCategory::SYNTAX,
                                                      "SYN008", "Unclosed variable expansion ${",
                                                      original_line, "Add closing brace '}'"));
@@ -603,7 +602,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
             (std::isdigit(static_cast<unsigned char>(var_name[0])) == 0)) {
             for (size_t line : usage_lines) {
                 errors.push_back(SyntaxError(
-                    {line, 0, 0, 0}, ErrorSeverity::WARNING, ErrorCategory::VARIABLES, "VAR002",
+                    {line, 0, 0}, ErrorSeverity::WARNING, ErrorCategory::VARIABLES, "VAR002",
                     "Variable '" + var_name + "' used but not defined in this script", "",
                     "Define the variable before use: " + var_name + "=value"));
             }
@@ -616,7 +615,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
         }
         if (used_vars.find(var_name) == used_vars.end()) {
             for (size_t line : def_lines) {
-                errors.push_back(SyntaxError({line, 0, 0, 0}, ErrorSeverity::INFO,
+                errors.push_back(SyntaxError({line, 0, 0}, ErrorSeverity::INFO,
                                              ErrorCategory::VARIABLES, "VAR003",
                                              "Variable '" + var_name + "' defined but never used",
                                              "", "Remove unused variable or add usage"));

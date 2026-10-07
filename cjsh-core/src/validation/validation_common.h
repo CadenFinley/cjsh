@@ -97,7 +97,6 @@ bool extract_trimmed_line(const std::string& line, std::string& trimmed_line,
                           size_t& first_non_space);
 
 std::vector<std::string> tokenize_whitespace(const std::string& input);
-bool is_word_boundary(const std::string& text, size_t start, size_t length);
 size_t find_control_keyword(const std::string& line, const std::string& keyword,
                             size_t search_from = 0);
 size_t find_inline_do_position(const std::string& line);

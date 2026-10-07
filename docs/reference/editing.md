@@ -1184,14 +1184,6 @@ cjshopt inline-help off
 3. **Reduce history size** for faster search
 4. **Use simpler prompt markup** to reduce rendering time
 
-### Benchmarks
-
-Isocline is designed to be fast and responsive:
-- Completion generation: < 10ms for typical cases
-- Syntax highlighting: Real-time with no noticeable lag
-- History search: Fast even with large history files
-- Multiline editing: Smooth for inputs up to hundreds of lines
-
 ## Troubleshooting
 
 ### Common Issues
@@ -1220,7 +1212,6 @@ Isocline is designed to be fast and responsive:
 
 - Press `F1` during input for interactive help
 - Run `cjshopt <subcommand> --help` for command-specific help
-- Check logs in debug mode
 - Report issues on the cjsh GitHub repository
 
 ## External terminal settings

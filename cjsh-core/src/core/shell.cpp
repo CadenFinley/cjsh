@@ -832,10 +832,6 @@ bool Shell::get_interactive_mode() const {
     return interactive_mode;
 }
 
-bool Shell::is_interactive_process() const {
-    return interactive_mode && getpid() == shell_pid;
-}
-
 void Shell::set_abbreviations(
     const std::unordered_map<std::string, std::string>& new_abbreviations) {
     abbreviations = new_abbreviations;
@@ -858,10 +854,6 @@ std::unordered_map<std::string, std::string>& Shell::get_aliases() {
 }
 
 std::vector<std::string>& Shell::get_directory_stack() {
-    return directory_stack;
-}
-
-const std::vector<std::string>& Shell::get_directory_stack() const {
     return directory_stack;
 }
 

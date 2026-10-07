@@ -75,8 +75,6 @@ class Built_ins {
     std::string previous_directory;
     std::unordered_map<std::string, std::function<int(const std::vector<std::string>&)>> builtins;
     Shell* shell;
-    std::unordered_map<std::string, std::string> aliases;
-    std::unordered_map<std::string, std::string> env_vars;
 };
 
 #endif  // CJSH_CORE_SRC_CORE_BUILTIN_H

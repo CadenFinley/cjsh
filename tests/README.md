@@ -100,8 +100,7 @@ For failures:
   investigating timing or process-count interference.
 - Inspect `<build-dir>/Testing/Temporary/LastTest.log` and any failure output from the suite.
 - Repeat suspected flakes with `ctest --preset release -R '<pattern>' --repeat until-fail:10`.
-- Keep platform/locale skips visible. PTY resize/reflow cases in `isocline/test_isocline_pty.py`
-  currently include disabled coverage; a green run does not establish those cases passed.
+- Keep platform/locale skips visible; a green run does not establish that skipped cases passed.
 
 CTest reports registered suites, and the custom summary additionally combines individual
 case counts where suites provide them. Check both failures and skipped counts; neither a

@@ -70,12 +70,6 @@ const std::unordered_set<std::string>& inline_command_keywords() {
     return kInlineCommandKeywords;
 }
 
-const std::unordered_set<std::string>& loop_keywords() {
-    static const std::unordered_set<std::string> kLoopKeywords = {"for", "while", "until",
-                                                                  "select"};
-    return kLoopKeywords;
-}
-
 const std::unordered_set<std::string>& redirection_operators() {
     static const std::unordered_set<std::string> kRedirectionOperators = [] {
         std::unordered_set<std::string> operators;

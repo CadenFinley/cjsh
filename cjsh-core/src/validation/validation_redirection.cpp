@@ -57,7 +57,7 @@ ShellScriptInterpreter::SyntaxError create_pipe_error(size_t display_line, size_
                                                       size_t end_pos, const std::string& line,
                                                       const std::string& message,
                                                       const std::string& suggestion) {
-    return ShellScriptInterpreter::SyntaxError({display_line, start_pos, end_pos, 0},
+    return ShellScriptInterpreter::SyntaxError({display_line, start_pos, end_pos},
                                                ErrorSeverity::ERROR, ErrorCategory::REDIRECTION,
                                                "PIPE001", message, line, suggestion);
 }
@@ -92,7 +92,7 @@ ShellScriptInterpreter::validate_redirection_syntax(const std::vector<std::strin
                          redir_op_kind == redirection_utils::RedirectionOperator::Output) &&
                         next_index + 1 < line.length() && line[next_index + 1] == '(') {
                         line_errors.push_back(
-                            SyntaxError({display_line, redir_start, redir_start + 2, 0},
+                            SyntaxError({display_line, redir_start, redir_start + 2},
                                         ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "POSIX003",
                                         "Process substitution is disabled in POSIX mode", line,
                                         "Use a pipeline or temporary file instead"));
@@ -101,7 +101,7 @@ ShellScriptInterpreter::validate_redirection_syntax(const std::vector<std::strin
 
                     if (redir_op_kind == redirection_utils::RedirectionOperator::HereString) {
                         line_errors.push_back(
-                            SyntaxError({display_line, redir_start, redir_start + 3, 0},
+                            SyntaxError({display_line, redir_start, redir_start + 3},
                                         ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "POSIX004",
                                         "Here-strings are disabled in POSIX mode", line,
                                         "Use a here-document (<<) instead"));
@@ -126,7 +126,7 @@ ShellScriptInterpreter::validate_redirection_syntax(const std::vector<std::strin
                         (redir_op_kind == redirection_utils::RedirectionOperator::HereDoc &&
                          next_char == '<')) {
                         line_errors.push_back(SyntaxError(
-                            {display_line, redir_start, check_pos + 1, 0}, ErrorSeverity::ERROR,
+                            {display_line, redir_start, check_pos + 1}, ErrorSeverity::ERROR,
                             ErrorCategory::REDIRECTION, "RED005",
                             "Invalid redirection syntax '" + redir_op + " " + next_char + "'", line,
                             "Use single redirection operator"));
@@ -143,7 +143,7 @@ ShellScriptInterpreter::validate_redirection_syntax(const std::vector<std::strin
 
                     if (target_start >= line.length()) {
                         line_errors.push_back(
-                            SyntaxError({display_line, redir_start, next_index + 1, 0},
+                            SyntaxError({display_line, redir_start, next_index + 1},
                                         ErrorSeverity::ERROR, ErrorCategory::REDIRECTION, "RED001",
                                         "Redirection '" + redir_op + "' missing target", line,
                                         "Add filename or file descriptor after " + redir_op));
@@ -179,7 +179,7 @@ ShellScriptInterpreter::validate_redirection_syntax(const std::vector<std::strin
                             (!std::isdigit(static_cast<unsigned char>(target[0])) &&
                              target != "-" && !expanded_descriptor)) {
                             line_errors.push_back(SyntaxError(
-                                {display_line, target_start, target_end, 0}, ErrorSeverity::ERROR,
+                                {display_line, target_start, target_end}, ErrorSeverity::ERROR,
                                 ErrorCategory::REDIRECTION, "RED002",
                                 "File descriptor redirection requires digit, variable, or '-'",
                                 line, "Use format like 2>&1, 2>&$fd, or 2>&-"));
@@ -189,7 +189,7 @@ ShellScriptInterpreter::validate_redirection_syntax(const std::vector<std::strin
                                     redirection_utils::RedirectionOperator::HereDocStrip) &&
                                target.empty()) {
                         line_errors.push_back(SyntaxError(
-                            {display_line, target_start, target_end, 0}, ErrorSeverity::ERROR,
+                            {display_line, target_start, target_end}, ErrorSeverity::ERROR,
                             ErrorCategory::REDIRECTION, "RED003", "Here document missing delimiter",
                             line, "Provide delimiter like: << EOF"));
                     }
@@ -224,7 +224,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                     std::string issue;
                     if (name_ok && !validate_array_index_expression(index_text, issue)) {
                         line_errors.push_back(SyntaxError(
-                            {display_line, first_non_space + lb, first_non_space + rb + 1, 0},
+                            {display_line, first_non_space + lb, first_non_space + rb + 1},
                             ErrorSeverity::ERROR, ErrorCategory::VARIABLES, "VAR005",
                             issue + " for array '" + name + "'", line,
                             "Use a valid numeric or arithmetic expression index"));
@@ -235,7 +235,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
             if (!trimmed_line.empty() && trimmed_line[0] == '|' &&
                 (trimmed_line.size() <= 1 || trimmed_line[1] != '|')) {
                 line_errors.push_back(
-                    SyntaxError({display_line, first_non_space, first_non_space + 1, 0},
+                    SyntaxError({display_line, first_non_space, first_non_space + 1},
                                 ErrorSeverity::ERROR, ErrorCategory::REDIRECTION, "PIPE002",
                                 "Pipeline cannot start with pipe operator", line,
                                 "Remove leading pipe or add command before pipe"));
@@ -255,7 +255,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
 
                             if (after_logical < line.length() && line[after_logical] == '|') {
                                 line_errors.push_back(SyntaxError(
-                                    {display_line, i, after_logical + 1, 0}, ErrorSeverity::ERROR,
+                                    {display_line, i, after_logical + 1}, ErrorSeverity::ERROR,
                                     ErrorCategory::REDIRECTION, "PIPE001",
                                     "Invalid pipeline syntax", line, "Check pipe operator usage"));
                             }
@@ -387,8 +387,8 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
 
                             if (!heredoc_stack.empty()) {
                                 errors.push_back(SyntaxError(
-                                    {display_line, heredoc_pos, delim_end, 0},
-                                    ErrorSeverity::WARNING, ErrorCategory::SYNTAX, "SYN011",
+                                    {display_line, heredoc_pos, delim_end}, ErrorSeverity::WARNING,
+                                    ErrorCategory::SYNTAX, "SYN011",
                                     "Nested heredoc detected - may cause parsing issues", line,
                                     "Consider closing previous heredoc '" +
                                         heredoc_stack.back().delimiter +
@@ -411,7 +411,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
     while (!heredoc_stack.empty()) {
         auto& unclosed = heredoc_stack.back();
         errors.push_back(
-            SyntaxError({unclosed.line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX,
+            SyntaxError({unclosed.line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX,
                         "SYN010", "Unclosed here document - missing '" + unclosed.delimiter + "'",
                         "", "Add closing delimiter: " + unclosed.delimiter));
         heredoc_stack.pop_back();

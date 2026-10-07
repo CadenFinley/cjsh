@@ -40,7 +40,6 @@ class Tokenizer {
     // Combines redirections while retaining unquoted IO-number adjacency.
     static std::vector<std::string> tokenize_command(const std::string& cmdline);
 
-    std::vector<std::string> split_by_ifs(const std::string& input);
     std::vector<std::string> split_by_ifs(const std::string& input, const std::string& ifs,
                                           const std::vector<bool>* expanded_bytes = nullptr);
 

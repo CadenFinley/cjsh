@@ -48,7 +48,8 @@ POSIX, Bash, or Zsh behavior is not identical.
     mode is enabled for interactive shells and toggled with `set -m` / `set +m`. Append `&^` to a command
     to auto-background it on `Ctrl+Z`, or `&^!` to auto-background and discard stdout/stderr after
     the suspend. `shopt -s huponexit` controls whether exiting shells hang up or leave running jobs
-    alone (default: off, so long-lived helpers keep running until you explicitly stop them).
+    alone. It defaults on in interactive shells and off in noninteractive shells. Use
+    `disown` to exempt jobs from hangup-on-exit handling.
 
 ## Interactive Layer
 
@@ -220,7 +221,7 @@ Other switches:
 ## Platform & Build Support
 
 - **Targets** – Linux, macOS, and WSL are primary; other POSIX-like systems generally work.
-- **Toolchain** – Requires CMake ≥3.25 and a C++17-capable compiler (clang, GCC, or MSVC via WSL).
+- **Toolchain** – Requires CMake ≥3.25 and a C++17-capable compiler (Clang or GCC; WSL uses Linux tooling).
 - **Quick build** – `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel`.
 - **Package installs** – Homebrew (`brew install cjsh`) and Arch AUR (`cjsh`) are maintained.
 

@@ -87,7 +87,6 @@ static inline ssize_t to_ssize_t(size_t sz) {
 
 ic_private void ic_memmove(void* dest, const void* src, ssize_t n);
 ic_private void ic_memcpy(void* dest, const void* src, ssize_t n);
-ic_private void ic_memset(void* dest, uint8_t value, ssize_t n);
 
 ic_private ssize_t ic_strlen(const char* s);
 ic_private bool ic_strcpy(char* dest, ssize_t dest_size /* including 0 */, const char* src);

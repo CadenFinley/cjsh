@@ -133,7 +133,6 @@ class Parser {
     std::vector<std::string> parse_command(const std::string& cmdline);
     std::string expand_aliases(const std::string& source) const;
     std::vector<Command> parse_pipeline(const std::string& command);
-    std::vector<std::string> expand_wildcards(const std::string& pattern);
     std::vector<LogicalCommand> parse_logical_commands(const std::string& command);
     std::vector<std::string> parse_semicolon_commands(const std::string& command,
                                                       bool split_on_newlines = false);
@@ -141,8 +140,6 @@ class Parser {
                            std::string& var_value);
     void expand_env_vars(std::string& arg);
     void expand_env_vars_selective(std::string& arg);
-    void expand_exported_env_vars_only(std::string& arg);
-    std::vector<std::string> split_by_ifs(const std::string& input);
     long long evaluate_arithmetic(const std::string& expr);
 
     std::vector<Command> parse_pipeline_with_preprocessing(const std::string& command);

@@ -265,10 +265,9 @@ available without shell initialization.
 
 `-n` and `--no-exec` check syntax without executing commands or loading startup files.
 They accept `-c` strings, script files, and standard input. Invalid syntax returns a
-nonzero status; valid syntax returns 0. `-m` remains minimal mode and `-s` remains secure
-mode; they are not monitor mode or stdin selectors. Use `set -m` for monitor mode and
-omit a script/`-c` to read stdin. Options precede the script or command operands; `--`
-ends option parsing. `--help` lists all invocation flags. Invocation errors return 1
+nonzero status; valid syntax returns 0. `-m` enables monitor mode and `-s` reads commands
+from standard input. Use `--minimal` for minimal mode and `--secure` for secure mode.
+Options precede the script or command operands; `--` ends option parsing. `--help` lists all invocation flags. Invocation errors return 1
 and send diagnostics and usage to stderr; explicit help and version return 0 on stdout.
 
 Native login shells initialize `PATH` automatically before startup files run. Non-login

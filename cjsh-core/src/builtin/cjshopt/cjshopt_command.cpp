@@ -30,10 +30,9 @@
 
 #include "builtin_help.h"
 
-#include <array>
 #include <cstddef>
-#include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -45,147 +44,69 @@
 
 namespace {
 
-enum class CjshoptSubcommand : std::uint8_t {
-    StyleDef,
-    CompletionCase,
-    HistorySearchCase,
-    HistoryDirectory,
-    HistoryDirectorySubdirs,
-    HistoryDirectoryParents,
-    CompletionSpell,
-    CompletionSpellEnter,
-    CompletionLearning,
-    ExitConfirmation,
-    SmartCd,
-    Dialect,
-    ScriptExtensionInterpreter,
-    LineNumbers,
-    Scrollbars,
-    LineNumbersContinuation,
-    LineNumbersReplacePrompt,
-    CurrentLineNumberHighlight,
-    MultilineStartLines,
-    MultilineMaxLines,
-    CompletionMenuMaxLines,
-    HistoryMenuMaxLines,
-    CommandPaletteMaxLines,
-    CustomMenuMaxLines,
-    MultilineBottomLines,
-    HintDelay,
-    IdleTimeout,
-    CompletionPreview,
-    CompletionAutoMenu,
-    CompletionClickAccept,
-    MenuHighlighting,
-    VisibleWhitespace,
-    LineWrapMarker,
-    Hint,
-    MultilineIndent,
-    Multiline,
-    InlineHelp,
-    StatusHints,
-    StatusLine,
-    StatusReporting,
-    StatusLineCallback,
-    MouseClicking,
-    MouseClickingStatusLine,
-    AutoTab,
-    PromptNewline,
-    RightPromptFollowCursor,
-    AgentMode,
-    Keybind,
-    GenerateProfile,
-    GenerateEnv,
-    GenerateRc,
-    GenerateLogout,
-    SetHistoryMax,
-    SetCompletionMax,
-    Count
-};
-
 using SubcommandHandler = int (*)(const std::vector<std::string>& args);
 
 struct CjshoptSubcommandDescriptor {
-    CjshoptSubcommand command;
     const char* name;
     SubcommandHandler handler;
 };
 
-constexpr std::array<CjshoptSubcommandDescriptor, static_cast<size_t>(CjshoptSubcommand::Count)>
-    kCjshoptSubcommandDescriptors = {
-        {{CjshoptSubcommand::StyleDef, "style_def", style_def_command},
-         {CjshoptSubcommand::CompletionCase, "completion-case", completion_case_command},
-         {CjshoptSubcommand::HistorySearchCase, "history-search-case", history_search_case_command},
-         {CjshoptSubcommand::HistoryDirectory, "history-directory", history_directory_command},
-         {CjshoptSubcommand::HistoryDirectorySubdirs, "history-directory-subdirs",
-          history_directory_subdirs_command},
-         {CjshoptSubcommand::HistoryDirectoryParents, "history-directory-parents",
-          history_directory_parents_command},
-         {CjshoptSubcommand::CompletionSpell, "completion-spell", completion_spell_command},
-         {CjshoptSubcommand::CompletionSpellEnter, "completion-spell-enter",
-          completion_spell_enter_command},
-         {CjshoptSubcommand::CompletionLearning, "completion-learning",
-          completion_learning_command},
-         {CjshoptSubcommand::ExitConfirmation, "exit-confirmation", exit_confirmation_command},
-         {CjshoptSubcommand::SmartCd, "smart-cd", smart_cd_command},
-         {CjshoptSubcommand::Dialect, "dialect", dialect_command},
-         {CjshoptSubcommand::ScriptExtensionInterpreter, "script-extension-interpreter",
-          script_extension_interpreter_command},
-         {CjshoptSubcommand::LineNumbers, "line-numbers", line_numbers_command},
-         {CjshoptSubcommand::Scrollbars, "scrollbars", scrollbars_command},
-         {CjshoptSubcommand::LineNumbersContinuation, "line-numbers-continuation",
-          line_numbers_continuation_command},
-         {CjshoptSubcommand::LineNumbersReplacePrompt, "line-numbers-replace-prompt",
-          line_numbers_replace_prompt_command},
-         {CjshoptSubcommand::CurrentLineNumberHighlight, "current-line-number-highlight",
-          current_line_number_highlight_command},
-         {CjshoptSubcommand::MultilineStartLines, "multiline-start-lines",
-          multiline_start_lines_command},
-         {CjshoptSubcommand::MultilineMaxLines, "multiline-max-lines", multiline_max_lines_command},
-         {CjshoptSubcommand::CompletionMenuMaxLines, "completion-menu-max-lines",
-          completion_menu_max_lines_command},
-         {CjshoptSubcommand::HistoryMenuMaxLines, "history-menu-max-lines",
-          history_menu_max_lines_command},
-         {CjshoptSubcommand::CommandPaletteMaxLines, "command-palette-max-lines",
-          command_palette_max_lines_command},
-         {CjshoptSubcommand::CustomMenuMaxLines, "custom-menu-max-lines",
-          custom_menu_max_lines_command},
-         {CjshoptSubcommand::MultilineBottomLines, "multiline-bottom-lines",
-          multiline_bottom_lines_command},
-         {CjshoptSubcommand::HintDelay, "hint-delay", hint_delay_command},
-         {CjshoptSubcommand::IdleTimeout, "idle-timeout", idle_timeout_command},
-         {CjshoptSubcommand::CompletionPreview, "completion-preview", completion_preview_command},
-         {CjshoptSubcommand::CompletionAutoMenu, "completion-auto-menu",
-          completion_auto_menu_command},
-         {CjshoptSubcommand::CompletionClickAccept, "completion-click-accept",
-          completion_click_accept_command},
-         {CjshoptSubcommand::MenuHighlighting, "menu-highlighting", menu_highlighting_command},
-         {CjshoptSubcommand::VisibleWhitespace, "visible-whitespace", visible_whitespace_command},
-         {CjshoptSubcommand::LineWrapMarker, "line-wrap-marker", line_wrap_marker_command},
-         {CjshoptSubcommand::Hint, "hint", hint_command},
-         {CjshoptSubcommand::MultilineIndent, "multiline-indent", multiline_indent_command},
-         {CjshoptSubcommand::Multiline, "multiline", multiline_command},
-         {CjshoptSubcommand::InlineHelp, "inline-help", inline_help_command},
-         {CjshoptSubcommand::StatusHints, "status-hints", status_hints_command},
-         {CjshoptSubcommand::StatusLine, "status-line", status_line_command},
-         {CjshoptSubcommand::StatusReporting, "status-reporting", status_reporting_command},
-         {CjshoptSubcommand::StatusLineCallback, "status-line-callback",
-          status_line_callback_command},
-         {CjshoptSubcommand::MouseClicking, "mouse-clicking", mouse_clicking_command},
-         {CjshoptSubcommand::MouseClickingStatusLine, "mouse-clicking-status-line",
-          mouse_clicking_status_line_command},
-         {CjshoptSubcommand::AutoTab, "auto-tab", auto_tab_command},
-         {CjshoptSubcommand::PromptNewline, "prompt-newline", prompt_newline_command},
-         {CjshoptSubcommand::RightPromptFollowCursor, "right-prompt-follow-cursor",
-          right_prompt_follow_cursor_command},
-         {CjshoptSubcommand::AgentMode, "agent-mode", agent_mode::command},
-         {CjshoptSubcommand::Keybind, "keybind", keybind_command},
-         {CjshoptSubcommand::GenerateProfile, "generate-profile", generate_profile_command},
-         {CjshoptSubcommand::GenerateEnv, "generate-env", generate_env_command},
-         {CjshoptSubcommand::GenerateRc, "generate-rc", generate_rc_command},
-         {CjshoptSubcommand::GenerateLogout, "generate-logout", generate_logout_command},
-         {CjshoptSubcommand::SetHistoryMax, "set-history-max", set_history_max_command},
-         {CjshoptSubcommand::SetCompletionMax, "set-completion-max", set_completion_max_command}}};
+constexpr CjshoptSubcommandDescriptor kCjshoptSubcommandDescriptors[] = {
+    {"style_def", style_def_command},
+    {"completion-case", completion_case_command},
+    {"history-search-case", history_search_case_command},
+    {"history-directory", history_directory_command},
+    {"history-directory-subdirs", history_directory_subdirs_command},
+    {"history-directory-parents", history_directory_parents_command},
+    {"completion-spell", completion_spell_command},
+    {"completion-spell-enter", completion_spell_enter_command},
+    {"completion-learning", completion_learning_command},
+    {"exit-confirmation", exit_confirmation_command},
+    {"smart-cd", smart_cd_command},
+    {"dialect", dialect_command},
+    {"script-extension-interpreter", script_extension_interpreter_command},
+    {"line-numbers", line_numbers_command},
+    {"scrollbars", scrollbars_command},
+    {"line-numbers-continuation", line_numbers_continuation_command},
+    {"line-numbers-replace-prompt", line_numbers_replace_prompt_command},
+    {"current-line-number-highlight", current_line_number_highlight_command},
+    {"multiline-start-lines", multiline_start_lines_command},
+    {"multiline-max-lines", multiline_max_lines_command},
+    {"completion-menu-max-lines", completion_menu_max_lines_command},
+    {"history-menu-max-lines", history_menu_max_lines_command},
+    {"command-palette-max-lines", command_palette_max_lines_command},
+    {"custom-menu-max-lines", custom_menu_max_lines_command},
+    {"multiline-bottom-lines", multiline_bottom_lines_command},
+    {"hint-delay", hint_delay_command},
+    {"idle-timeout", idle_timeout_command},
+    {"completion-preview", completion_preview_command},
+    {"completion-auto-menu", completion_auto_menu_command},
+    {"completion-click-accept", completion_click_accept_command},
+    {"menu-highlighting", menu_highlighting_command},
+    {"visible-whitespace", visible_whitespace_command},
+    {"line-wrap-marker", line_wrap_marker_command},
+    {"hint", hint_command},
+    {"multiline-indent", multiline_indent_command},
+    {"multiline", multiline_command},
+    {"inline-help", inline_help_command},
+    {"status-hints", status_hints_command},
+    {"status-line", status_line_command},
+    {"status-reporting", status_reporting_command},
+    {"status-line-callback", status_line_callback_command},
+    {"mouse-clicking", mouse_clicking_command},
+    {"mouse-clicking-status-line", mouse_clicking_status_line_command},
+    {"auto-tab", auto_tab_command},
+    {"prompt-newline", prompt_newline_command},
+    {"right-prompt-follow-cursor", right_prompt_follow_cursor_command},
+    {"agent-mode", agent_mode::command},
+    {"keybind", keybind_command},
+    {"generate-profile", generate_profile_command},
+    {"generate-env", generate_env_command},
+    {"generate-rc", generate_rc_command},
+    {"generate-logout", generate_logout_command},
+    {"set-history-max", set_history_max_command},
+    {"set-completion-max", set_completion_max_command},
+};
 
 std::optional<CjshoptSubcommandDescriptor> parse_cjshopt_subcommand(const std::string& subcommand) {
     for (const auto& descriptor : kCjshoptSubcommandDescriptors) {
@@ -347,7 +268,7 @@ void print_cjshopt_usage() {
 
 std::string available_subcommands_message() {
     std::string message = "Available subcommands: ";
-    for (size_t i = 0; i < kCjshoptSubcommandDescriptors.size(); ++i) {
+    for (size_t i = 0; i < std::size(kCjshoptSubcommandDescriptors); ++i) {
         if (i != 0) {
             message += ", ";
         }

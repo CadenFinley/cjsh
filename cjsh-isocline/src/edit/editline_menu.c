@@ -1034,13 +1034,6 @@ static const char* edit_menu_first_line_end(const char* str) {
     return p;
 }
 
-static bool edit_menu_contains_line_break(const char* str) {
-    if (str == NULL) {
-        return false;
-    }
-    return (strchr(str, '\n') != NULL || strchr(str, '\r') != NULL);
-}
-
 static ssize_t edit_menu_line_count(const char* str) {
     if (str == NULL || *str == '\0') {
         return 1;

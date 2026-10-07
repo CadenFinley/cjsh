@@ -2333,7 +2333,3 @@ ic_private void history_load(history_t* h) {
     history_list_free(h, &list);
     history_unlock(fd);
 }
-
-ic_private void history_save(const history_t* h) {
-    ic_unused(h);
-}

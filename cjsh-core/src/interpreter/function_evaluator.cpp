@@ -195,33 +195,4 @@ std::vector<std::string> get_function_names(const FunctionMap& functions) {
     return names;
 }
 
-void push_function_scope(LocalVariableStack& stack) {
-    (void)stack.emplace_back();
-}
-
-void pop_function_scope(LocalVariableStack& stack) {
-    if (stack.empty()) {
-        return;
-    }
-    stack.pop_back();
-}
-
-void set_local_variable(
-    LocalVariableStack& stack, const std::string& name, const std::string& value,
-    const std::function<void(const std::string&, const std::string&)>& set_global_var) {
-    if (stack.empty()) {
-        set_global_var(name, value);
-        return;
-    }
-    stack.back()[name] = value;
-}
-
-bool is_local_variable(const LocalVariableStack& stack, const std::string& name) {
-    if (stack.empty()) {
-        return false;
-    }
-    const auto& current_scope = stack.back();
-    return current_scope.find(name) != current_scope.end();
-}
-
 }  // namespace function_evaluator

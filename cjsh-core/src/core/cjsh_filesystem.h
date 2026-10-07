@@ -32,7 +32,6 @@
 #include <sys/types.h>
 
 #include <cstdint>
-#include <ctime>
 #include <filesystem>
 #include <optional>
 #include <stdexcept>
@@ -160,7 +159,6 @@ std::optional<HereStringError> setup_here_string_stdin(const std::string& here_s
 bool should_noclobber_prevent_overwrite(const std::string& filename, bool force_overwrite = false);
 bool command_exists(const std::string& command_path);
 bool resolves_to_executable(const std::string& name, const std::string& cwd);
-bool path_is_directory_candidate(const std::string& value, const std::string& cwd);
 bool token_has_explicit_path_hint(const std::string& value);
 std::filesystem::path expand_shell_path_token(const std::string& value, const std::string& cwd,
                                               const std::string& previous_directory);
@@ -176,7 +174,6 @@ struct PathHashEntry {
     std::string command;
     std::string path;
     std::uint64_t hits;
-    std::time_t last_used;
     bool manually_added;
 };
 
@@ -225,7 +222,6 @@ void reset_interactive_path_cache();
 std::vector<std::string> get_path_completion_candidates();
 std::string resolve_executable_for_execution(const std::string& name);
 std::string resolve_cjsh_executable_path(const std::vector<std::string>& startup_args = {});
-std::string resolve_cjsh_executable_directory(const std::vector<std::string>& startup_args = {});
 std::string resolve_cjsh_argv0(const std::vector<std::string>& startup_args = {},
                                const std::string& executable_path = {});
 bool hash_executable(const std::string& name, std::string* resolved_path = nullptr);

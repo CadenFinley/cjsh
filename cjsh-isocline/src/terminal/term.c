@@ -118,13 +118,6 @@ static bool term_get_cursor_pos(term_t* term, ssize_t* row, ssize_t* col);
 // Helpers
 //-------------------------------------------------------------
 
-ic_private void term_left(term_t* term, ssize_t n) {
-    if (n <= 0) {
-        return;
-    }
-    term_writef(term, IC_CSI "%zdD", n);
-}
-
 ic_private void term_right(term_t* term, ssize_t n) {
     if (n <= 0) {
         return;
@@ -152,13 +145,6 @@ ic_private void term_clear_line(term_t* term) {
 
 ic_private void term_clear_to_end_of_line(term_t* term) {
     term_write(term, IC_CSI "K");
-}
-
-ic_private void term_delete_lines(term_t* term, ssize_t n) {
-    if (n <= 0) {
-        return;
-    }
-    term_writef(term, IC_CSI "%zdM", n);
 }
 
 ic_private void term_start_of_line(term_t* term) {

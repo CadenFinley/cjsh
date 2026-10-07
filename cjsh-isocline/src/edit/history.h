@@ -89,7 +89,6 @@ ic_private ssize_t history_count(const history_t* h);
 
 ic_private void history_load_from(history_t* h, const char* fname, long max_entries);
 ic_private void history_load(history_t* h);
-ic_private void history_save(const history_t* h);
 
 ic_private bool history_push(history_t* h, const char* entry);
 ic_private bool history_push_with_metadata(history_t* h, const char* entry,

@@ -50,7 +50,3 @@ bool DelimiterState::update_quote(char c) {
     }
     return false;
 }
-
-void DelimiterState::reset() {
-    *this = {};
-}

@@ -519,7 +519,7 @@ std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std
     }
 
     const size_t no_match = std::string::npos;
-    const auto choose = [longest, no_match](size_t left, size_t right) {
+    const auto choose = [longest](size_t left, size_t right) {
         if (left == no_match) {
             return right;
         }

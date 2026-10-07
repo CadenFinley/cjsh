@@ -757,7 +757,6 @@ void SignalHandler::signal_handler(int signum) {
             s_sigwinch_received = 1;
             // this is currently disabled as this lets isocline know about terminal resizing, which
             // is currently broken.
-            // ic_notify_resize();
 
             break;
         }

@@ -741,10 +741,6 @@ ic_private char sbuf_char_at(stringbuf_t* sbuf, ssize_t pos) {
     return sbuf->buf[pos];
 }
 
-ic_private char* sbuf_strdup_at(stringbuf_t* sbuf, ssize_t pos) {
-    return mem_strdup(sbuf->mem, sbuf_string_at(sbuf, pos));
-}
-
 ic_private char* sbuf_strdup(stringbuf_t* sbuf) {
     return mem_strdup(sbuf->mem, sbuf_string(sbuf));
 }
@@ -802,21 +798,6 @@ ic_private ssize_t sbuf_insert_at_n(stringbuf_t* sbuf, const char* s, ssize_t n,
     sbuf->count += n;
     sbuf->buf[sbuf->count] = 0;
     return (pos + n);
-}
-
-ic_private stringbuf_t* sbuf_split_at(stringbuf_t* sb, ssize_t pos) {
-    if (pos < 0) {
-        return NULL;
-    }
-    stringbuf_t* res = sbuf_new(sb->mem);
-    if (res == NULL) {
-        return NULL;
-    }
-    if (pos < sb->count) {
-        (void)sbuf_append_n(res, sb->buf + pos, sb->count - pos);
-        sb->count = pos;
-    }
-    return res;
 }
 
 ic_private ssize_t sbuf_insert_at(stringbuf_t* sbuf, const char* s, ssize_t pos) {
@@ -1140,21 +1121,6 @@ ic_private bool ic_atoz2(const char* s, ssize_t* pi, ssize_t* pj) {
         return false;
     }
     return parse_ssize_strict(endptr + 1, pj);
-}
-
-// parse unsigned 32-bit (leave pu unchanged on error)
-ic_private bool ic_atou32(const char* s, uint32_t* pu) {
-    if (s == NULL || pu == NULL) {
-        return false;
-    }
-    errno = 0;
-    char* endptr = NULL;
-    unsigned long value = strtoul(s, &endptr, 10);
-    if (errno != 0 || endptr == s || *endptr != '\0' || value > UINT32_MAX) {
-        return false;
-    }
-    *pu = (uint32_t)value;
-    return true;
 }
 
 // Convenience: character class for separators `[ \t\r\n,.;:/\\\(\)\{\}\[\]]`.

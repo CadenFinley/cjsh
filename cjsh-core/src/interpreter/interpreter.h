@@ -82,7 +82,6 @@ class ShellScriptInterpreter {
         size_t line_number;
         size_t column_start;
         size_t column_end;
-        size_t char_offset;
     };
 
     struct SyntaxError {

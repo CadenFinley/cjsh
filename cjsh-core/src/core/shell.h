@@ -148,14 +148,12 @@ class Shell {
         interactive_input_started = true;
     }
     bool get_interactive_mode() const;
-    bool is_interactive_process() const;
     void set_abbreviations(const std::unordered_map<std::string, std::string>& new_abbreviations);
     std::unordered_map<std::string, std::string>& get_abbreviations();
     void set_aliases(const std::unordered_map<std::string, std::string>& new_aliases);
     std::unordered_map<std::string, std::string>& get_aliases();
 
     std::vector<std::string>& get_directory_stack();
-    const std::vector<std::string>& get_directory_stack() const;
     void set_last_interactive_command(const std::string& command);
     const std::string& get_last_interactive_command() const;
 
@@ -231,7 +229,6 @@ class Shell {
     unsigned errexit_suppression_depth = 0;
 
     std::array<std::vector<std::string>, static_cast<size_t>(HookType::Count)> hooks;
-    std::string last_directory;
 
     void apply_abbreviations_to_line_editor();
 };

@@ -67,8 +67,6 @@
 // and foreground-wait state; each consumed wait report must reach both layers.
 namespace {
 
-std::atomic<pid_t> g_atomic_last_background_pid{-1};
-
 // let the editor place notifications around active input when possible. stderr
 // remains the fallback for noninteractive use or an unavailable notification queue.
 void print_job_notification(const std::string& message) {
@@ -351,25 +349,6 @@ std::optional<ResolvedJob> resolve_control_job_target(const std::vector<std::str
     return ResolvedJob{job->job_id, job};
 }
 
-std::optional<int> interpret_wait_status(int status) {
-    return wait_status_utils::to_exit_code_optional(status);
-}
-
-// stopped jobs remain available for fg/bg. only a terminal state consumes cached
-// per-pid results and removes the user-facing job after this explicit wait.
-std::optional<int> wait_for_job_and_remove(const std::shared_ptr<JobControlJob>& job,
-                                           JobManager& job_manager) {
-    auto status = wait_for_job(job, job_manager, true);
-    const JobState final_state = job->state.load(std::memory_order_relaxed);
-    if (final_state == JobState::DONE || final_state == JobState::TERMINATED) {
-        for (pid_t pid : job->pids) {
-            (void)job_manager.consume_completed_pid_status(pid);
-        }
-        job_manager.remove_job(job->job_id);
-    }
-    return status;
-}
-
 // wait using aggregate job state rather than assuming the last waitpid result is
 // the pipeline result. stop policy belongs to the caller, and terminal ownership
 // must already have been arranged by a foreground-control caller when needed.
@@ -445,34 +424,6 @@ std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobMa
             return ready;
         }
     }
-}
-
-std::optional<int> parse_job_specifier(const std::string& target) {
-    if (target.empty() || target[0] != '%') {
-        return std::nullopt;
-    }
-
-    int parsed_value = 0;
-    if (!numeric_utils::parse_int_strict(target.substr(1), parsed_value)) {
-        return std::nullopt;
-    }
-    return parsed_value;
-}
-
-std::optional<int> parse_job_specifier_flexible(const std::string& target) {
-    if (target.empty()) {
-        return std::nullopt;
-    }
-
-    if (target[0] == '%') {
-        return parse_job_specifier(target);
-    }
-
-    int parsed_value = 0;
-    if (!numeric_utils::parse_int_strict(target, parsed_value)) {
-        return std::nullopt;
-    }
-    return parsed_value;
 }
 
 std::optional<pid_t> parse_pid_specifier(const std::string& target) {
@@ -610,15 +561,6 @@ std::shared_ptr<JobControlJob> JobManager::get_job(int job_id) {
     return it != jobs.end() ? it->second : nullptr;
 }
 
-std::shared_ptr<JobControlJob> JobManager::get_job_by_pgid(pid_t pgid) {
-    for (const auto& pair : jobs) {
-        if (pair.second->pgid == pgid) {
-            return pair.second;
-        }
-    }
-    return nullptr;
-}
-
 std::shared_ptr<JobControlJob> JobManager::get_job_by_pid(pid_t pid) {
     for (const auto& pair : jobs) {
         const auto& job = pair.second;
@@ -725,15 +667,10 @@ int JobManager::get_previous_job() const {
 
 void JobManager::set_last_background_pid(pid_t pid) {
     last_background_pid = pid;
-    g_atomic_last_background_pid.store(pid, std::memory_order_relaxed);
 }
 
 pid_t JobManager::get_last_background_pid() const {
     return last_background_pid;
-}
-
-pid_t JobManager::get_last_background_pid_atomic() {
-    return g_atomic_last_background_pid.load(std::memory_order_relaxed);
 }
 
 void JobManager::set_shell(Shell* shell) {
@@ -1003,7 +940,6 @@ void JobManager::clear_all_jobs() {
     current_job = -1;
     previous_job = -1;
     last_background_pid = -1;
-    g_atomic_last_background_pid.store(-1, std::memory_order_relaxed);
 }
 
 // explicit wait consumes a retained result once, unlike the non-consuming query.
@@ -1016,16 +952,4 @@ std::optional<int> JobManager::consume_completed_pid_status(pid_t pid) {
     int status = it->second;
     completed_pid_statuses.erase(it);
     return status;
-}
-
-std::optional<int> JobManager::completed_pid_status(pid_t pid) const {
-    auto it = completed_pid_statuses.find(pid);
-    if (it == completed_pid_statuses.end()) {
-        return std::nullopt;
-    }
-    return it->second;
-}
-
-void JobManager::mark_pid_completed(pid_t pid, int status) {
-    handle_child_status(pid, status);
 }

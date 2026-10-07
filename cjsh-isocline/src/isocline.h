@@ -296,8 +296,9 @@ void ic_set_check_for_continuation_or_return_callback(
 
 /// Controls when the built-in status hint line (the underlined control hints) is displayed.
 /// - `IC_STATUS_HINT_OFF`: never show the built-in hints.
-/// - `IC_STATUS_HINT_NORMAL`: show only when both the input buffer and the status line are empty.
-/// - `IC_STATUS_HINT_TRANSIENT`: show whenever the status line has no other content (default).
+/// - `IC_STATUS_HINT_NORMAL`: show only when both the input buffer and the status line are empty
+/// (default).
+/// - `IC_STATUS_HINT_TRANSIENT`: show whenever the status line has no other content.
 /// - `IC_STATUS_HINT_PERSISTENT`: always show and prepend the hints above other status messages.
 typedef enum ic_status_hint_mode_e {
     IC_STATUS_HINT_OFF = 0,

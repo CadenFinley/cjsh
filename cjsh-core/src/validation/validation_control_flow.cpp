@@ -52,7 +52,6 @@ using validation_internal::append_function_name_errors;
 using validation_internal::check_for_loop_keywords;
 using validation_internal::create_tokenized_validator;
 using validation_internal::find_inline_do_position;
-using validation_internal::find_inline_done_position;
 using validation_internal::inline_loop_body_missing_done;
 using validation_internal::next_effective_line_starts_with_keyword;
 using validation_internal::QuoteState;
@@ -125,23 +124,23 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                 !next_effective_line_starts_with_keyword(ctx.all_lines, ctx.line_index, "in");
             if (!loop_check.header_error.empty()) {
                 line_errors.push_back(SyntaxError(
-                    {display_line, 0, 0, 0}, ErrorSeverity::CRITICAL, ErrorCategory::CONTROL_FLOW,
+                    {display_line, 0, 0}, ErrorSeverity::CRITICAL, ErrorCategory::CONTROL_FLOW,
                     "SYN002", loop_check.header_error, line,
                     "Use 'for name in words; do ...; done' or 'for name; do ...; done'"));
             } else if (loop_check.incomplete) {
-                line_errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::ERROR,
+                line_errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::ERROR,
                                                   ErrorCategory::CONTROL_FLOW, "SYN002",
                                                   "'for' statement incomplete", line,
                                                   "Complete for statement: for var in list; do"));
             } else if (missing_do_effective) {
-                line_errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::ERROR,
+                line_errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::ERROR,
                                                   ErrorCategory::CONTROL_FLOW, "SYN002",
                                                   "'for' statement missing 'do' keyword", line,
                                                   "Add 'do' keyword: for var in list; do"));
             } else if (loop_check.inline_body_without_done &&
                        ctx.line_index + 1 == ctx.all_lines.size()) {
                 line_errors.push_back(SyntaxError(
-                    {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
+                    {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
                     "SYN002", "'for' loop missing closing 'done' after inline body", line,
                     "End inline loop bodies with 'done' or move the body to a new line"));
             }
@@ -152,7 +151,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                                         "select", config::is_posix_mode());
             if (!header.error.empty()) {
                 line_errors.push_back(SyntaxError(
-                    {display_line, 0, 0, 0}, ErrorSeverity::CRITICAL, ErrorCategory::CONTROL_FLOW,
+                    {display_line, 0, 0}, ErrorSeverity::CRITICAL, ErrorCategory::CONTROL_FLOW,
                     "SYN002", header.error, line,
                     "Use 'select name in words; do ...; done' or 'select name; do ...; done'"));
                 return;
@@ -168,18 +167,18 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
 
             if (missing_iteration_list) {
                 line_errors.push_back(SyntaxError(
-                    {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
+                    {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
                     "SYN002", "'select' statement missing selection list after 'in'", line,
                     "Add values after 'in' or omit 'in' to select from positional parameters"));
             } else if (missing_do_effective) {
-                line_errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::ERROR,
+                line_errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::ERROR,
                                                   ErrorCategory::CONTROL_FLOW, "SYN002",
                                                   "'select' statement missing 'do' keyword", line,
                                                   "Add 'do' keyword: select var in list; do"));
             } else if (has_do && inline_loop_body_missing_done(trimmed_line) &&
                        ctx.line_index + 1 == ctx.all_lines.size()) {
                 line_errors.push_back(SyntaxError(
-                    {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
+                    {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
                     "SYN002", "'select' loop missing closing 'done' after inline body", line,
                     "End inline select bodies with 'done' or move the body to a new line"));
             }
@@ -193,19 +192,19 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
 
             if (missing_condition && missing_do) {
                 line_errors.push_back(SyntaxError(
-                    {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
+                    {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
                     "SYN003",
                     "'" + first_token + "' statement missing condition expression and 'do' keyword",
                     line, "Use syntax: " + first_token + " condition; do"));
             } else {
                 if (missing_condition) {
                     line_errors.push_back(SyntaxError(
-                        {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
+                        {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
                         "SYN003", "'" + first_token + "' loop missing condition expression", line,
                         "Add a condition expression before 'do'"));
                 } else if (loop_check.unclosed_test) {
                     line_errors.push_back(SyntaxError(
-                        {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
+                        {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
                         "SYN003", "Unclosed test expression in '" + first_token + "' condition",
                         line, "Close the '[' with ']' or use '[[ ... ]]'"));
                 }
@@ -218,7 +217,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                     }
 
                     line_errors.push_back(
-                        SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::ERROR,
+                        SyntaxError({display_line, 0, 0}, ErrorSeverity::ERROR,
                                     ErrorCategory::CONTROL_FLOW, "SYN002", msg, line,
                                     "Add 'do' keyword and close with 'done': " + first_token +
                                         " condition; do ... done"));
@@ -252,19 +251,19 @@ ShellScriptInterpreter::validate_conditional_syntax(const std::vector<std::strin
 
             if (missing_then_effective && missing_condition) {
                 line_errors.push_back(SyntaxError(
-                    {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
+                    {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::CONTROL_FLOW,
                     "SYN004", "'if' statement missing condition and 'then' keyword", line,
                     "Use syntax: if [ condition ]; then"));
             } else {
                 if (missing_then_effective) {
-                    line_errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::ERROR,
+                    line_errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::ERROR,
                                                       ErrorCategory::CONTROL_FLOW, "SYN004",
                                                       "'if' statement missing 'then' keyword", line,
                                                       "Add 'then' keyword: if condition; then"));
                 }
 
                 if (missing_condition) {
-                    line_errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::ERROR,
+                    line_errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::ERROR,
                                                       ErrorCategory::CONTROL_FLOW, "SYN004",
                                                       "'if' statement missing condition", line,
                                                       "Add condition: if [ condition ]; then"));
@@ -276,12 +275,12 @@ ShellScriptInterpreter::validate_conditional_syntax(const std::vector<std::strin
                 case_check.missing_in_keyword &&
                 !next_effective_line_starts_with_keyword(ctx.all_lines, ctx.line_index, "in");
             if (missing_in_effective) {
-                line_errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::ERROR,
+                line_errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::ERROR,
                                                   ErrorCategory::CONTROL_FLOW, "SYN008",
                                                   "'case' statement missing 'in' keyword", line,
                                                   "Add 'in' keyword: case variable in"));
             } else if (case_check.incomplete) {
-                line_errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::ERROR,
+                line_errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::ERROR,
                                                   ErrorCategory::CONTROL_FLOW, "SYN008",
                                                   "'case' statement incomplete", line,
                                                   "Complete case statement: case variable in"));
@@ -328,30 +327,27 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::check_s
 
                 if (logical_ops > 3) {
                     line_errors.push_back(SyntaxError(
-                        {display_line, 0, 0, 0}, ErrorSeverity::INFO, ErrorCategory::STYLE,
-                        "STYLE001",
+                        {display_line, 0, 0}, ErrorSeverity::INFO, ErrorCategory::STYLE, "STYLE001",
                         "Complex condition with " + std::to_string(logical_ops) +
                             " logical operators",
                         line, "Consider breaking into multiple if statements or using a function"));
                 }
 
                 if (max_bracket_depth > 2) {
-                    line_errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::INFO,
-                                                      ErrorCategory::STYLE, "STYLE002",
-                                                      "Deeply nested test conditions (depth: " +
-                                                          std::to_string(max_bracket_depth) + ")",
-                                                      line,
-                                                      "Consider simplifying the condition logic"));
+                    line_errors.push_back(SyntaxError(
+                        {display_line, 0, 0}, ErrorSeverity::INFO, ErrorCategory::STYLE, "STYLE002",
+                        "Deeply nested test conditions (depth: " +
+                            std::to_string(max_bracket_depth) + ")",
+                        line, "Consider simplifying the condition logic"));
                 }
             }
 
             if (line.length() > 100) {
-                line_errors.push_back(
-                    SyntaxError({display_line, 100, line.length(), 0}, ErrorSeverity::INFO,
-                                ErrorCategory::STYLE,
-                                "Line length (" + std::to_string(line.length()) +
-                                    " chars) exceeds recommended 100 characters",
-                                line, "Consider breaking long lines for better readability"));
+                line_errors.push_back(SyntaxError(
+                    {display_line, 100, line.length()}, ErrorSeverity::INFO, ErrorCategory::STYLE,
+                    "Line length (" + std::to_string(line.length()) +
+                        " chars) exceeds recommended 100 characters",
+                    line, "Consider breaking long lines for better readability"));
             }
 
             if (line.find('\t') != std::string::npos && line.find(' ') != std::string::npos) {
@@ -359,7 +355,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::check_s
                 size_t first_space = line.find(' ');
                 if (first_tab < 20 && first_space < 20) {
                     line_errors.push_back(SyntaxError(
-                        {display_line, 0, std::min(first_tab, first_space), 0}, ErrorSeverity::INFO,
+                        {display_line, 0, std::min(first_tab, first_space)}, ErrorSeverity::INFO,
                         ErrorCategory::STYLE, "STYLE004", "Mixed tabs and spaces for indentation",
                         line, "Use consistent indentation (either all tabs or all spaces)"));
                 }
@@ -370,10 +366,10 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::check_s
                 std::string warning_type = trimmed_line.find("eval ") != std::string::npos
                                                ? "eval"
                                                : "command substitution";
-                line_errors.push_back(SyntaxError(
-                    {display_line, 0, 0, 0}, ErrorSeverity::WARNING, ErrorCategory::STYLE,
-                    "STYLE005", "Use of " + warning_type + " - potential security risk", line,
-                    "Validate input carefully or consider safer alternatives"));
+                line_errors.push_back(
+                    SyntaxError({display_line, 0, 0}, ErrorSeverity::WARNING, ErrorCategory::STYLE,
+                                "STYLE005", "Use of " + warning_type + " - potential security risk",
+                                line, "Validate input carefully or consider safer alternatives"));
             }
 
             return line_errors;

@@ -38,7 +38,6 @@ struct DelimiterState {
     int brace_depth = 0;
 
     bool update_quote(char c);
-    void reset();
 };
 
 #endif  // CJSH_CORE_SRC_PARSER_DELIMITER_STATE_H

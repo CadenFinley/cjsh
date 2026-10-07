@@ -113,7 +113,6 @@ function(cjsh_apply_build_profile)
     target_compile_definitions(
         ${CJSH_PROFILE_TARGET}
         INTERFACE
-            "$<$<CONFIG:Debug>:DEBUG=1>"
             "$<$<CONFIG:Debug>:CJSH_ENABLE_DEBUG=1>"
             "$<$<NOT:$<CONFIG:Debug>>:IC_NO_DEBUG_MSG=1>"
     )
@@ -122,8 +121,6 @@ function(cjsh_apply_build_profile)
         target_compile_definitions(
             ${CJSH_PROFILE_TARGET}
             INTERFACE
-                CJSH_MINIMAL_BUILD=1
-                CJSH_NO_FANCY_FEATURES=1
                 IC_NO_DEBUG_MSG=1
         )
     endif()

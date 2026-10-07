@@ -86,25 +86,6 @@ size_t find_matching_backtick_for_validation_impl(const std::string& text, size_
     return find_char_skipping_escapes(text, start_index, [](char ch) { return ch == '`'; });
 }
 
-template <typename Func>
-void for_each_effective_char_basic(const std::string& text, size_t start_index, Func&& callback) {
-    utils::QuoteState state;
-
-    for (size_t i = start_index; i < text.size(); ++i) {
-        char ch = text[i];
-
-        if (state.consume_forward(ch) == utils::QuoteAdvanceResult::Continue) {
-            continue;
-        }
-
-        if (!state.in_single_quote) {
-            if (callback(i, ch)) {
-                return;
-            }
-        }
-    }
-}
-
 bool find_matching_command_substitution_end_for_validation_impl(const std::string& text,
                                                                 size_t start_index,
                                                                 size_t& end_out) {
@@ -469,10 +450,6 @@ std::vector<std::string> tokenize_whitespace(const std::string& input) {
     return tokens;
 }
 
-bool is_word_boundary(const std::string& text, size_t start, size_t length) {
-    return parser_is_word_boundary(text, start, length);
-}
-
 size_t find_control_keyword(const std::string& line, const std::string& keyword,
                             size_t search_from) {
     return parser_find_keyword_token(line, keyword, search_from);
@@ -511,14 +488,14 @@ void append_function_name_errors(std::vector<SyntaxError>& errors, size_t displa
                                  const std::string& missing_name_suggestion) {
     if (func_name.empty() || func_name == "()") {
         errors.push_back(SyntaxError(
-            {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "FUNC001",
+            {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "FUNC001",
             "Function declaration missing name", line, missing_name_suggestion));
         return;
     }
 
     if (!is_valid_identifier_start(func_name[0])) {
         errors.push_back(SyntaxError(
-            {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "FUNC002",
+            {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "FUNC002",
             "Invalid function name '" + func_name + "' - must start with letter or underscore",
             line, "Use valid function name starting with letter or underscore"));
         return;
@@ -527,7 +504,7 @@ void append_function_name_errors(std::vector<SyntaxError>& errors, size_t displa
     for (char c : func_name) {
         if (!is_valid_identifier_char(c)) {
             errors.push_back(SyntaxError(
-                {display_line, 0, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "FUNC002",
+                {display_line, 0, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "FUNC002",
                 "Invalid function name '" + func_name + "' - contains invalid character '" +
                     std::string(1, c) + "'",
                 line, "Use only letters, numbers, and underscores in function names"));

@@ -29,7 +29,6 @@
 #ifndef CJSH_CORE_SRC_COMPLETION_EXTERNAL_SUB_COMPLETIONS_H
 #define CJSH_CORE_SRC_COMPLETION_EXTERNAL_SUB_COMPLETIONS_H
 
-#include <functional>
 #include <string>
 #include <vector>
 
@@ -50,10 +49,6 @@ class ScopedCompletionDocumentationLookup {
     ScopedCompletionDocumentationLookup& operator=(const ScopedCompletionDocumentationLookup&) =
         delete;
 };
-using CompletionCacheProgressCallback =
-    std::function<void(const std::string& target, bool generated, bool is_root_target)>;
-using CompletionCacheCancelCallback = std::function<bool()>;
-
 struct CompletionCacheTargetResult {
     bool generated{false};
     std::vector<std::string> discovered_targets;
@@ -61,10 +56,5 @@ struct CompletionCacheTargetResult {
 
 CompletionCacheTargetResult regenerate_external_completion_cache_target(
     const std::string& target, bool force_refresh = true, bool discover_subcommands = false);
-
-bool regenerate_external_completion_cache(
-    const std::string& command, bool force_refresh = true, bool include_subcommands = false,
-    const CompletionCacheProgressCallback& progress_callback = CompletionCacheProgressCallback{},
-    const CompletionCacheCancelCallback& cancel_callback = CompletionCacheCancelCallback{});
 
 #endif  // CJSH_CORE_SRC_COMPLETION_EXTERNAL_SUB_COMPLETIONS_H

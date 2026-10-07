@@ -80,10 +80,6 @@ std::string get_custom_keybinding(ic_keycode_t key) {
     return binding_field_or_empty(g_custom_keybindings, key, &custom_command_binding_t::command);
 }
 
-std::string get_custom_keybinding_title(ic_keycode_t key) {
-    return binding_field_or_empty(g_custom_keybindings, key, &custom_command_binding_t::title);
-}
-
 bool has_custom_keybinding(ic_keycode_t key) {
     return g_custom_keybindings.find(key) != g_custom_keybindings.end();
 }
@@ -110,10 +106,6 @@ std::vector<std::pair<ic_keycode_t, custom_command_binding_t>> list_custom_keybi
 std::string get_custom_palette_command(const std::string& id) {
     return binding_field_or_empty(g_custom_palette_commands, id,
                                   &custom_command_binding_t::command);
-}
-
-std::string get_custom_palette_command_title(const std::string& id) {
-    return binding_field_or_empty(g_custom_palette_commands, id, &custom_command_binding_t::title);
 }
 
 bool has_custom_palette_command(const std::string& id) {

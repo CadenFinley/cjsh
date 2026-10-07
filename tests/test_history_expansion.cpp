@@ -304,33 +304,28 @@ static bool test_history_file_rejects_malformed_entries() {
 }
 
 int main() {
-    struct TestCase {
-        const char* name;
-        bool (*func)();
-    };
-
-    const TestCase tests[] = {
-        {"substring_search_skips_staged_entry", test_substring_search_skips_staged_entry},
-        {"quick_substitution_skips_staged_entry", test_quick_substitution_skips_staged_entry},
-        {"quick_substitution_rejects_empty_search", test_quick_substitution_rejects_empty_search},
-        {"quick_substitution_valid_forms", test_quick_substitution_valid_forms},
-        {"quick_substitution_preserves_suffix", test_quick_substitution_preserves_suffix},
-        {"quick_substitution_errors", test_quick_substitution_errors},
-        {"previous_command_word_designators_expand", test_previous_command_word_designators_expand},
-        {"double_bang_replays_last_expanded_command",
-         test_double_bang_replays_last_expanded_command},
-        {"committed_history_event_selection", test_committed_history_event_selection},
-        {"committed_history_errors_preserve_input", test_committed_history_errors_preserve_input},
-        {"literal_history_syntax_is_not_reexpanded", test_literal_history_syntax_is_not_reexpanded},
-        {"history_file_decodes_entries", test_history_file_decodes_entries},
-        {"history_file_rejects_malformed_entries", test_history_file_rejects_malformed_entries},
+    using TestFunction = bool (*)();
+    const TestFunction tests[] = {
+        test_substring_search_skips_staged_entry,
+        test_quick_substitution_skips_staged_entry,
+        test_quick_substitution_rejects_empty_search,
+        test_quick_substitution_valid_forms,
+        test_quick_substitution_preserves_suffix,
+        test_quick_substitution_errors,
+        test_previous_command_word_designators_expand,
+        test_double_bang_replays_last_expanded_command,
+        test_committed_history_event_selection,
+        test_committed_history_errors_preserve_input,
+        test_literal_history_syntax_is_not_reexpanded,
+        test_history_file_decodes_entries,
+        test_history_file_rejects_malformed_entries,
     };
 
     const std::size_t test_count = sizeof(tests) / sizeof(tests[0]);
     std::size_t failures = 0;
     bool all_passed = true;
-    for (const auto& test : tests) {
-        if (!test.func()) {
+    for (const auto test : tests) {
+        if (!test()) {
             all_passed = false;
             ++failures;
         }

@@ -37,7 +37,6 @@
 #include <cstdio>
 #include <functional>
 #include <iostream>
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -376,13 +375,4 @@ CommandSubstitutionEvaluator::ExpansionResult CommandSubstitutionEvaluator::expa
     }
 
     return result;
-}
-
-std::optional<size_t> CommandSubstitutionEvaluator::find_matching_paren(const std::string& text,
-                                                                        size_t start_index) {
-    size_t match = 0;
-    if (!parser_find_matching_command_substitution_end(text, start_index, match)) {
-        return std::nullopt;
-    }
-    return match;
 }

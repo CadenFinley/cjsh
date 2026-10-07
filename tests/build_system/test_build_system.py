@@ -725,7 +725,8 @@ class BuildSystemConfigurationTests(unittest.TestCase):
         self.assertIn("-g", args)
         self.assertIn("-fsanitize=address", args)
         self.assertNotIn("-O3", args)
-        self.assertIn("DEBUG", definitions)
+        self.assertIn("CJSH_ENABLE_DEBUG", definitions)
+        self.assertNotIn("DEBUG", definitions)
         self.assertNotIn("IC_NO_DEBUG_MSG", definitions)
         self.assertNotIn("NDEBUG", definitions)
         self.assertNotIn("_FORTIFY_SOURCE", definitions)
@@ -741,8 +742,8 @@ class BuildSystemConfigurationTests(unittest.TestCase):
         self.assertIn("-Oz", args)
         self.assertNotIn("-O2", args)
         self.assertIn("-DNDEBUG", args)
-        self.assertEqual(definitions.get("CJSH_MINIMAL_BUILD"), "1")
-        self.assertEqual(definitions.get("CJSH_NO_FANCY_FEATURES"), "1")
+        self.assertNotIn("CJSH_MINIMAL_BUILD", definitions)
+        self.assertNotIn("CJSH_NO_FANCY_FEATURES", definitions)
         self.assertEqual(definitions.get("IC_NO_DEBUG_MSG"), "1")
 
 

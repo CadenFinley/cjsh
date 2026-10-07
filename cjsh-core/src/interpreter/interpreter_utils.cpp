@@ -223,10 +223,6 @@ std::vector<std::string> split_ampersand(const std::string& s) {
     return parts;
 }
 
-std::string to_lower_copy(std::string value) {
-    return string_utils::to_lower_copy(std::move(value));
-}
-
 bool is_readable_file(const std::string& path) {
     struct stat st{};
     return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode) && access(path.c_str(), R_OK) == 0;

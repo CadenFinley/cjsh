@@ -305,11 +305,11 @@ bool VariableManager::assign_associative_literal_impl(const std::string& name,
         (void)global_array_variables.erase(name);
         (void)global_nameref_variables.erase(name);
     }
-    return target_array != nullptr && assign_associative_words(*target_array, words, append);
+    return target_array != nullptr && assign_associative_words(*target_array, words);
 }
 
 bool VariableManager::assign_associative_words(AssociativeArray& target_array,
-                                               const std::vector<std::string>& words, bool append) {
+                                               const std::vector<std::string>& words) {
     size_t cursor = target_array.size();
     for (const std::string& word : words) {
         bool element_append = false;

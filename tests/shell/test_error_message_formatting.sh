@@ -182,18 +182,6 @@ expect_option_success() {
     fi
 }
 
-expect_no_escape_sequences() {
-    name="$1"
-    cmd="$2"
-    log_test "$name"
-    run_cmd "$cmd"
-    if [ -n "$output" ] && printf '%s' "$output" | awk 'BEGIN{esc=sprintf("%c",27)} index($0, esc){found=1} END{exit found}'; then
-        fail "Unexpected escape sequence in output; status=$status output='$output'"
-    else
-        pass
-    fi
-}
-
 expect_nonempty_output_nonzero "syntax error reports message" "if then; fi"
 expect_nonempty_output_nonzero "bad parameter expansion reports message" "unset FOO; echo \${FOO?missing}"
 expect_nonempty_output_nonzero "bad arithmetic expansion reports message" "echo \$((1/0))"

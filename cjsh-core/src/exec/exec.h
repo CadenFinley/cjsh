@@ -117,9 +117,6 @@ class Exec {
     Exec();
     ~Exec();
 
-    int execute_command_sync(const std::vector<std::string>& args,
-                             bool auto_background_on_stop = false,
-                             bool auto_background_on_stop_silent = false);
     int execute_command_async(const std::vector<std::string>& args);
     int execute_prepared_command_sync(cjsh_env::PreparedCommand command,
                                       bool auto_background_on_stop = false,
@@ -150,7 +147,6 @@ class Exec {
     ErrorInfo get_error();
     void print_last_error();
     void print_error_if_needed(int exit_code);
-    int get_exit_code() const;
     const std::vector<int>& get_last_pipeline_statuses() const;
 };
 

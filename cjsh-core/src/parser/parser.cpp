@@ -2466,13 +2466,6 @@ std::vector<std::string> Parser::parse_semicolon_commands(const std::string& com
     return commands;
 }
 
-std::vector<std::string> Parser::expand_wildcards(const std::string& pattern) {
-    if (!expansionEngine) {
-        expansionEngine = std::make_unique<ExpansionEngine>(shell);
-    }
-    return expansionEngine->expand_wildcards(pattern);
-}
-
 void Parser::expand_env_vars(std::string& arg) {
     if (!variableExpander) {
         variableExpander = std::make_unique<VariableExpander>(shell, env_vars);
@@ -2485,20 +2478,6 @@ void Parser::expand_env_vars_selective(std::string& arg) {
         variableExpander = std::make_unique<VariableExpander>(shell, env_vars);
     }
     variableExpander->expand_env_vars_selective(arg);
-}
-
-void Parser::expand_exported_env_vars_only(std::string& arg) {
-    if (!variableExpander) {
-        variableExpander = std::make_unique<VariableExpander>(shell, env_vars);
-    }
-    variableExpander->expand_exported_env_vars_only(arg);
-}
-
-std::vector<std::string> Parser::split_by_ifs(const std::string& input) {
-    if (!tokenizer) {
-        tokenizer = std::make_unique<Tokenizer>();
-    }
-    return tokenizer->split_by_ifs(input);
 }
 
 long long Parser::evaluate_arithmetic(const std::string& expr) {

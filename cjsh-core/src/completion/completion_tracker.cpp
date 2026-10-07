@@ -155,15 +155,6 @@ bool is_completion_preferred(const char* completion_text, long delete_before) {
                tracker.calculate_final_result(completion_text, delete_before))) != 0;
 }
 
-bool safe_add_completion_with_source(ic_completion_env_t* cenv, const char* completion_text,
-                                     const char* source) {
-    if ((g_current_completion_tracker != nullptr) &&
-        g_current_completion_tracker->has_reached_completion_limit()) {
-        return true;
-    }
-    return ic_add_completion_ex_with_source(cenv, completion_text, nullptr, nullptr, source);
-}
-
 bool safe_add_completion_prim_with_source(ic_completion_env_t* cenv, const char* completion_text,
                                           const char* display, const char* help, const char* source,
                                           long delete_before, long delete_after) {

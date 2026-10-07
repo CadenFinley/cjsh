@@ -53,21 +53,17 @@
 #include "error_out.h"
 
 using shell_script_interpreter::detail::process_line_for_validation;
-using shell_script_interpreter::detail::should_skip_line;
 using shell_script_interpreter::detail::strip_inline_comment;
 using shell_script_interpreter::detail::trim;
 namespace validation_internal = shell_validation::internal;
 
 using validation_internal::analyze_case_syntax;
 using validation_internal::analyze_for_loop_syntax;
-using validation_internal::analyze_if_syntax;
 using validation_internal::analyze_while_until_syntax;
 using validation_internal::check_for_loop_keywords;
 using validation_internal::extract_trimmed_line;
 using validation_internal::for_each_effective_char;
-using validation_internal::is_word_boundary;
 using validation_internal::IterationAction;
-using validation_internal::next_effective_line_starts_with_keyword;
 using validation_internal::QuoteState;
 using validation_internal::sanitize_command_substitutions_for_validation;
 using validation_internal::sanitize_lines_for_validation;
@@ -464,7 +460,7 @@ std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& 
                     suggestion = "Replace 'f' with 'if'";
                 }
                 return SyntaxError(
-                    {line_index + 1, exact_columns ? start : 0, exact_columns ? end : 0, 0},
+                    {line_index + 1, exact_columns ? start : 0, exact_columns ? end : 0},
                     ErrorSeverity::CRITICAL, ErrorCategory::SYNTAX, "SYN004", message, line,
                     suggestion);
             }
@@ -804,7 +800,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
             suggestion.push_back(missing);
             suggestion += " or remove the stray quote";
 
-            SyntaxError quote_error({display_line, 0, 0, 0}, ErrorSeverity::CRITICAL,
+            SyntaxError quote_error({display_line, 0, 0}, ErrorSeverity::CRITICAL,
                                     ErrorCategory::SYNTAX, "SYN001", message, line, suggestion);
             errors.push_back(std::move(quote_error));
             encountered_unclosed_quote = true;
@@ -913,7 +909,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
         if (config::is_posix_mode()) {
             auto add_posix_error = [&](const std::string& code, size_t start, size_t end,
                                        const std::string& message, const std::string& suggestion) {
-                errors.push_back(SyntaxError({display_line, start, end, 0}, ErrorSeverity::ERROR,
+                errors.push_back(SyntaxError({display_line, start, end}, ErrorSeverity::ERROR,
                                              ErrorCategory::SYNTAX, code, message, line,
                                              suggestion));
             };
@@ -1063,7 +1059,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                     trimmed_for_parsing[after_elif] == ';' ||
                     (after_elif + 4 <= trimmed_for_parsing.length() &&
                      trimmed_for_parsing.substr(after_elif, 4) == "then")) {
-                    errors.push_back({{display_line, 0, 0, 0},
+                    errors.push_back({{display_line, 0, 0},
                                       ErrorSeverity::CRITICAL,
                                       ErrorCategory::SYNTAX,
                                       "SYN012",
@@ -1092,7 +1088,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                 auto first_control = parse_control_token(first_token);
 
                 auto add_unmatched_control_error = [&](const std::string& message) {
-                    errors.push_back(SyntaxError({display_line, 0, 0, 0}, ErrorSeverity::CRITICAL,
+                    errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::CRITICAL,
                                                  ErrorCategory::CONTROL_FLOW, "SYN001", message,
                                                  line));
                 };
@@ -1126,7 +1122,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                         std::get<0>(control_stack.back()) = ControlToken::Elif;
 
                         if (tokens.size() == 1) {
-                            errors.push_back({{display_line, 0, 0, 0},
+                            errors.push_back({{display_line, 0, 0},
                                               ErrorSeverity::CRITICAL,
                                               ErrorCategory::SYNTAX,
                                               "SYN012",

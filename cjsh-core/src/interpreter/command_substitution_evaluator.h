@@ -31,7 +31,6 @@
 
 #include <cstddef>
 #include <functional>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,8 +48,6 @@ class CommandSubstitutionEvaluator {
     explicit CommandSubstitutionEvaluator(CommandExecutor executor);
     ExpansionResult expand_substitutions(const std::string& input);
     std::pair<std::string, int> capture_command_output(const std::string& command);
-
-    static std::optional<size_t> find_matching_paren(const std::string& text, size_t start_index);
 
     static CommandExecutor create_command_executor(
         cjsh::FunctionRef<int(const std::string&)> executor);

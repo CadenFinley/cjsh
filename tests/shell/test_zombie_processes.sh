@@ -68,15 +68,6 @@ count_zombies() {
     fi
 }
 
-is_zombie() {
-    local pid=$1
-    if [ -n "$pid" ] && [ "$pid" -gt 0 ]; then
-        ps -o stat= -p "$pid" 2>/dev/null | grep -q "^Z"
-    else
-        return 1
-    fi
-}
-
 wait_for_zombie_cleanup() {
     local baseline="$1"
     local max_checks="${2:-20}"

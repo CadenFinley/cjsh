@@ -384,12 +384,6 @@ static bool ls_colors_init(void) {
     return true;
 }
 
-static ic_maybe_unused bool ls_valid_esc(ssize_t c) {
-    return ((c == 0 || c == 1 || c == 4 || c == 7 || c == 22 || c == 24 || c == 27) ||
-            (c >= 30 && c <= 37) || (c >= 40 && c <= 47) || (c >= 90 && c <= 97) ||
-            (c >= 100 && c <= 107));
-}
-
 static bool ls_colors_from_key(stringbuf_t* sb, const char* key) {
     // find key
     ssize_t keylen = ic_strlen(key);

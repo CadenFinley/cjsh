@@ -53,7 +53,7 @@ ShellScriptInterpreter::validate_arithmetic_expressions(const std::vector<std::s
             const size_t adjusted_line = adjust_display_line(line, ctx.display_line, start);
 
             if (!bounds.closed) {
-                line_errors.push_back(SyntaxError({adjusted_line, start, bounds.closing_index, 0},
+                line_errors.push_back(SyntaxError({adjusted_line, start, bounds.closing_index},
                                                   ErrorSeverity::ERROR, ErrorCategory::SYNTAX,
                                                   "ARITH001", "Unclosed arithmetic expansion $(()",
                                                   line, "Add closing ))"));
@@ -62,10 +62,10 @@ ShellScriptInterpreter::validate_arithmetic_expressions(const std::vector<std::s
                     line.substr(bounds.expr_start, bounds.expr_end - bounds.expr_start);
 
                 if (expr.empty()) {
-                    line_errors.push_back(SyntaxError(
-                        {adjusted_line, start, bounds.closing_index, 0}, ErrorSeverity::ERROR,
-                        ErrorCategory::SYNTAX, "ARITH002", "Empty arithmetic expression", line,
-                        "Provide expression inside $(( ))"));
+                    line_errors.push_back(SyntaxError({adjusted_line, start, bounds.closing_index},
+                                                      ErrorSeverity::ERROR, ErrorCategory::SYNTAX,
+                                                      "ARITH002", "Empty arithmetic expression",
+                                                      line, "Provide expression inside $(( ))"));
                 } else {
                     std::string trimmed_expr = trim_whitespace(expr);
 
@@ -75,8 +75,8 @@ ShellScriptInterpreter::validate_arithmetic_expressions(const std::vector<std::s
                             last_char == '/' || last_char == '%' || last_char == '&' ||
                             last_char == '|' || last_char == '^') {
                             line_errors.push_back(SyntaxError(
-                                {adjusted_line, start, bounds.closing_index, 0},
-                                ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "ARITH003",
+                                {adjusted_line, start, bounds.closing_index}, ErrorSeverity::ERROR,
+                                ErrorCategory::SYNTAX, "ARITH003",
                                 "Incomplete arithmetic expression - missing operand", line,
                                 "Add operand after '" + std::string(1, last_char) + "'"));
                         }
@@ -85,7 +85,7 @@ ShellScriptInterpreter::validate_arithmetic_expressions(const std::vector<std::s
                     if (expr.find("/0") != std::string::npos ||
                         expr.find("% 0") != std::string::npos) {
                         line_errors.push_back(SyntaxError(
-                            {adjusted_line, start, bounds.closing_index, 0}, ErrorSeverity::WARNING,
+                            {adjusted_line, start, bounds.closing_index}, ErrorSeverity::WARNING,
                             ErrorCategory::SEMANTICS, "ARITH004", "Potential division by zero",
                             line, "Ensure divisor is not zero"));
                     }
@@ -103,7 +103,7 @@ ShellScriptInterpreter::validate_arithmetic_expressions(const std::vector<std::s
                     }
                     if (balance != 0) {
                         line_errors.push_back(
-                            SyntaxError({ctx.display_line, start, bounds.closing_index, 0},
+                            SyntaxError({ctx.display_line, start, bounds.closing_index},
                                         ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "ARITH005",
                                         "Unbalanced parentheses in arithmetic expression", line,
                                         "Check parentheses balance in expression"));
@@ -115,7 +115,7 @@ ShellScriptInterpreter::validate_arithmetic_expressions(const std::vector<std::s
         }
 
         if (ctx.character == '$' && ctx.index + 1 < line.length() && line[ctx.index + 1] == '[') {
-            line_errors.push_back(SyntaxError({ctx.display_line, ctx.index, ctx.index + 2, 0},
+            line_errors.push_back(SyntaxError({ctx.display_line, ctx.index, ctx.index + 2},
                                               ErrorSeverity::WARNING, ErrorCategory::STYLE,
                                               "ARITH006",
                                               "Deprecated arithmetic syntax $[...], use $((...))",
@@ -139,10 +139,10 @@ ShellScriptInterpreter::validate_parameter_expansions(const std::vector<std::str
             const size_t end = find_matching_brace(line, i + 1);
             if (end != std::string::npos &&
                 posix_parameter_name_end(line.substr(i + 2, end - i - 2)) == std::string::npos) {
-                line_errors.push_back(SyntaxError(
-                    {display_line, i, end + 1, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX,
-                    "POSIX014", "Parameter expansion is disabled in POSIX mode", line,
-                    "Use POSIX parameter operators"));
+                line_errors.push_back(SyntaxError({display_line, i, end + 1}, ErrorSeverity::ERROR,
+                                                  ErrorCategory::SYNTAX, "POSIX014",
+                                                  "Parameter expansion is disabled in POSIX mode",
+                                                  line, "Use POSIX parameter operators"));
             }
         }
 
@@ -153,7 +153,7 @@ ShellScriptInterpreter::validate_parameter_expansions(const std::vector<std::str
             size_t j = closed ? end + 1 : line.length();
 
             if (!closed) {
-                line_errors.push_back(SyntaxError({display_line, start, j, 0}, ErrorSeverity::ERROR,
+                line_errors.push_back(SyntaxError({display_line, start, j}, ErrorSeverity::ERROR,
                                                   ErrorCategory::SYNTAX, "SYN005",
                                                   "Unclosed command substitution $() - missing ')'",
                                                   line, "Add closing parenthesis"));
@@ -170,8 +170,8 @@ ShellScriptInterpreter::validate_parameter_expansions(const std::vector<std::str
 
             if (!found_closing) {
                 line_errors.push_back(SyntaxError(
-                    {display_line, start, j, 0}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX,
-                    "SYN006", "Unclosed backtick command substitution - missing '`'", line,
+                    {display_line, start, j}, ErrorSeverity::ERROR, ErrorCategory::SYNTAX, "SYN006",
+                    "Unclosed backtick command substitution - missing '`'", line,
                     "Add closing backtick"));
             }
 
@@ -217,7 +217,7 @@ ShellScriptInterpreter::validate_parameter_expansions(const std::vector<std::str
                         std::string index_issue;
                         if (!validate_array_index_expression(index_text, index_issue)) {
                             line_errors.push_back(SyntaxError(
-                                {display_line, name_start, i, 0}, ErrorSeverity::ERROR,
+                                {display_line, name_start, i}, ErrorSeverity::ERROR,
                                 ErrorCategory::VARIABLES, "VAR005",
                                 index_issue + " for array '" + var_name_only + "'", line,
                                 "Use a valid numeric or arithmetic expression index"));
@@ -256,7 +256,7 @@ ShellScriptInterpreter::validate_parameter_expansions(const std::vector<std::str
 
                     if (!is_valid_identifier_start(var_name[0])) {
                         line_errors.push_back(SyntaxError(
-                            {display_line, var_start, i, 0}, ErrorSeverity::ERROR,
+                            {display_line, var_start, i}, ErrorSeverity::ERROR,
                             ErrorCategory::VARIABLES, "VAR004",
                             "Invalid variable name '" + var_name +
                                 "' - must start with letter or underscore",
@@ -267,17 +267,17 @@ ShellScriptInterpreter::validate_parameter_expansions(const std::vector<std::str
                         line.substr(0, var_start).find_first_not_of(" \t") == std::string::npos) {
                         if (i > 0 && std::isspace(line[i - 1])) {
                             line_errors.push_back(
-                                SyntaxError({display_line, i - 1, i + 1, 0}, ErrorSeverity::ERROR,
+                                SyntaxError({display_line, i - 1, i + 1}, ErrorSeverity::ERROR,
                                             ErrorCategory::VARIABLES, "VAR005",
                                             "Variable assignment cannot have spaces around '='",
                                             line, "Remove spaces: " + var_name + "=value"));
                         }
                         if (i + 1 < line.length() && std::isspace(line[i + 1])) {
-                            line_errors.push_back(SyntaxError(
-                                {display_line, var_start, i + 2, 0}, ErrorSeverity::ERROR,
-                                ErrorCategory::VARIABLES, "VAR005",
-                                "Variable assignment cannot have spaces around '='", line,
-                                "Remove spaces: " + var_name + "=value"));
+                            line_errors.push_back(
+                                SyntaxError({display_line, var_start, i + 2}, ErrorSeverity::ERROR,
+                                            ErrorCategory::VARIABLES, "VAR005",
+                                            "Variable assignment cannot have spaces around '='",
+                                            line, "Remove spaces: " + var_name + "=value"));
                         }
                     }
                 }
@@ -306,7 +306,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
             if (var_end > 0 && line[var_end - 1] == '=') {
                 if (config::is_posix_mode()) {
                     line_errors.push_back(SyntaxError(
-                        {display_line, var_end - 1, i + 1, 0}, ErrorSeverity::ERROR,
+                        {display_line, var_end - 1, i + 1}, ErrorSeverity::ERROR,
                         ErrorCategory::SYNTAX, "POSIX005", "Arrays are disabled in POSIX mode",
                         line, "Use separate scalar variables or positional parameters"));
                     next_index = line.length();
@@ -336,7 +336,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                 }
 
                 if (paren_count > 0) {
-                    line_errors.push_back(SyntaxError({display_line, i, j, 0}, ErrorSeverity::ERROR,
+                    line_errors.push_back(SyntaxError({display_line, i, j}, ErrorSeverity::ERROR,
                                                       ErrorCategory::SYNTAX, "SYN009",
                                                       "Unclosed array declaration - missing ')'",
                                                       line, "Add closing parenthesis"));

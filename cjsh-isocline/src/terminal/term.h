@@ -100,14 +100,12 @@ ic_private void term_mark_line_visible(term_t* term, bool visible);
 ic_private void term_writef(term_t* term, const char* fmt, ...);
 ic_private void term_vwritef(term_t* term, const char* fmt, va_list args);
 
-ic_private void term_left(term_t* term, ssize_t n);
 ic_private void term_right(term_t* term, ssize_t n);
 ic_private void term_up(term_t* term, ssize_t n);
 ic_private void term_down(term_t* term, ssize_t n);
 ic_private void term_start_of_line(term_t* term);
 ic_private void term_clear_line(term_t* term);
 ic_private void term_clear_to_end_of_line(term_t* term);
-ic_private void term_delete_lines(term_t* term, ssize_t n);
 ic_private void term_clear_lines_to_end(term_t* term);
 
 ic_private void term_attr_reset(term_t* term);

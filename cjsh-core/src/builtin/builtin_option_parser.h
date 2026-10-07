@@ -35,11 +35,6 @@
 #include <string>
 #include <vector>
 
-struct BuiltinShortOptionSpec {
-    char option;
-    bool requires_value;
-};
-
 struct BuiltinParsedShortOption {
     char option;
     std::optional<std::string> value;

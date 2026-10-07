@@ -61,8 +61,6 @@ void completion_session_end();
 void prioritize_completion(const char* completion_text, long delete_before);
 bool is_completion_preferred(const char* completion_text, long delete_before);
 
-bool safe_add_completion_with_source(ic_completion_env_t* cenv, const char* completion_text,
-                                     const char* source);
 bool safe_add_completion_prim_with_source(ic_completion_env_t* cenv, const char* completion_text,
                                           const char* display, const char* help, const char* source,
                                           long delete_before, long delete_after);

@@ -37,7 +37,6 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
-#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
@@ -149,13 +148,6 @@ class ScopedFd {
     ScopedFd(ScopedFd&& other) noexcept : fd_(other.release()) {
     }
 
-    ScopedFd& operator=(ScopedFd&& other) noexcept {
-        if (this != &other) {
-            reset(other.release());
-        }
-        return *this;
-    }
-
     int get() const {
         return fd_;
     }
@@ -164,11 +156,6 @@ class ScopedFd {
         int released = fd_;
         fd_ = -1;
         return released;
-    }
-
-    void reset(int fd = -1) {
-        close_fd_if_valid(fd_);
-        fd_ = fd;
     }
 
    private:
@@ -450,7 +437,6 @@ thread_local size_t interactive_path_lookup_depth = 0;
 struct CachedExecutable {
     std::string path;
     std::uint64_t hits{0};
-    std::time_t last_used{0};
     bool manually_added{false};
 };
 
@@ -515,8 +501,6 @@ class PathHashCache {
             }
         }
 
-        auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-
         auto it = entries_.find(name);
         if (it != entries_.end()) {
             // a valid hash keeps its selected path until invalidated or reset;
@@ -528,7 +512,6 @@ class PathHashCache {
                 if (usage == CacheUsage::Manual) {
                     it->second.manually_added = true;
                 }
-                it->second.last_used = now;
                 if (interactive) {
                     interactive_results_[name] = it->second.path;
                 }
@@ -568,7 +551,6 @@ class PathHashCache {
             entry.path = resolved;
             entry.hits = (usage == CacheUsage::Execution) ? 1 : 0;
             entry.manually_added = (usage == CacheUsage::Manual);
-            entry.last_used = now;
             entries_[name] = std::move(entry);
         }
 
@@ -607,8 +589,7 @@ class PathHashCache {
         std::vector<PathHashEntry> snapshot;
         snapshot.reserve(entries_.size());
         for (const auto& [command, entry] : entries_) {
-            snapshot.push_back(
-                {command, entry.path, entry.hits, entry.last_used, entry.manually_added});
+            snapshot.push_back({command, entry.path, entry.hits, entry.manually_added});
         }
 
         std::sort(snapshot.begin(), snapshot.end(),
@@ -740,8 +721,6 @@ class PathHashCache {
             return;
         }
 
-        auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-
         (void)for_each_path_segment(path_value, [&](std::string_view raw_segment) {
             if (raw_segment.empty()) {
                 return false;
@@ -790,7 +769,7 @@ class PathHashCache {
                 }
 
                 (void)entries_.emplace(std::move(command),
-                                       CachedExecutable{entry.path().string(), 0, now, false});
+                                       CachedExecutable{entry.path().string(), 0, false});
             }
 
             return false;
@@ -1208,19 +1187,6 @@ bool resolves_to_executable(const std::string& name, const std::string& cwd) {
     return !resolve_command_with_cache(name, CacheUsage::Query).empty();
 }
 
-bool path_is_directory_candidate(const std::string& value, const std::string& cwd) {
-    if (value.empty()) {
-        return false;
-    }
-
-    std::filesystem::path candidate(value);
-    if (!candidate.is_absolute()) {
-        candidate = std::filesystem::path(cwd) / candidate;
-    }
-
-    return path_is_directory(candidate);
-}
-
 bool token_has_explicit_path_hint(const std::string& value) {
     if (value.empty()) {
         return false;
@@ -1496,25 +1462,6 @@ std::string resolve_cjsh_executable_path(const std::vector<std::string>& startup
     }
 
     return {};
-}
-
-std::string resolve_cjsh_executable_directory(const std::vector<std::string>& startup_args) {
-    std::string executable_path = resolve_cjsh_executable_path(startup_args);
-    if (executable_path.empty()) {
-        return safe_current_directory();
-    }
-
-    std::filesystem::path normalized = normalize_path(executable_path);
-    if (!normalized.empty() && !normalized.parent_path().empty()) {
-        return normalized.parent_path().string();
-    }
-
-    std::filesystem::path fallback(executable_path);
-    if (!fallback.parent_path().empty()) {
-        return fallback.parent_path().lexically_normal().string();
-    }
-
-    return safe_current_directory();
 }
 
 // choose an invocation name separately from the executable location. preserve

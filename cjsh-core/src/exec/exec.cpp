@@ -1350,12 +1350,6 @@ void Exec::set_last_pipeline_statuses(std::vector<int> statuses) {
     last_pipeline_statuses = std::move(statuses);
 }
 
-int Exec::execute_command_sync(const std::vector<std::string>& args, bool auto_background_on_stop,
-                               bool auto_background_on_stop_silent) {
-    return execute_prepared_command_sync(cjsh_env::prepare_command(args), auto_background_on_stop,
-                                         auto_background_on_stop_silent);
-}
-
 // launch a simple foreground command whose assignments and argv are separated.
 // prepare helpers before fork, register both job views, then let the foreground
 // path perform terminal handoff, barrier release, and waiting.
@@ -3077,7 +3071,6 @@ CommandOutput execute_args_for_output_impl(const std::vector<std::string>& args,
             const char* exec_override =
                 cached_exec_path.empty() ? nullptr : cached_exec_path.c_str();
             exec_external_child(args, exec_override);
-            return 127;
         },
         false, true, progress_callback, progress_interval_ms, cancellation_callback,
         separate_stderr);

@@ -29,7 +29,6 @@
 #include "wait_status_utils.h"
 
 #include <sys/wait.h>
-#include <optional>
 
 namespace wait_status_utils {
 
@@ -55,13 +54,6 @@ int to_exit_code(int status, int fallback) {
         return 128 + info.code;
     }
     return fallback;
-}
-
-std::optional<int> to_exit_code_optional(int status) {
-    if (WIFEXITED(status) || WIFSIGNALED(status)) {
-        return to_exit_code(status);
-    }
-    return std::nullopt;
 }
 
 }  // namespace wait_status_utils

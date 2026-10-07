@@ -79,10 +79,6 @@ void Exec::print_error_if_needed(int exit_code) {
     }
 }
 
-int Exec::get_exit_code() const {
-    return last_exit_code;
-}
-
 const std::vector<int>& Exec::get_last_pipeline_statuses() const {
     return last_pipeline_statuses;
 }

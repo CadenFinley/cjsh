@@ -112,8 +112,6 @@ class JobManager {
 
     std::shared_ptr<JobControlJob> get_job(int job_id);
 
-    std::shared_ptr<JobControlJob> get_job_by_pgid(pid_t pgid);
-
     std::shared_ptr<JobControlJob> get_job_by_pid(pid_t pid);
 
     std::shared_ptr<JobControlJob> get_job_by_pid_or_pgid(pid_t id);
@@ -132,8 +130,6 @@ class JobManager {
 
     pid_t get_last_background_pid() const;
 
-    static pid_t get_last_background_pid_atomic();
-
     void cleanup_finished_jobs(bool at_prompt = false);
 
     void set_shell(Shell* shell);
@@ -147,9 +143,7 @@ class JobManager {
     void clear_stdin_signal(pid_t pid);
 
     void clear_all_jobs();
-    void mark_pid_completed(pid_t pid, int status);
     std::optional<int> consume_completed_pid_status(pid_t pid);
-    std::optional<int> completed_pid_status(pid_t pid) const;
 
    private:
     JobManager() = default;
@@ -178,15 +172,9 @@ std::shared_ptr<JobControlJob> find_job_by_command(const std::string& spec, JobM
 std::optional<ResolvedJob> resolve_control_job_target(const std::vector<std::string>& args,
                                                       JobManager& job_manager);
 
-std::optional<int> interpret_wait_status(int status);
-
-std::optional<int> wait_for_job_and_remove(const std::shared_ptr<JobControlJob>& job,
-                                           JobManager& job_manager);
 std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobManager& job_manager,
                                 bool return_on_stop = true, pid_t* status_pid = nullptr);
 
-std::optional<int> parse_job_specifier(const std::string& target);
-std::optional<int> parse_job_specifier_flexible(const std::string& target);
 std::optional<pid_t> parse_pid_specifier(const std::string& target);
 
 int parse_signal(const std::string& signal_str);

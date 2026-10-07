@@ -715,10 +715,6 @@ std::unordered_map<std::string, std::string>& env_vars() {
     return g_env_vars;
 }
 
-void sync_parser_env_vars(Shell* shell) {
-    apply_env_vars_to_parser(shell);
-}
-
 void sync_parser_env_var(Shell* shell, const std::string& name) {
     if (auto* parser = shell ? shell->get_parser() : nullptr) {
         const auto it = g_env_vars.find(name);

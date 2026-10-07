@@ -80,8 +80,6 @@ struct SignalInfo {
 struct SignalState {
     SignalDisposition disposition = SignalDisposition::DEFAULT;
     struct sigaction original_action{};
-    volatile sig_atomic_t pending_count = 0;
-    bool is_blocked = false;
 };
 
 class SignalHandler {

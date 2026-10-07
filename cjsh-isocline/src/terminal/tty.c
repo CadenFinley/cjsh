@@ -440,12 +440,6 @@ ic_private code_t tty_read(tty_t* tty) {
 // Read back an ANSI query response
 //-------------------------------------------------------------
 
-ic_private bool tty_read_esc_response(tty_t* tty, char esc_start, bool final_st, char* buf,
-                                      ssize_t buflen, tty_response_fun_t* matches, void* arg) {
-    return tty_read_esc_response_with_timeout(tty, esc_start, final_st, buf, buflen, matches, arg,
-                                              -1);
-}
-
 ic_private bool tty_read_esc_response_with_timeout(tty_t* tty, char esc_start, bool final_st,
                                                    char* buf, ssize_t buflen,
                                                    tty_response_fun_t* matches, void* arg,

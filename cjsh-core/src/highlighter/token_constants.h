@@ -41,7 +41,6 @@ const std::unordered_set<std::string>& shell_keywords();
 const std::vector<std::string>& shell_control_structure_keywords();
 const std::unordered_set<std::string>& shell_control_structure_leaders();
 const std::unordered_set<std::string>& inline_command_keywords();
-const std::unordered_set<std::string>& loop_keywords();
 const std::unordered_set<std::string>& redirection_operators();
 const std::unordered_map<std::string, std::string>& default_styles();
 }  // namespace token_constants

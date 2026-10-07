@@ -11,6 +11,14 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+### Removed
+
+- Remove unused core helpers, fields, metadata, build definitions, test scaffolding, and an unreferenced documentation image. Limit isocline cleanup to unreferenced private helpers and declarations.
+
+### Fixed
+
+- Correct invocation flag meanings, interactive `huponexit` and status-hint defaults, the startup configuration link, and WSL compiler guidance. Remove unsupported editor benchmark claims and obsolete debug-log instructions.
+
 ## [1.5.10] - 2026-10-07
 
 ### Added

@@ -538,17 +538,12 @@ std::map<int, Job> Exec::get_jobs() {
 // signal a snapshot during shell teardown, then give children a bounded chance
 // to exit. disown-style hangup protection applies to SIGHUP, not all shutdown causes.
 void Exec::terminate_all_child_process(int signal) {
-    struct JobRecord {
-        int id;
-        Job job;
-    };
-
-    std::vector<JobRecord> job_snapshot;
+    std::vector<Job> job_snapshot;
     {
         std::lock_guard<std::mutex> lock(jobs_mutex);
         job_snapshot.reserve(jobs.size());
         for (const auto& pair : jobs) {
-            job_snapshot.push_back({pair.first, pair.second});
+            job_snapshot.push_back(pair.second);
         }
     }
 
@@ -565,8 +560,7 @@ void Exec::terminate_all_child_process(int signal) {
     };
 
     std::vector<pid_t> pending_children;
-    for (const auto& entry : job_snapshot) {
-        const Job& job = entry.job;
+    for (const Job& job : job_snapshot) {
         if (job.completed || (signal == SIGHUP && job.hup_protected)) {
             continue;
         }
