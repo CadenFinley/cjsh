@@ -11,12 +11,22 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+## [1.5.10] - 2026-10-07
+
 ### Added
 
+- Add explicit `cjsh` and `posix` dialect selection through `--dialect` and `cjshopt dialect`, plus a `shopt` builtin for `autocd`, `extglob`, `globstar`, `huponexit`, and `expand_aliases`.
+- Expand POSIX.1-2024 mode coverage with dedicated invocation, expansion, builtin, fatal-error, extension-restriction, and interactive regression tests, plus a POSIX mode reference guide.
 - Restore `tools/lint.py` and enforce LLVM 23 formatting and static analysis in CI, including project headers, standalone headers, and tests. Add regressions for lint failures and release/install notice packaging.
 - Add a security reporting and support policy, core and test contributor guides, isocline fork maintenance notes, and third-party notices for isocline and the adapted combining-character table. Include project and third-party license notices in release archives and CMake installations.
 - Add a repeatable hotspot benchmark with alternating before/after runs for loops, direct function calls, redirections, and glob expansion.
 - Agent mode can answer general questions with `{"text":"..."}` responses printed to stdout. Executors can return `{"error":"..."}` to report a problem through `error_out`; executor failures and malformed responses also use standard stderr diagnostics instead of an error menu.
+
+### Changed
+
+- Standardize short invocation options across dialects: `-v` selects verbose mode, `-h` hashall, `-C` noclobber, `-m` monitor mode, `-s` stdin, `-H` history expansion, and `-O NAME` a shell option. Use `--version`, `--help`, `--no-colors`, `--minimal`, `--secure`, `--no-history-expansion`, and `--no-completions` instead of the former native shortcuts.
+- Move extended-glob configuration from `cjshopt extglob` to `shopt -s/-u extglob`, and hangup-on-exit configuration from `set -o/+o huponexit` to `shopt -s/-u huponexit`. Interactive native shells retain automatic directory changes by default; `shopt -u autocd` disables them.
+- Keep automatic completion menus dismissed after Escape until explicit Tab or a new prompt. Preserve inline ghost-text hints alongside passive menus, honor completion-preview settings after activation, and hide suggestions that only repeat the current word or append a space.
 
 ### Removed
 
@@ -26,6 +36,9 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 - Reduce repeated function-body validation and copying, simple-command dispatch overhead, and descriptor backups for redirected leaf builtins while preserving nested execution and shell error handling.
 - Avoid redundant metadata lookups during supported bracket and extglob expansion, and use bounded directory snapshots when highlighting many file arguments. Filesystem answers refresh on each redraw.
+- Improve POSIX-mode alias expansion, compound function bodies and positional parameters, special-builtin error handling, dot-file lookup, `read` field splitting and EOF behavior, restorable option and trap output, and exit-trap status handling. Support POSIX.1-2024 `$'…'` quoting and `;&` case fall-through while tightening nonstandard-extension restrictions.
+- Refresh command and filesystem caches even when filesystem timestamps have coarse resolution.
+- Restore missing typeahead and fuzzy-matching sources in isocline's amalgamated build and guard platform feature macros, including macOS feature visibility.
 - Preserve interactive input while validating function bodies, preventing parser-cache invalidation from crashing the shell.
 - Process signals received during foreground process launch before waiting for the child, so TERM can exit the shell promptly.
 - Wait for redirected agent replies before checking stdout in interactive tests, including executors that pause while the editor is quiet.
@@ -1067,7 +1080,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Included JSON prompt themes, a shared-library plugin engine, and an optional built-in AI assistant.
 - Included CMake builds, installation helpers, and shell compatibility tests.
 
-[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.9...HEAD
+[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.10...HEAD
+[1.5.10]: https://github.com/CadenFinley/cjsh/compare/v1.5.9...v1.5.10
 [1.5.9]: https://github.com/CadenFinley/cjsh/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/CadenFinley/cjsh/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/CadenFinley/cjsh/compare/v1.5.6...v1.5.7
