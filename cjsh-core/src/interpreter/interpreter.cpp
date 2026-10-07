@@ -96,12 +96,19 @@ using shell_script_interpreter::detail::should_skip_line;
 using shell_script_interpreter::detail::strip_inline_comment;
 using shell_script_interpreter::detail::trim;
 
+// coordinate evaluation rather than treating parsing as a single up-front pass.
+// structured evaluators choose which bodies run; command expansion and dispatch
+// happen in that execution context, with Shell and Exec owning command launch.
+// internal control-flow results must reach their enclosing function or loop.
 namespace {
 
+// distinguish fatal parameter expansion from an ordinary nonzero command result.
 thread_local bool g_parameter_expansion_fatal_error = false;
 
 constexpr std::string_view kSignalExitExceptionPrefix = "__CJSH_SIGNAL_EXIT__:";
 
+// dispatch pending signals at evaluation boundaries and preserve an explicit exit
+// override. no value means evaluation may continue, not a successful command result.
 std::optional<int> collect_pending_signal_exit_code() {
     if (!g_shell) {
         return std::nullopt;
@@ -127,6 +134,8 @@ bool is_terminating_signal_exit_code(int exit_code) {
 #endif
 }
 
+// string-returning expansion paths use an internal exception to unwind on signal
+// exit. the runtime-error boundary recognizes it without emitting a syntax error.
 std::runtime_error make_signal_exit_exception(int exit_code) {
     return std::runtime_error(std::string(kSignalExitExceptionPrefix) + std::to_string(exit_code));
 }
@@ -406,6 +415,8 @@ std::vector<std::string> build_command_suggestions(const std::string& command_na
     return suggestion_utils::generate_command_suggestions_if_enabled(command_name);
 }
 
+// translate expansion and evaluation failures into shell diagnostics and statuses.
+// preserve signal-unwind results before classifying ordinary runtime messages.
 int handle_runtime_exception(const std::string& text, const std::runtime_error& e,
                              size_t line_number) {
     const std::string raw_message = e.what() ? std::string(e.what()) : "runtime error";
@@ -533,6 +544,8 @@ VariableManager& ShellScriptInterpreter::get_variable_manager() {
     return variable_manager;
 }
 
+// evaluate a parenthesized body in a forked copy of shell state. the parent sees
+// its status, not variable or directory mutations made while running the body.
 int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content,
                                              bool preexpanded) {
     pid_t pid = fork();
@@ -552,7 +565,7 @@ int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content
 
         // exit() destroys function-local statics (including JobManager) before
         // the inherited shell cleanup callback, which then accesses freed state.
-        // Run shell hooks explicitly and leave C++ teardown to the parent.
+        // run shell hooks explicitly and leave C++ teardown to the parent.
         g_shell->run_exit_handlers(exit_code);
         exit_code = read_exit_code_or(exit_code);
         (void)std::cout.flush();
@@ -575,6 +588,9 @@ int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content
     }
 }
 
+// invoke already expanded arguments with temporary positional parameters and a
+// function-local variable scope. return is consumed here rather than escaping as
+// a block-control sentinel to the function's caller.
 int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>& expanded_args) {
     if (expanded_args.empty()) {
         return set_last_status(0);
@@ -585,7 +601,7 @@ int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>
         return set_last_status(127);
     }
 
-    // Keep the active definition alive if the body unsets or redefines itself.
+    // keep the active definition alive if the body unsets or redefines itself.
     const auto function_definition = function_it->second;
 
     push_function_scope();
@@ -644,6 +660,9 @@ int ShellScriptInterpreter::invoke_function(const std::vector<std::string>& args
     return execute_function_call(args);
 }
 
+// recognize assignment-only commands before ordinary command dispatch. -1 means
+// this is not an assignment-only form; nonnegative results are handled statuses.
+// a successful assignment inherits its command substitution's status when present.
 int ShellScriptInterpreter::handle_env_assignment(const std::vector<std::string>& expanded_args) {
     if (expanded_args.empty()) {
         return -1;
@@ -721,6 +740,9 @@ int ShellScriptInterpreter::handle_env_assignment(const std::vector<std::string>
     return assignment_success_status();
 }
 
+// bypass pipeline construction only for text without compound-command syntax.
+// parse_command still performs expansion, so a successful quick path must not be
+// followed by another parse that repeats assignment or substitution side effects.
 std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
     const std::string& command_text, bool* function_call) {
     if (!shell_parser || command_text.find_first_of("|&;<>!(){}`") != std::string::npos) {
@@ -777,6 +799,8 @@ std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
     return set_last_status(exit_code);
 }
 
+// optimize a single unstructured line while retaining signal, status, and errexit
+// boundaries. a declined fast path returns no value so full block dispatch can run.
 std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
     const std::vector<std::string>& lines) {
     if (lines.size() != 1) {
@@ -810,7 +834,7 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
         word.find_first_of("$~'\"*?[") < word.find('=')) {
         return std::nullopt;
     }
-    // Alias expansion may introduce a list or structured statement. Leave it
+    // alias expansion may introduce a list or structured statement. leave it
     // with the full dispatcher, including POSIX expansion before tokenization.
     const std::string program(word);
     if ((!config::is_posix_mode() || !aliases_preexpanded) &&
@@ -823,7 +847,7 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
     if (auto signal = collect_pending_signal_exit_code()) {
         return set_last_status(*signal);
     }
-    // Signal traps can change aliases while pending signals are dispatched.
+    // signal traps can change aliases while pending signals are dispatched.
     if ((!config::is_posix_mode() || !aliases_preexpanded) &&
         (g_shell->get_aliases().count(program) != 0 ||
          (word.find('=') != std::string_view::npos && !g_shell->get_aliases().empty()))) {
@@ -884,6 +908,9 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
     return code;
 }
 
+// evaluate logical lines with scoped alias/validation modes. nested evaluators
+// re-enter this function, so per-call policy must unwind independently of persistent
+// functions, variables, and the parser state shared by the shell.
 int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                                           bool skip_validation, std::optional<bool> preexpanded,
                                           function_evaluator::SyntaxValidationCache* syntax_cache) {
@@ -932,6 +959,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         return 1;
     }
 
+    // syntax validity depends on dialect and extglob even for an unchanged body.
+    // reuse only a matching function-body validation result, not runtime expansions.
     const auto syntax_options =
         std::make_pair(static_cast<int>(config::shell_dialect()), config::extglob_enabled);
     if (!effective_skip && (!syntax_cache || syntax_cache->validated_options != syntax_options)) {
@@ -943,13 +972,15 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             print_error(error);
             return cjsh_env::posix_error_exit(2);
         }
-        // This skips only this immutable body's syntax pass. Nested eval/source
+        // this skips only this immutable body's syntax pass. nested eval/source
         // calls retain their own validation and every command still runs checks.
         if (syntax_cache) {
             syntax_cache->validated_options = syntax_options;
         }
     }
 
+    // POSIX noexec still validates syntax but must return before command expansion,
+    // function invocation, or the quick execution path can produce side effects.
     if (config::is_posix_mode() && g_shell->get_shell_option(ShellOption::Noexec)) {
         return 0;
     }
@@ -967,6 +998,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         return execute_simple_or_pipeline_impl(cmd_text, true, nullptr);
     };
 
+    // failure in a tested condition controls branch selection rather than errexit.
+    // suppress it for nested execution without changing the user's set -e option.
     evaluate_logical_condition = [&](const std::string& condition) -> int {
         Shell::ErrexitScope scope(g_shell.get());
         // conditions from if and elif headers are normalized through this shared path
@@ -1025,6 +1058,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             }
 
             if (has_logical_op) {
+                // expand and execute only selected list members. a failing nonfinal
+                // member can be a tested result, not a reason to abort the outer list.
                 int logical_status = 0;
                 size_t last_executed_index = 0;
                 bool executed_command = false;
@@ -1147,7 +1182,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 }
             }
             if (group_end != std::string::npos) {
-                // The group evaluates its body in its own execution context.
+                // the group evaluates its body in its own execution context.
+                // expand only its trailing text here, not substitutions in the body.
                 text = text.substr(0, group_end + 1) +
                        expand_all_substitutions(text.substr(group_end + 1),
                                                 execute_simple_or_pipeline);
@@ -1222,7 +1258,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             }
 
             if (!has_multiple_commands) {
-                // Pipeline parsing already expanded these words. Re-parsing can repeat
+                // pipeline parsing already expanded these words. re-parsing can repeat
                 // arithmetic assignments and other expansion side effects.
                 if (!cmds.empty()) {
                     parsed_args = cmds.front().args;
@@ -1347,6 +1383,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         return 0;
                     }
 
+                    // a native alias that introduces a pipe must return to pipeline
+                    // parsing rather than launching its expansion as a single argv.
                     if (expanded_args.size() == 2 && expanded_args[0] == "__ALIAS_PIPELINE__") {
                         std::string pipeline_text = expanded_args[1];
                         if (c.auto_background_on_stop) {
@@ -1606,7 +1644,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             execute_simple_or_pipeline, shell_parser, should_abort_for_parameter_expansion);
     };
 
-    // runtime execution trace starts here after parser and validation stages have completed
+    // walk the validated block in execution order. structural handlers advance the
+    // line index past their bodies; only selected bodies are evaluated recursively.
     for (size_t line_index = 0; line_index < lines.size(); ++line_index) {
         current_line_number = line_index + 1;
 
@@ -1654,6 +1693,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             continue;
         }
 
+        // definitions register stored bodies instead of expanding/executing them
+        // now. any trailing command after the definition remains in this iteration.
         if (function_evaluator::parse_function_header(line, true)) {
             auto parse_result = function_evaluator::parse_and_register_functions(
                 line, lines, line_index, functions, trim, strip_inline_comment,
@@ -1996,6 +2037,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         return set_last_status(last_code);
                     }
 
+                    // errexit applies to ordinary failures, not loop/function
+                    // control sentinels or failures used to decide a logical list.
                     const bool is_nonfinal_logical_command = !lc.op.empty();
                     if (g_shell && g_shell->should_abort_on_nonzero_exit(code) && code != 0 &&
                         !is_nonfinal_logical_command && !last_result_errexit_exempt) {
@@ -2004,6 +2047,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         }
                     }
 
+                    // an enclosing function/source/loop consumes its control result.
+                    // reject misplaced control builtins instead of letting their
+                    // sentinel masquerade as a user command's ordinary status.
                     if (!is_function_call && is_control_flow_exit_code(code)) {
                         bool control_flow_error = false;
                         if (code == exit_return && !in_function_scope() && !in_source_scope()) {
@@ -2056,6 +2102,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     return last_code;
 }
 
+// recognize files the interpreter can run directly: readable .cjsh paths, or
+// explicit readable paths with a cjsh shebang. ordinary bare names stay with lookup.
 bool ShellScriptInterpreter::should_interpret_as_cjsh_script(const std::string& path) const {
     if (path.empty()) {
         return false;
@@ -2078,7 +2126,7 @@ bool ShellScriptInterpreter::should_interpret_as_cjsh_script(const std::string& 
     }
 
     std::ifstream f(path);
-    // Most explicit paths name binaries. Check the shebang before reading a line,
+    // most explicit paths name binaries. check the shebang before reading a line,
     // which may otherwise consume an entire binary with no newline.
     if (!f || f.get() != '#' || f.get() != '!') {
         return false;
@@ -2153,6 +2201,8 @@ int ShellScriptInterpreter::evaluate_logical_condition_internal(
     return condition_status;
 }
 
+// wire arithmetic reads and writes to live variable scope. assignments update an
+// existing local binding first; POSIX readonly failures become expansion errors.
 long long ShellScriptInterpreter::evaluate_arithmetic_expression(const std::string& expr) {
     auto var_reader = [this](const std::string& name) -> long long {
         std::string var_value = variable_manager.get_variable_value(name);
@@ -2187,6 +2237,8 @@ long long ShellScriptInterpreter::evaluate_arithmetic_expression(const std::stri
     return evaluator.evaluate(expr);
 }
 
+// publish scalar status together with the executor's most recent pipeline vector.
+// callers returning internal control sentinels can bypass publication until consumed.
 int ShellScriptInterpreter::set_last_status(int code) {
     Exec* exec_ptr = (g_shell && g_shell->shell_exec) ? g_shell->shell_exec.get() : nullptr;
     pipeline_status_utils::apply_execution_status_env(code, exec_ptr);
@@ -2194,6 +2246,8 @@ int ShellScriptInterpreter::set_last_status(int code) {
     return code;
 }
 
+// parsed commands cross into process/redirection ownership here. report executor
+// diagnostics before exposing its result to subsequent expansions and conditions.
 int ShellScriptInterpreter::run_pipeline(const std::vector<Command>& cmds) {
     if (!g_shell || !g_shell->shell_exec) {
         return set_last_status(1);
@@ -2204,6 +2258,9 @@ int ShellScriptInterpreter::run_pipeline(const std::vector<Command>& cmds) {
     return set_last_status(exit_code);
 }
 
+// supply parameter evaluation with live scope, assignment checks, array access,
+// and context-sensitive word expansion. default words and patterns do not share
+// ordinary argv splitting rules, especially inside a quoted POSIX expansion.
 std::string ShellScriptInterpreter::expand_parameter_expression(const std::string& param_expr,
                                                                 bool quoted) {
     auto var_reader = [this](const std::string& name) -> std::string {
@@ -2452,6 +2509,8 @@ bool ShellScriptInterpreter::in_loop_scope() const {
     return loop_depth > 0;
 }
 
+// route structured headers before generic list splitting can separate their
+// delimiters. handlers return the final consumed line as well as the body status.
 ShellScriptInterpreter::BlockHandlerResult ShellScriptInterpreter::try_dispatch_block_statement(
     const std::vector<std::string>& lines, size_t line_index, const std::string& line,
     cjsh::FunctionRef<int(const std::vector<std::string>&, size_t&)> handle_if_block,
@@ -2503,6 +2562,9 @@ ShellScriptInterpreter::BlockHandlerResult ShellScriptInterpreter::try_dispatch_
     return {false, 0, line_index};
 }
 
+// expand command substitutions before arithmetic and parameter expressions, while
+// preserving quote/protection markers needed by later parser expansion. remember
+// substitution status separately for a surrounding assignment-only command.
 std::string ShellScriptInterpreter::expand_all_substitutions(
     const std::string& input, cjsh::FunctionRef<int(const std::string&)> executor) {
     CommandSubstitutionEvaluator cmd_subst_evaluator(
@@ -2542,12 +2604,16 @@ std::string ShellScriptInterpreter::expand_all_substitutions(
     };
 
     for (size_t i = 0; i < result.size(); ++i) {
+        // long expansion scans need signal safe points too. unwind through the
+        // internal status exception because this function returns text, not a status.
         if ((i & 255U) == 0U) {
             if (auto signal_exit = collect_pending_signal_exit_code()) {
                 throw make_signal_exit_exception(*signal_exit);
             }
         }
 
+        // output already protected by substitution is data, not fresh shell syntax.
+        // copy it intact rather than evaluating embedded dollar expressions again.
         if (append_protected_substitution_output(i, noenv_start(), noenv_end()) ||
             append_protected_substitution_output(i, subst_literal_start(), subst_literal_end())) {
             continue;

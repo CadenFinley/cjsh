@@ -54,6 +54,12 @@
 #include "shell_env.h"
 #include "trap_command.h"
 
+// separate asynchronous signal receipt from shell work at execution safe points.
+// foreground waiters can dispatch traps without surrendering child wait statuses;
+// shutdown coordination stays live until cjsh.cpp has released shell resources.
+
+// restore the caller's exact mask on scope exit, including signals that were
+// already blocked. a failed block operation must not trigger a later restoration.
 SignalMask::SignalMask(int signum) : active(false) {
     sigset_t mask{};
     sigemptyset(&mask);
@@ -89,6 +95,9 @@ SignalHandler* SignalHandler::instance() {
     return s_instance.load(std::memory_order_acquire);
 }
 
+// these flags coalesce receipt rather than counting deliveries. direct flags also
+// keep work visible when a consumer clears the shared pending hint but leaves a
+// specific action, such as child reaping, for its owning waiter.
 volatile sig_atomic_t SignalHandler::s_sigint_received = 0;
 volatile sig_atomic_t SignalHandler::s_startup_interrupt_received = 0;
 volatile sig_atomic_t SignalHandler::s_sigchld_received = 0;
@@ -115,6 +124,8 @@ std::unordered_map<int, struct sigaction> SignalHandler::s_inherited_actions;
 volatile sig_atomic_t SignalHandler::s_observed_signals[NSIG] = {};
 std::unordered_map<int, SignalState> SignalHandler::s_signal_states;
 
+// share platform-supported names and capabilities with trap and job builtins.
+// pseudo-traps are added separately; they are not operating-system signals.
 const std::vector<SignalInfo>& SignalHandler::signal_table() {
     static const std::vector<SignalInfo> kSignalTable = {
 #ifdef SIGHUP
@@ -220,7 +231,7 @@ const std::vector<SignalInfo>& SignalHandler::available_signals() {
 }
 
 SignalHandler::SignalHandler() {
-    // Children can receive signals before exec resets their handlers. Record
+    // children can receive signals before exec resets their handlers. record
     // the owning shell now, before any fork, so those signals keep child defaults.
     s_main_pid = getpid();
     s_startup_interrupt_received = 0;
@@ -229,6 +240,8 @@ SignalHandler::SignalHandler() {
     for (auto& observed : s_observed_signals) {
         observed = 0;
     }
+    // capture inherited dispositions before installing shell policy. inherited
+    // ignores must remain distinguishable from ignores used only by the shell.
     for (const auto& info : signal_table()) {
         struct sigaction action{};
         if (sigaction(info.signal, nullptr, &action) == 0) {
@@ -244,12 +257,16 @@ bool SignalHandler::inherited_ignored(int signum) {
     return it != s_inherited_actions.end() && it->second.sa_handler == SIG_IGN;
 }
 
+// children retain inherited and user-requested ignores, but not shell-only SYSTEM
+// dispositions such as ignoring SIGPIPE while a builtin writes to a closed pipe.
 bool SignalHandler::child_ignored(int signum) {
     auto it = s_signal_states.find(signum);
     return inherited_ignored(signum) ||
            (it != s_signal_states.end() && it->second.disposition == SignalDisposition::IGNORE);
 }
 
+// prepare a child or exec replacement without carrying shell handlers or blocked
+// launch signals into the new program. preserve ignores selected by child policy.
 void reset_child_signals() {
     for (const auto& info : SignalHandler::available_signals()) {
         if (info.can_trap) {
@@ -262,6 +279,8 @@ void reset_child_signals() {
     (void)sigprocmask(SIG_SETMASK, &set, nullptr);
 }
 
+// exec runs in the shell process, so save dispositions and the mask before using
+// child policy. successful exec never returns; failure unwinds this guard instead.
 ExecSignalGuard::ExecSignalGuard() {
     (void)sigprocmask(SIG_SETMASK, nullptr, &mask);
     for (const auto& info : SignalHandler::available_signals()) {
@@ -284,6 +303,8 @@ int SignalHandler::termination_signal() {
     return s_termination_signal;
 }
 
+// cjsh.cpp blocks terminating signals around the transition into shutdown. later
+// untrapped termination is recorded without scheduling another cleanup sequence.
 void SignalHandler::begin_shutdown() {
     s_shutting_down = 1;
 }
@@ -293,7 +314,7 @@ bool SignalHandler::shutting_down() {
 }
 
 void SignalHandler::finish_shutdown() {
-    // Cleanup is complete. Signals arriving after this point can take their
+    // cleanup is complete. signals arriving after this point can take their
     // default action directly, without touching shell objects during teardown.
     for (int signum : {SIGHUP, SIGTERM}) {
         if (!child_ignored(signum) && !is_signal_observed(signum)) {
@@ -304,6 +325,8 @@ void SignalHandler::finish_shutdown() {
     if (signum == 0) {
         return;
     }
+    // re-raise after cleanup so the parent can observe signal death rather than
+    // only a numeric exit code. _exit is the fallback if delivery does not end us.
     (void)fflush(nullptr);
     (void)signal(signum, SIG_DFL);
     sigset_t mask{};
@@ -371,6 +394,8 @@ int SignalHandler::name_to_signal(const std::string& name) {
     return numeric_utils::parse_int_strict(name, signal_number) ? signal_number : -1;
 }
 
+// reserve internal ids for shell events before validating real signal names.
+// these pseudo-traps never pass through sigaction or the asynchronous handler.
 int SignalHandler::parse_trap_signal_token(const std::string& token) {
     std::string search_name = token;
     for (char& c : search_name) {
@@ -475,6 +500,8 @@ void SignalHandler::signal_unblock_all() {
     (void)sigprocmask(SIG_SETMASK, &iset, nullptr);
 }
 
+// update kernel disposition and shell bookkeeping together. inherited ignores
+// cannot be overridden here, and uncatchable signals must never reach installation.
 void SignalHandler::set_signal_disposition(int signum, SignalDisposition disp, const std::string&) {
     if (!is_valid_signal(signum)) {
         return;
@@ -565,8 +592,8 @@ void SignalHandler::install_signal_handler(int signum, struct sigaction* old_act
 
     sa.sa_flags = 0;
 
-    // Exit-causing signals must interrupt waitpid/read loops so pending signal processing can
-    // promptly propagate them to managed jobs. SIGCHLD and cosmetic signals remain restartable.
+    // exit-causing signals must interrupt waitpid/read loops so deferred dispatch
+    // can promptly reach managed jobs. SIGCHLD and cosmetic signals remain restartable.
     if (signum != SIGINT && signum != SIGHUP && signum != SIGTERM) {
         sa.sa_flags |= SA_RESTART;
     }
@@ -574,6 +601,8 @@ void SignalHandler::install_signal_handler(int signum, struct sigaction* old_act
     (void)sigaction(signum, &sa, old_action);
 }
 
+// evaluate traps only from normal execution. prevent nested trap dispatch and
+// restore the interrupted command's status rather than exposing the trap's result.
 void SignalHandler::process_trapped_signal(int signum) {
     if (trap_manager_has_trap(signum) && !s_executing_trap) {
         const int saved_status =
@@ -590,8 +619,8 @@ bool SignalHandler::executing_trap() {
 }
 
 void SignalHandler::note_startup_interrupt() {
-    // Keep cancellation after a waiter or builtin consumes the pending SIGINT.
-    // Foreground children have their own process group, so their wait status can
+    // keep cancellation after a waiter or builtin consumes the pending SIGINT.
+    // foreground children have their own process group, so their wait status can
     // be the only evidence of Ctrl-C available to the shell.
     if (config::interactive_mode && cjsh_env::startup_active() && !is_forked_child()) {
         s_startup_interrupt_received = 1;
@@ -602,7 +631,12 @@ bool SignalHandler::startup_interrupted() {
     return s_startup_interrupt_received != 0 && cjsh_env::startup_active() && !is_forked_child();
 }
 
+// asynchronous entry point: do not add allocation, ordinary diagnostics, or trap
+// evaluation here. record work and wake readline where needed; child defaults and
+// immediate non-interactive interrupt/quit exits are handled directly below.
 void SignalHandler::signal_handler(int signum) {
+    // a child still carrying this handler must not mutate the parent's copied
+    // shell state. restore the signal's default action and deliver it again.
     if (is_forked_child()) {
         struct sigaction sa{};
         sa.sa_handler = SIG_DFL;
@@ -653,7 +687,7 @@ void SignalHandler::signal_handler(int signum) {
 
         case SIGTERM: {
             s_sigterm_received = 1;
-            // Dispatch traps and cleanup outside the asynchronous handler.
+            // dispatch traps and cleanup outside the asynchronous handler.
             ic_notify_readline();
             should_mark_pending = true;
             break;
@@ -674,8 +708,8 @@ void SignalHandler::signal_handler(int signum) {
             should_mark_pending = true;
 
             if (!config::interactive_mode && !is_observed) {
-                // In orphaned process groups (common in CI), default SIGTSTP can be discarded.
-                // Force a real stop to preserve expected shell behavior for non-interactive runs.
+                // orphaned process groups can discard default SIGTSTP. force a
+                // real stop for an untrapped non-interactive suspension request.
                 (void)kill(getpid(), SIGSTOP);
             }
 
@@ -764,6 +798,8 @@ void SignalHandler::signal_handler(int signum) {
     }
 }
 
+// install shell process policy after its foreground startup handshake. ignored
+// tty signals allow terminal handoff; child setup later restores child policy.
 void SignalHandler::setup_signal_handlers() {
     struct sigaction sa{};
     sigemptyset(&sa.sa_mask);
@@ -799,6 +835,8 @@ void SignalHandler::setup_signal_handlers() {
     s_signal_states[SIGINT].disposition = SignalDisposition::SYSTEM;
 }
 
+// interactive shells survive terminal quit/stop keys themselves; foreground jobs
+// receive those keys under their own dispositions after terminal handoff.
 void SignalHandler::setup_interactive_handlers() {
     struct sigaction sa{};
     sigemptyset(&sa.sa_mask);
@@ -819,6 +857,8 @@ void SignalHandler::setup_interactive_handlers() {
 #endif
 }
 
+// normal destruction can restore inherited policy, but shutdown deliberately
+// leaves termination handling under finish_shutdown's control until cleanup ends.
 void SignalHandler::restore_original_handlers() {
     if (shutting_down()) {
         return;
@@ -828,13 +868,15 @@ void SignalHandler::restore_original_handlers() {
     }
 }
 
+// one wait status must update both execution-side and user-facing job state.
+// limit broad reaping per call so a burst of children does not monopolize dispatch.
 void SignalHandler::reap_pending_children(Exec* shell_exec, bool managed_jobs_only) {
     if (shell_exec == nullptr || s_sigchld_received == 0) {
         return;
     }
     s_sigchld_received = 0;
     if (managed_jobs_only) {
-        // Prompt workers own their captured children. The editor must only poll shell jobs.
+        // prompt workers own their captured children. the editor must only poll shell jobs.
         JobManager::instance().update_job_statuses();
         return;
     }
@@ -852,11 +894,14 @@ void SignalHandler::reap_pending_children(Exec* shell_exec, bool managed_jobs_on
         shell_exec->handle_child_signal(pid, status);
         JobManager::instance().handle_child_status(pid, status);
     }
-    // Leave work pending after a burst; never consume a status beyond the batch limit.
+    // leave work pending after a burst; never consume a status beyond the batch limit.
     s_sigchld_received = 1;
     s_signal_pending.store(true, std::memory_order_release);
 }
 
+// consume pending work at a shell safe point. reap_children=false lets a blocking
+// foreground waiter remain the sole consumer of its children's wait statuses;
+// the unconsumed SIGCHLD flag keeps that work visible for a later reaper.
 SignalProcessingResult SignalHandler::process_pending_signals(Exec* shell_exec,
                                                               bool reap_children) {
     bool should_process = s_signal_pending.exchange(false, std::memory_order_acq_rel);
@@ -895,6 +940,8 @@ SignalProcessingResult SignalHandler::process_pending_signals(Exec* shell_exec,
         reap_pending_children(shell_exec);
     }
 
+    // a trap handles the signal without automatically exiting. untrapped hangup
+    // or termination selects the first shutdown cause and requests orderly exit.
     const auto dispatch_termination = [&](int signum, bool& terminating) {
         if (is_signal_observed(signum)) {
             process_trapped_signal(signum);
@@ -1044,6 +1091,6 @@ void SignalHandler::unobserve_signal(int signum) {
 }
 
 bool SignalHandler::is_signal_observed(int signum) {
-    // This lookup also runs in the asynchronous handler: no container traversal.
+    // this lookup also runs in the asynchronous handler: no container traversal.
     return signum > 0 && signum < NSIG && s_observed_signals[signum] != 0;
 }

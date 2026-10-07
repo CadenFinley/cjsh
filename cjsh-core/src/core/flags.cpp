@@ -42,6 +42,9 @@
 #include "shell_env.h"
 #include "usage.h"
 
+// translate the invocation into startup configuration before a Shell exists.
+// return deferred shell options, display requests, and script arguments to cjsh.cpp;
+// keep the original invocation separate from the positional parameters scripts can change.
 namespace flags {
 
 std::vector<std::string>& startup_args() {
@@ -71,10 +74,14 @@ constexpr int kOptNoCompletions = 273;
 constexpr int kOptMinimal = 274;
 constexpr int kOptSecure = 275;
 constexpr int kOptNoHistoryExpansion = 276;
+// $1 onward live here; $0 is managed through the shell variable environment.
 std::vector<std::string> positional_parameters;
+// retain the launcher's leading-dash identity separately from mutable login mode.
 bool login_shell_invocation = false;
 bool sh_invocation = false;
 
+// recognize sh by basename, including a login-style -sh, rather than by the
+// executable's resolved path. symlink invocation can intentionally select a dialect.
 bool invoked_via_sh(const char* arg0) {
     if (arg0 == nullptr) {
         return false;
@@ -93,7 +100,7 @@ bool invoked_via_sh(const char* arg0) {
 }
 
 void detect_login_mode(char* argv[]) {
-    // detect argv[0] being -cjsh
+    // a leading dash in argv[0] marks a login invocation even without an explicit -l.
     login_shell_invocation = (argv != nullptr) && (argv[0] != nullptr) && argv[0][0] == '-';
     if (login_shell_invocation) {
         config::login_mode = true;
@@ -101,8 +108,8 @@ void detect_login_mode(char* argv[]) {
 }
 
 void apply_minimal_mode() {
-    // literally disable everything which turns cjsh into a worse bash or zsh or oh my zsh which is
-    // pretty bad
+    // minimal mode reduces native interactive features as a group. it is not the
+    // secure-mode policy and does not disable every startup or persistence path.
     config::minimal_mode = true;
     config::colors_enabled = false;
     config::source_enabled = false;
@@ -124,6 +131,8 @@ bool is_login_shell_invocation() {
     return login_shell_invocation;
 }
 
+// the interactive startup caller decides when this warning is appropriate;
+// parsing an sh invocation alone must not print it for ordinary scripts.
 void warn_if_invoked_via_sh() {
     if (sh_invocation && !config::suppress_sh_warning) {
         print_error({ErrorType::INVALID_ARGUMENT,
@@ -136,7 +145,8 @@ void warn_if_invoked_via_sh() {
 }
 
 void save_startup_arguments(int argc, char* argv[]) {
-    // Save startup args for restart/prompt helpers that mirror invocation identity.
+    // copy argv while it is available so restart helpers retain the invocation
+    // identity even after set or shift changes positional parameters.
     auto& args = startup_args();
     args.clear();
     for (int i = 0; i < argc; i++) {
@@ -144,11 +154,16 @@ void save_startup_arguments(int argc, char* argv[]) {
     }
 }
 
+// update process-wide startup settings as flags are encountered, but retain shell
+// option changes in order for application after construction. parse errors return
+// a status to cjsh.cpp without constructing subsystems or sourcing user files.
 ParseResult parse_arguments(int argc, char* argv[]) {
     ParseResult result;
 
     detect_login_mode(argv);
 
+    // invocation identity supplies the initial dialect; later explicit dialect
+    // flags can replace it before the final option compatibility checks.
     sh_invocation = invoked_via_sh(argc > 0 ? argv[0] : nullptr);
     if (sh_invocation) {
         config::set_shell_dialect(config::ShellDialect::Posix);
@@ -186,6 +201,8 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         {"no-sh-warning", no_argument, nullptr, 'W'},
         {nullptr, 0, nullptr, 0}};
 
+    // stop getopt at the first operand rather than permuting script arguments.
+    // suppress its diagnostics so missing operands and unknown flags use shell errors.
     const char* short_options = "+:lic:nvhCLUNOSmsHW";
 
     int option_index = 0;
@@ -195,6 +212,8 @@ ParseResult parse_arguments(int argc, char* argv[]) {
     while (true) {
         if (optind < argc) {
             const std::string arg(argv[optind]);
+            // parse short bundles ourselves to support shell-style + flags as
+            // well as - flags. long options and -- still go through getopt below.
             if (arg.size() > 1 && (arg[0] == '+' || (arg[0] == '-' && arg[1] != '-'))) {
                 ++optind;
                 const bool enable = arg[0] == '-';
@@ -202,9 +221,13 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 for (size_t j = 1; j < arg.size(); ++j) {
                     const char flag = arg[j];
                     if (flag == 'c') {
+                        // finish this bundle before consuming the next argv entry
+                        // as command text, allowing invocation forms such as -ic.
                         command_operand = true;
                     } else if (flag == 'o' || flag == 'O') {
                         std::string operand = arg.substr(j + 1);
+                        // with no attached name and no following operand, defer
+                        // an option listing. + requests the reusable command form.
                         if (operand.empty() &&
                             (optind >= argc || argv[optind][0] == '-' || argv[optind][0] == '+')) {
                             result.option_queries.emplace_back(flag == 'O', !enable);
@@ -226,6 +249,8 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                                                       : parse_shell_option(operand);
                             option) {
                             result.shell_options.emplace_back(operand, enable);
+                            // mirror noexec into startup configuration too; system
+                            // PATH and startup-file gates consult this flag directly.
                             if (*option == ShellOption::Noexec) {
                                 config::no_exec = enable;
                             }
@@ -275,6 +300,8 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                         return result;
                     }
                 }
+                // once command text is consumed, all remaining words belong to
+                // its $0 and positional arguments, even if they look like options.
                 if (command_operand) {
                     if (optind >= argc) {
                         print_error({ErrorType::INVALID_ARGUMENT,
@@ -323,6 +350,8 @@ ParseResult parse_arguments(int argc, char* argv[]) {
                 config::no_config = true;
                 break;
             case kOptConfigDir:
+                // retain the raw override here; cjsh.cpp normalizes it after HOME
+                // is initialized and before startup files can change directories.
                 if (optarg[0] == '\0') {
                     print_error({ErrorType::INVALID_ARGUMENT,
                                  "startup",
@@ -445,6 +474,9 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         }
     }
 
+    // -s makes remaining operands positional parameters, not a script filename.
+    // -c takes precedence: its first remaining operand supplies $0 through the
+    // same script_file field that ordinary script invocation uses for its path.
     config::read_stdin = read_stdin;
     if (read_stdin && !config::execute_command) {
         for (int i = optind; i < argc; ++i) {
@@ -459,6 +491,9 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         }
     }
 
+    // input source and interactive behavior are separate decisions. redirected
+    // stdin disables automatic interactivity, but -i overrides that decision even
+    // for a supplied command or script; cjsh.cpp later decides whether to prompt.
     if (!config::force_interactive && (isatty(STDIN_FILENO) == 0)) {
         config::interactive_mode = false;
         config::history_expansion_enabled = false;
@@ -468,6 +503,9 @@ ParseResult parse_arguments(int argc, char* argv[]) {
         config::interactive_mode = true;
     }
 
+    // validate deferred options against the final dialect, not the dialect in
+    // effect when each option was parsed. native-only requests must not reach
+    // startup merely because they preceded --posix or --dialect.
     if (config::is_posix_mode()) {
         for (const auto& [shopt, reusable] : result.option_queries) {
             (void)reusable;
@@ -502,6 +540,9 @@ void set_positional_parameters(const std::vector<std::string>& params) {
     positional_parameters = params;
 }
 
+// discard leading positional arguments without changing $0. this storage helper
+// clears the list for counts at or beyond its size; builtin policy is handled by
+// the caller before reaching this mutation.
 int shift_positional_parameters(int count) {
     if (count < 0) {
         return 1;

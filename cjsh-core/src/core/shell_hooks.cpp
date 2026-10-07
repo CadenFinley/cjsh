@@ -40,6 +40,9 @@
 #include "pipeline_status_utils.h"
 #include "shell_env.h"
 
+// keep native hook registration and dispatch separate from signal traps and exit
+// handlers. callers choose when a hook type applies; this layer preserves command
+// status while invoking the registered entries in order.
 namespace {
 
 constexpr size_t to_index(HookType type) {
@@ -68,6 +71,8 @@ std::optional<HookType> parse_hook_type(const std::string& name) {
     return std::nullopt;
 }
 
+// preserve registration order and ignore duplicate entries within a hook type.
+// names are resolved at dispatch time, so registration need not follow definition.
 void Shell::register_hook(HookType hook_type, const std::string& function_name) {
     if (function_name.empty()) {
         return;
@@ -86,6 +91,7 @@ void Shell::unregister_hook(HookType hook_type, const std::string& function_name
                           hook_list.end());
 }
 
+// return a snapshot for callers inspecting hooks, not a mutable registration list.
 std::vector<std::string> Shell::get_hooks(HookType hook_type) const {
     return hooks[to_index(hook_type)];
 }
@@ -94,17 +100,23 @@ void Shell::clear_hooks(HookType hook_type) {
     hooks[to_index(hook_type)].clear();
 }
 
+// hook return values must not replace the command status seen by the next hook
+// or prompt. other shell side effects, including exit requests, are not rolled back.
 void Shell::execute_hooks(HookType hook_type, const std::vector<std::string>& arguments) {
     const auto& hook_list = hooks[to_index(hook_type)];
     if (hook_list.empty()) {
         return;
     }
 
+    // preserve whether PIPESTATUS existed as well as its value; restoring an empty
+    // binding would not be equivalent to leaving an originally unset variable unset.
     const std::string saved_status = cjsh_env::get_shell_variable_value("?");
     const int saved_status_code = numeric_utils::parse_exit_status_or(saved_status, 0, false);
     const bool had_pipe_status = cjsh_env::shell_variable_is_set("PIPESTATUS");
     const std::string saved_pipe_status = cjsh_env::get_shell_variable_value("PIPESTATUS");
 
+    // reset status before every entry so each sees the triggering command's result,
+    // not the return value of the preceding hook.
     for (const auto& function_name : hook_list) {
         pipeline_status_utils::set_last_status_env(saved_status_code);
         if (had_pipe_status) {
@@ -112,6 +124,8 @@ void Shell::execute_hooks(HookType hook_type, const std::vector<std::string>& ar
         } else {
             (void)cjsh_env::unset_shell_variable_value("PIPESTATUS");
         }
+        // defined functions receive event arguments as distinct words. otherwise
+        // evaluate the registered text as shell code without appending arguments.
         if (shell_script_interpreter != nullptr &&
             shell_script_interpreter->has_function(function_name)) {
             std::vector<std::string> hook_arguments;
@@ -124,6 +138,7 @@ void Shell::execute_hooks(HookType hook_type, const std::vector<std::string>& ar
         }
     }
 
+    // leave the caller with the same status bindings after the final hook returns.
     pipeline_status_utils::set_last_status_env(saved_status_code);
     if (had_pipe_status) {
         (void)cjsh_env::set_shell_variable_value("PIPESTATUS", saved_pipe_status);

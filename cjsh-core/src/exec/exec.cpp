@@ -82,12 +82,18 @@
 #include "suggestion_utils.h"
 #include "wait_status_utils.h"
 
+// execute prepared commands and pipelines in the appropriate process context.
+// this layer owns launch-time descriptors, child setup, redirection scopes, and
+// output capture; exec_jobs.cpp owns foreground waiting and execution-side job
+// transitions after launch. parser expansion must not be repeated from display text.
 namespace {
 
 int extract_exit_code(int status) {
     return wait_status_utils::to_exit_code(status, 1);
 }
 
+// captured children inherit stdio buffers as well as descriptors. drain parent
+// output before fork so a child's later flush cannot duplicate already pending text.
 void flush_standard_streams_before_fork() {
     (void)std::cout.flush();
     (void)std::cerr.flush();
@@ -96,8 +102,8 @@ void flush_standard_streams_before_fork() {
 }
 
 pid_t fork_command_child() {
-    // A signal can arrive before fork finishes restoring the child's runtime.
-    // Keep it pending until reset_child_signals installs the command's defaults;
+    // a signal can arrive before fork finishes restoring the child's runtime.
+    // keep it pending until reset_child_signals installs the command's defaults;
     // inherited handlers (including raise on macOS) are not safe in that window.
     sigset_t blocked_signals{};
     sigset_t previous_mask{};
@@ -121,7 +127,7 @@ int set_process_group(pid_t pid, pid_t pgid) {
     }
 
     const int saved_errno = errno;
-    // Parent and child both establish the job's group. On macOS their concurrent
+    // parent and child both establish the job's group. on macOS their concurrent
     // calls can report EPERM even though the requested group is already in place.
     const pid_t target_pgid = pgid == 0 ? (pid == 0 ? getpid() : pid) : pgid;
     if (saved_errno == EPERM && getpgid(pid) == target_pgid) {
@@ -143,6 +149,8 @@ struct PtyPair {
     int slave_fd{-1};
 };
 
+// preserve terminal-like output for silent auto-background jobs without giving
+// the relay a controlling terminal. copy presentation settings when available.
 std::optional<PtyPair> create_output_pty(int terminal_fd) {
     int master_fd = posix_openpt(O_RDWR | O_NOCTTY);
     if (master_fd < 0) {
@@ -179,6 +187,9 @@ std::optional<PtyPair> create_output_pty(int terminal_fd) {
     return PtyPair{master_fd, slave_fd};
 }
 
+// the detached worker owns the pty master until EOF/error. keep draining even
+// when forwarding is disabled so a silenced background child cannot fill the pty;
+// discarded output is not buffered for a later foreground transition.
 std::shared_ptr<OutputRelayState> start_output_relay(int master_fd, bool forward) {
     auto relay = std::make_shared<OutputRelayState>();
     relay->master_fd = master_fd;
@@ -237,6 +248,8 @@ bool is_builtin_or_special_command(const std::vector<std::string>& cmd_args) {
     return built_ins != nullptr && (built_ins->is_builtin_or_runtime_command(cmd_args[0]) != 0);
 }
 
+// decide builtin versus external lookup before launch and retain the resolved
+// path. a known classification avoids repeating dispatch work already done by Shell.
 CommandExecutionPlan resolve_command_exec_plan(const std::vector<std::string>& cmd_args,
                                                std::optional<bool> known_builtin = std::nullopt) {
     CommandExecutionPlan plan;
@@ -249,6 +262,8 @@ CommandExecutionPlan resolve_command_exec_plan(const std::vector<std::string>& c
     return plan;
 }
 
+// a builtin in a child must leave through _exit after flushing its output, not
+// through the parent shell's inherited atexit cleanup and static destruction.
 [[noreturn]] void exec_builtin_or_external_child(const std::vector<std::string>& cmd_args,
                                                  bool is_builtin,
                                                  const std::string& cached_exec_path) {
@@ -326,6 +341,8 @@ bool is_shell_control_structure(const Command& cmd) {
     return command_lookup::is_shell_control_structure_leader(cmd.args[0]);
 }
 
+// structured pipeline stages need original syntax, not a lossy join of expanded
+// arguments. joined text is only a fallback for commands built without source text.
 std::string command_text_for_interpretation(const Command& cmd) {
     if (!cmd.original_text.empty()) {
         return cmd.original_text;
@@ -342,6 +359,8 @@ struct ProcessSubstitutionResources {
 void cleanup_process_substitutions(ProcessSubstitutionResources& resources,
                                    bool terminate_children = false);
 
+// isolate named FIFOs in a private directory rather than predictable shared paths.
+// callers remove the directory only after substitution children have been handled.
 std::string create_process_substitution_directory() {
     const char* configured_temp_dir = std::getenv("TMPDIR");
     std::string temp_dir = configured_temp_dir != nullptr && configured_temp_dir[0] != '\0'
@@ -422,6 +441,8 @@ bool handler_defers_to_default_command_not_found_output(
            handler_exit_code.value() == ShellScriptInterpreter::exit_command_not_found;
 }
 
+// native command-not-found hooks may themselves launch missing commands. guard
+// recursive invocation and retain depth for suppressing helper-job notifications.
 std::optional<int> maybe_invoke_command_not_found_handler(const std::vector<std::string>& args) {
     if (!special_handlers_enabled() || args.empty() || !g_shell) {
         return std::nullopt;
@@ -467,6 +488,9 @@ bool should_try_command_not_found_handler(const std::vector<std::string>& args, 
     return args[0].find('/') == std::string::npos;
 }
 
+// classify exec failure in the child using errno captured before diagnostics.
+// explicit missing paths are file errors; bare names may use the native handler.
+// all paths terminate here instead of returning into parent-side launch logic.
 [[noreturn]] void report_exec_failure(const std::vector<std::string>& args, int saved_errno) {
     const std::string command_name = args.empty() ? std::string{} : args[0];
 
@@ -543,6 +567,9 @@ bool strip_temporary_env_assignments(
 
 using cjsh_env::TemporaryEnvAssignmentScope;
 
+// replace process-substitution syntax with private FIFO paths and launch producers
+// or consumers in forked shell contexts. update argv and redirection records alike;
+// callers must retain these resources until the command no longer needs the FIFOs.
 ProcessSubstitutionResources setup_process_substitutions(Command& cmd) {
     ProcessSubstitutionResources resources;
 
@@ -666,6 +693,8 @@ ProcessSubstitutionResources setup_process_substitutions(Command& cmd) {
             }
         }
     } catch (...) {
+        // roll back helpers already launched before propagating a partial setup
+        // failure; otherwise a child may remain waiting for a FIFO peer forever.
         cleanup_process_substitutions(resources, true);
         throw;
     }
@@ -673,6 +702,8 @@ ProcessSubstitutionResources setup_process_substitutions(Command& cmd) {
     return resources;
 }
 
+// wait for substitution children before unlinking their rendezvous paths. failure
+// cleanup first requests termination; normal cleanup lets helpers finish their I/O.
 void cleanup_process_substitutions(ProcessSubstitutionResources& resources,
                                    bool terminate_children) {
     if (terminate_children) {
@@ -820,6 +851,9 @@ std::string format_here_document_error(HereDocErrorKind kind, const std::string&
 template <typename ErrorHandler>
 bool setup_here_document_stdin(const std::string& here_doc, ErrorHandler&& on_error);
 
+// apply operations left to right, including repeated targets and descriptor closes.
+// descriptor duplication observes the source as it exists at that point, so summary
+// fields cannot replace this sequence. callers decide how to report or unwind errors.
 template <typename ErrorHandler>
 bool apply_ordered_redirections(const Command& cmd, ErrorHandler&& on_error) {
     auto fail = [&](ErrorType type, const std::string& message) {
@@ -958,6 +992,8 @@ bool apply_ordered_redirections(const Command& cmd, ErrorHandler&& on_error) {
     return true;
 }
 
+// install already prepared heredoc bytes as stdin. expansion and delimiter/newline
+// handling belong to the parser; this helper owns only pipe setup and transfer.
 template <typename ErrorHandler>
 bool setup_here_document_stdin(const std::string& here_doc, ErrorHandler&& on_error) {
     int here_pipe[2] = {-1, -1};
@@ -1101,6 +1137,9 @@ bool configure_stderr_redirects(const Command& cmd, ErrorHandler&& on_error) {
     return true;
 }
 
+// native extension dispatch can select an interpreter before ordinary exec. use
+// the cached executable path when supplied, otherwise defer search to execvp;
+// any failed attempt reports and exits rather than returning to the shell caller.
 [[noreturn]] void exec_external_child(const std::vector<std::string>& args,
                                       const char* cached_path) {
     if (config::script_extension_interpreter_enabled && !config::is_posix_mode()) {
@@ -1126,6 +1165,8 @@ bool configure_stderr_redirects(const Command& cmd, ErrorHandler&& on_error) {
 
 }  // namespace
 
+// retain a terminal descriptor separate from redirected stdin where possible.
+// Shell still decides whether this process has authority to manage that terminal.
 Exec::Exec()
     : shell_pgid(getpid()),
       shell_terminal(STDIN_FILENO),
@@ -1145,6 +1186,8 @@ Exec::Exec()
     }
 }
 
+// finish bounded nonblocking zombie cleanup and release our terminal descriptor.
+// the Shell shutdown path handles signaling or abandoning managed jobs beforehand.
 Exec::~Exec() {
     int status = 0;
     int zombie_count = 0;
@@ -1203,6 +1246,8 @@ std::optional<int> Exec::handle_prepared_assignments(const cjsh_env::PreparedCom
     return 0;
 }
 
+// run a parent-context missing-command handler under the command's assignment
+// prefix. status 127 requests default diagnostics; other results belong to the hook.
 std::optional<int> Exec::run_command_not_found_handler(
     const std::vector<std::string>& args,
     const std::vector<std::pair<std::string, std::string>>& assignments, bool is_builtin,
@@ -1230,6 +1275,9 @@ std::optional<int> Exec::run_command_not_found_handler(
                               : handler_exit_code.value();
 }
 
+// flag commands that need more than direct builtin dispatch. this predicate also
+// selects scoped-redirection paths for functions/builtins; true does not by itself
+// guarantee that the caller will fork and discard parent-shell state.
 bool Exec::requires_fork(const Command& cmd) const {
     return !cmd.input_file.empty() || !cmd.output_file.empty() || !cmd.append_file.empty() ||
            cmd.background || !cmd.stderr_file.empty() || cmd.stderr_to_stdout ||
@@ -1250,6 +1298,8 @@ bool Exec::can_execute_in_process(const Command& cmd) const {
     return false;
 }
 
+// preserve parent-shell builtin effects while temporarily changing descriptors.
+// bare exec is the exception: its redirections are requested as persistent state.
 int Exec::execute_builtin_with_redirections(Command cmd) {
     if (!g_shell || (g_shell->get_built_ins() == nullptr)) {
         set_error(ErrorType::FATAL_ERROR, "builtin",
@@ -1264,7 +1314,7 @@ int Exec::execute_builtin_with_redirections(Command cmd) {
     auto action = [&]() -> int { return execute_builtin_or_special_command(cmd.args); };
 
     bool action_invoked = false;
-    // Only leaf builtins can omit untouched standard descriptors. Other
+    // only leaf builtins can omit untouched standard descriptors. other
     // builtins may run hooks, traps, or nested code that changes descriptors.
     const bool preserve_action_fds =
         !(command_name == ":" || command_name == "true" || command_name == "false" ||
@@ -1306,6 +1356,9 @@ int Exec::execute_command_sync(const std::vector<std::string>& args, bool auto_b
                                          auto_background_on_stop_silent);
 }
 
+// launch a simple foreground command whose assignments and argv are separated.
+// prepare helpers before fork, register both job views, then let the foreground
+// path perform terminal handoff, barrier release, and waiting.
 int Exec::execute_prepared_command_sync(cjsh_env::PreparedCommand command,
                                         bool auto_background_on_stop,
                                         bool auto_background_on_stop_silent) {
@@ -1430,6 +1483,8 @@ int Exec::execute_prepared_command_sync(cjsh_env::PreparedCommand command,
         warn_parent_setpgid_failure();
     }
 
+    // parent and child both establish grouping to tolerate either scheduling order.
+    // retain the barrier writer with the job until foreground handoff releases it.
     Job job = make_single_process_job(pid, args[0], false, auto_background_on_stop,
                                       auto_background_on_stop_silent, monitor_mode);
     job.launch_barrier_fd = launch_barrier[1];
@@ -1438,7 +1493,7 @@ int Exec::execute_prepared_command_sync(cjsh_env::PreparedCommand command,
     int job_id = add_job(job);
 
     std::string full_command = join_arguments(args);
-    // These arguments are already expanded. Re-parsing their display text can reinterpret
+    // these arguments are already expanded. re-parsing their display text can reinterpret
     // literal operators and substitutions; redirections use the pipeline execution path.
     const bool reads_stdin = job_utils::command_consumes_terminal_stdin(proc_cmd);
 
@@ -1485,6 +1540,8 @@ int Exec::execute_command_async(const std::vector<std::string>& args) {
     return execute_prepared_command_async(cjsh_env::prepare_command(args));
 }
 
+// launch without foreground waiting or terminal handoff. publish background job
+// state for later reapers; the immediate success status is not the child's result.
 int Exec::execute_prepared_command_async(cjsh_env::PreparedCommand command) {
     const auto& args = command.original_args;
     if (g_shell) {
@@ -1529,8 +1586,8 @@ int Exec::execute_prepared_command_async(cjsh_env::PreparedCommand command) {
                     strerror(errno));
         }
 
-        // POSIX asynchronous lists without job control inherit no terminal input. With monitor
-        // mode enabled, the distinct background process group is instead stopped by SIGTTIN if
+        // asynchronous lists without job control inherit no terminal input. with
+        // monitor mode, the distinct background group instead receives SIGTTIN if
         // it tries to read the controlling terminal.
         if (!monitor_mode) {
             int null_fd = open("/dev/null", O_RDONLY);
@@ -1576,6 +1633,9 @@ int Exec::execute_prepared_command_async(cjsh_env::PreparedCommand command) {
     }
 }
 
+// execute parsed stages while keeping per-stage statuses separate from the final
+// shell result. a single foreground builtin/function can stay in the current
+// process; multi-stage pipelines run members in children connected by pipes.
 int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
     const auto& commands = input_commands;
     const bool pipeline_negated = (!commands.empty() && commands[0].negate_pipeline);
@@ -1584,6 +1644,8 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
     }
     const bool monitor_mode = g_shell && g_shell->is_job_control_enabled();
 
+    // pipefail selects the rightmost failing stage in launch order, not the last
+    // child to exit. leading ! inverts that aggregate afterward, not PIPESTATUS.
     auto apply_pipefail = [&](int exit_code, const std::vector<int>& statuses) -> int {
         if (!g_shell || !g_shell->get_shell_option(ShellOption::Pipefail)) {
             return exit_code;
@@ -1624,6 +1686,8 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
         return finalize_exit(0);
     }
 
+    // preserve parent-shell effects for assignment-only commands and eligible
+    // builtins/functions before choosing the external-child path.
     if (commands.size() == 1) {
         Command cmd = commands[0];
         std::vector<std::pair<std::string, std::string>> env_assignments;
@@ -1924,9 +1988,9 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
 
         if (!monitor_mode) {
             cjsh_filesystem::safe_close(launch_barrier[1]);
-            // Non-monitor foreground children still need to participate in
+            // non-monitor foreground children still need to participate in
             // signal cleanup, without signaling the caller's process group.
-            // Negative keys keep this private record out of background job numbering.
+            // negative keys keep this private record out of background job numbering.
             const int foreground_job_id = -pid;
             {
                 std::lock_guard<std::mutex> lock(jobs_mutex);
@@ -2043,6 +2107,8 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
     std::vector<pid_t> pids;
     pid_t pgid = 0;
 
+    // allocate the whole pipe topology before forking stages. every child inherits
+    // these endpoints and must close all originals once its stdin/stdout are wired.
     std::vector<std::array<int, 2>> pipes(commands.size() - 1);
 
     std::optional<PtyPair> output_pty;
@@ -2272,6 +2338,8 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
                         std::string("dup2 output relay stderr failed: ") + strerror(saved_errno));
                 }
 
+                // explicit redirections override pipeline wiring in source order.
+                // a stage can intentionally read from a file instead of its upstream pipe.
                 if (!cmd.redirection_order.empty()) {
                     auto ordered_error = [&](ErrorType type, const std::string& message) {
                         child_error(type, message);
@@ -2297,6 +2365,8 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
                     cjsh_filesystem::safe_close(output_pty->slave_fd);
                 }
 
+                // inherited unused writers would keep downstream readers from
+                // seeing EOF even after the actual producing stage exits.
                 for (size_t j = 0; j < commands.size() - 1; j++) {
                     (void)close(pipes[j][0]);
                     (void)close(pipes[j][1]);
@@ -2386,6 +2456,8 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
     job.pids = pids;
     job.last_pid = pids.empty() ? -1 : pids.back();
     job.pid_order = pids;
+    // -1 denotes a stage whose terminal wait result has not arrived yet. preserve
+    // pid_order even after reaping removes members from the live-pid list.
     job.pipeline_statuses.assign(pids.size(), -1);
     job.output_relay = output_relay;
     job.launch_barrier_fd = launch_barrier[1];
@@ -2444,12 +2516,15 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
     }
 
     if (job.background) {
-        // Leave PIPESTATUS untouched for background pipelines to mirror bash behaviour.
+        // leave PIPESTATUS untouched for background pipelines; launch is not completion.
     }
 
     return finalize_exit(raw_exit);
 }
 
+// run an action with parent-process redirections, restoring descriptors on normal
+// return or caught failure unless persistence was requested. action_invoked reports
+// that the action returned, distinguishing setup failure from its numeric status.
 int Exec::run_with_command_redirections(Command cmd, const std::function<int()>& action,
                                         const std::string& command_name, bool persist_fd_changes,
                                         bool* action_invoked, bool preserve_action_fds) {
@@ -2520,7 +2595,7 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
         return EX_OSERR;
     }
 
-    // Backups must not occupy any descriptor named by the command, including duplication
+    // backups must not occupy any descriptor named by the command, including duplication
     // sources: otherwise saving stdout could make an invalid `1>&10` unexpectedly succeed.
     auto duplicate_fd = [&](int fd) {
         const int min_fd = highest_fd + 1;
@@ -2540,8 +2615,8 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
         return dup_fd;
     };
 
-    // A loop or function can launch foreground jobs while its redirections are active.
-    // Keep the owned terminal handle usable even when the command redirects or closes it,
+    // a loop or function can launch foreground jobs while its redirections are active.
+    // keep the owned terminal handle usable even when the command redirects or closes it,
     // including persistent `exec` redirections.
     if (owns_shell_terminal && redirected_fds.count(shell_terminal) != 0) {
         const int terminal_copy = duplicate_fd(shell_terminal);
@@ -2567,6 +2642,8 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
     };
     for (int fd : redirected_fds) {
         const int flags = fcntl(fd, F_GETFD);
+        // originally closed descriptors must become closed again, not copies of
+        // stdin or some arbitrary backup. retain flags for descriptors that were open.
         if (flags == -1 && errno == EBADF) {
             saved_descriptors.push_back({fd, -1, -1});
             continue;
@@ -2772,6 +2849,8 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
             *action_invoked = true;
         }
 
+        // flush the action's output before returning descriptors to their caller;
+        // buffered bytes must not leak to the restored destination afterward.
         (void)std::cout.flush();
         (void)std::cerr.flush();
         (void)std::clog.flush();
@@ -2789,6 +2868,9 @@ namespace exec_utils {
 
 namespace {
 
+// capture a private child independently of interactive job tables. drain output
+// while the child runs so pipe capacity cannot block completion; polling additionally
+// supports progress, separate stderr, and interactive startup cancellation.
 CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child_executor,
                                                bool capture_stderr, bool suppress_stderr,
                                                const std::function<void()>& progress_callback,
@@ -2829,7 +2911,7 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
         cjsh_filesystem::safe_close(stderr_pipefd[0]);
         (void)setpgid(0, 0);
         if (g_shell) {
-            // Captured commands must keep descendants in this private group so
+            // captured commands must keep descendants in this private group so
             // cancellation reaches them even in an interactive parent shell.
             (void)g_shell->set_job_control_enabled(false);
         }
@@ -2860,7 +2942,7 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
         _exit(exit_code);
     }
 
-    // Keep the executor and any descendants in a private process group so a
+    // keep the executor and any descendants in a private process group so a
     // cancellation cannot leave grandchildren holding the capture pipe open.
     (void)setpgid(pid, pid);
     cjsh_filesystem::safe_close(pipefd[1]);
@@ -2892,6 +2974,8 @@ CommandOutput execute_with_stdout_capture_impl(const std::function<int()>& child
         bool io_failed = false;
         bool cancellation_requested = false;
 
+        // child exit and pipe EOF are separate events: descendants may still hold
+        // writers open, and buffered output can remain after the direct child exits.
         while (descriptors[0].fd >= 0 || descriptors[1].fd >= 0 || !child_reaped) {
             if ((!child_reaped && cancellation_callback && cancellation_callback()) ||
                 (!cancellation_requested && startup_cancellable &&

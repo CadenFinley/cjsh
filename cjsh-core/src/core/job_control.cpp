@@ -62,10 +62,15 @@
 
 #include "error_out.h"
 
+// maintain the user-facing job table: jobspec resolution, aggregate child state,
+// notifications, and statuses retained for wait. Exec owns complementary launch
+// and foreground-wait state; each consumed wait report must reach both layers.
 namespace {
 
 std::atomic<pid_t> g_atomic_last_background_pid{-1};
 
+// let the editor place notifications around active input when possible. stderr
+// remains the fallback for noninteractive use or an unavailable notification queue.
 void print_job_notification(const std::string& message) {
     if (config::interactive_mode && isatty(STDERR_FILENO) &&
         ic_queue_notification(message.c_str())) {
@@ -135,6 +140,8 @@ JobMatchKind job_command_match_kind(const std::shared_ptr<JobControlJob>& job,
     return JobMatchKind::None;
 }
 
+// share jobspec policy across control builtins. absent operands use the current
+// job with a newest-job fallback; explicit operands must resolve unambiguously.
 std::shared_ptr<JobControlJob> resolve_job_argument(const std::vector<std::string>& args,
                                                     JobManager& job_manager, int& job_id_out) {
     job_id_out = job_manager.get_current_job();
@@ -214,8 +221,8 @@ std::shared_ptr<JobControlJob> resolve_job_argument(const std::vector<std::strin
             return job;
         }
 
-        // A leading '%' makes a number unambiguously a job ID. Bare numbers may also identify
-        // a process or process-group leader, as accepted by the job-control builtins.
+        // a leading '%' makes a number unambiguously a job id. bare numbers may
+        // also identify a process or process-group leader for control builtins.
         if (!explicit_jobspec) {
             auto job_by_pid = job_manager.get_job_by_pid_or_pgid(static_cast<pid_t>(parsed_value));
             if (job_by_pid) {
@@ -293,6 +300,8 @@ int parse_signal(const std::string& signal_str) {
     return -1;
 }
 
+// prefer an exact command/custom-name match over prefixes. multiple exact matches
+// or multiple prefixes without an exact match require an explicit id from the user.
 std::shared_ptr<JobControlJob> find_job_by_command(const std::string& spec, JobManager& job_manager,
                                                    bool& ambiguous) {
     ambiguous = false;
@@ -346,6 +355,8 @@ std::optional<int> interpret_wait_status(int status) {
     return wait_status_utils::to_exit_code_optional(status);
 }
 
+// stopped jobs remain available for fg/bg. only a terminal state consumes cached
+// per-pid results and removes the user-facing job after this explicit wait.
 std::optional<int> wait_for_job_and_remove(const std::shared_ptr<JobControlJob>& job,
                                            JobManager& job_manager) {
     auto status = wait_for_job(job, job_manager, true);
@@ -359,6 +370,9 @@ std::optional<int> wait_for_job_and_remove(const std::shared_ptr<JobControlJob>&
     return status;
 }
 
+// wait using aggregate job state rather than assuming the last waitpid result is
+// the pipeline result. stop policy belongs to the caller, and terminal ownership
+// must already have been arranged by a foreground-control caller when needed.
 std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobManager& job_manager,
                                 bool return_on_stop, pid_t* status_pid) {
     if (!job) {
@@ -388,6 +402,8 @@ std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobMa
             return current_result();
         }
 
+        // without monitor-mode grouping, wait for tracked pids individually rather
+        // than accidentally waiting for the shell's own process group.
         const pid_t target = job->process_group ? -job->pgid : *job->remaining_pids.begin();
         int status = 0;
         const pid_t pid = waitpid(target, &status, WUNTRACED | WCONTINUED);
@@ -405,6 +421,8 @@ std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobMa
                 continue;
             }
             if (errno == ECHILD) {
+                // another safe-point reaper may already have published completion.
+                // consult the shared job state before treating this as unavailable.
                 job_manager.update_job_statuses();
                 if (auto ready = current_result()) {
                     return ready;
@@ -414,6 +432,8 @@ std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobMa
             return std::nullopt;
         }
 
+        // waitpid consumes the report; publish it to both tables before deciding
+        // whether the entire job has completed or stopped.
         if (g_shell && g_shell->shell_exec) {
             g_shell->shell_exec->handle_child_signal(pid, status);
         }
@@ -488,6 +508,8 @@ ExitErrorResult make_exit_error_result(const std::string& command, int exit_code
     return result;
 }
 
+// classify whether a command can still inherit terminal input. this is redirection
+// metadata, not evidence that the process is currently blocked in a read.
 bool command_consumes_terminal_stdin(const Command& cmd) {
     if (!cmd.input_file.empty() || !cmd.here_doc.empty() || !cmd.here_string.empty()) {
         return false;
@@ -500,6 +522,8 @@ bool command_consumes_terminal_stdin(const Command& cmd) {
     return true;
 }
 
+// only a foreground pipeline's first stage inherits the shell's stdin; later
+// stages receive pipe input and cannot establish terminal-read eligibility here.
 bool pipeline_consumes_terminal_stdin(const std::vector<Command>& commands) {
     if (commands.empty()) {
         return false;
@@ -514,6 +538,8 @@ bool pipeline_consumes_terminal_stdin(const std::vector<Command>& commands) {
 
 }  // namespace job_utils
 
+// retain launch order and the last pipeline pid even after children exit. the
+// remaining and stopped sets track aggregate lifecycle independently of that order.
 JobControlJob::JobControlJob(int id, pid_t group_id, const std::vector<pid_t>& process_ids,
                              const std::string& cmd, bool is_background, bool consumes_stdin,
                              bool has_process_group)
@@ -535,7 +561,7 @@ JobManager& JobManager::instance() {
 
 int JobManager::add_job(pid_t pgid, const std::vector<pid_t>& pids, const std::string& command,
                         bool background, bool reads_stdin, bool process_group) {
-    // adds a new job to the manager and returns its job id
+    // ids increase monotonically; selecting the new job also shifts %+ and %-.
     int job_id = next_job_id++;
     std::shared_ptr<JobControlJob> job = std::make_shared<JobControlJob>(
         job_id, pgid, pids, command, background, reads_stdin, process_group);
@@ -547,7 +573,6 @@ int JobManager::add_job(pid_t pgid, const std::vector<pid_t>& pids, const std::s
 }
 
 void JobManager::remove_job(int job_id) {
-    // removes a job from the manager by its job id
     auto it = jobs.find(job_id);
     if (it != jobs.end()) {
         (void)jobs.erase(it);
@@ -559,9 +584,8 @@ void JobManager::remove_job(int job_id) {
             previous_job = -1;
         }
 
-        // Keep %+ and %- useful after jobs finish or are disowned. Job IDs are monotonically
-        // increasing, so the newest remaining jobs are the best fallback when recency markers
-        // no longer name live entries.
+        // keep %+ and %- useful after completion or disown. use the newest remaining
+        // ids when recency markers no longer name entries in the table.
         if (current_job < 0 || jobs.find(current_job) == jobs.end()) {
             current_job = -1;
             for (const auto& [id, job] : jobs) {
@@ -632,10 +656,12 @@ std::vector<std::shared_ptr<JobControlJob>> JobManager::get_all_jobs() {
     return result;
 }
 
+// poll only registered live children, leaving captured prompt workers to their
+// own waiters. gather reports before applying state changes and notifications.
 void JobManager::update_job_statuses() {
     std::vector<std::pair<pid_t, int>> status_changes;
 
-    // Poll a snapshot because handle_child_status mutates each job's live-process set.
+    // poll a snapshot because handle_child_status mutates each job's live-process set.
     for (auto& pair : jobs) {
         auto job = pair.second;
         const std::vector<pid_t> pids(job->remaining_pids.begin(), job->remaining_pids.end());
@@ -714,6 +740,8 @@ void JobManager::set_shell(Shell* shell) {
     shell_ref = shell;
 }
 
+// emit a stop once per stop/resume cycle. POSIX background notifications can wait
+// for a prompt boundary unless notify mode requests immediate reporting.
 void JobManager::notify_job_stopped(const std::shared_ptr<JobControlJob>& job) const {
     if (!job || job->stop_notified.load(std::memory_order_relaxed)) {
         return;
@@ -746,6 +774,8 @@ void JobManager::notify_job_stopped(const std::shared_ptr<JobControlJob>& job) c
     job->stop_notified.store(true, std::memory_order_relaxed);
 }
 
+// notification completion controls when cleanup may remove a finished job.
+// deliberately silent cases still mark it notified; deferred cases leave it pending.
 void JobManager::notify_job_finished(const std::shared_ptr<JobControlJob>& job) const {
     if (!job || job->notified) {
         return;
@@ -806,6 +836,8 @@ void JobManager::notify_job_finished(const std::shared_ptr<JobControlJob>& job) 
     job->notified = true;
 }
 
+// apply a waitpid report, not a signal-handler callback. retain a bounded cache of
+// terminal statuses even for pids no longer visible, for later wait calls to consume.
 void JobManager::handle_child_status(pid_t pid, int status) {
     if (WIFEXITED(status) || WIFSIGNALED(status)) {
         if (completed_pid_statuses.size() >= 256) {
@@ -819,6 +851,8 @@ void JobManager::handle_child_status(pid_t pid, int status) {
         return;
     }
 
+    // one stopped member does not stop a pipeline as a whole. report STOPPED
+    // only when every remaining child has stopped; continuation reopens the cycle.
     if (WIFSTOPPED(status)) {
         job->stopped_pids.insert(pid);
         job->stop_signal = WSTOPSIG(status);
@@ -844,6 +878,8 @@ void JobManager::handle_child_status(pid_t pid, int status) {
         return;
     }
 
+    // preserve the last pipeline member's result even if another child finishes
+    // later. aggregate completion still waits for every remaining pid to disappear.
     if (pid == job->last_pid || job->last_pid <= 0) {
         if (WIFSIGNALED(status)) {
             job->termination_signal = WTERMSIG(status);
@@ -882,6 +918,9 @@ void JobManager::update_current_previous(int new_current) {
     }
 }
 
+// prompt boundaries release deferred notifications. collect removals separately
+// so notification and recency updates cannot invalidate this traversal; retained
+// per-pid completion statuses are independent of visible job records.
 void JobManager::cleanup_finished_jobs(bool at_prompt) {
     allow_deferred_notifications = at_prompt;
     std::vector<int> to_remove;
@@ -907,6 +946,9 @@ void JobManager::cleanup_finished_jobs(bool at_prompt) {
     allow_deferred_notifications = false;
 }
 
+// gate editor typeahead using the current foreground job's stdin-signal state.
+// eligibility alone is insufficient; retain a short grace period after a signal
+// so the editor does not immediately consume input intended for that job.
 bool JobManager::foreground_job_reads_stdin() {
     if (jobs.empty()) {
         return false;
@@ -964,6 +1006,8 @@ void JobManager::clear_all_jobs() {
     g_atomic_last_background_pid.store(-1, std::memory_order_relaxed);
 }
 
+// explicit wait consumes a retained result once, unlike the non-consuming query.
+// these entries can outlive the notification and removal of the visible job.
 std::optional<int> JobManager::consume_completed_pid_status(pid_t pid) {
     auto it = completed_pid_statuses.find(pid);
     if (it == completed_pid_statuses.end()) {

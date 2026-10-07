@@ -81,6 +81,12 @@
 #include "trap_command.h"
 #include "version_command.h"
 
+// bridge the line editor and shell runtime: prepare prompts, read complete input,
+// run interactive hooks and commands, then publish status and history. process
+// startup and final destruction remain with cjsh.cpp.
+
+// cjsh.cpp starts this clock before invocation parsing; interactive startup reads
+// it after editor initialization so the displayed duration includes both stages.
 std::chrono::steady_clock::time_point& startup_begin_time() {
     static std::chrono::steady_clock::time_point value;
     return value;
@@ -92,6 +98,8 @@ bool last_prompt_started_with_newline = false;
 
 void refresh_command_palette_entries();
 
+// stop an orphaned interactive session. permission errors from kill(pid, 0) do
+// not mean the parent is gone; only ESRCH proves the process no longer exists.
 bool parent_process_alive() {
     if (!config::interactive_mode) {
         return true;
@@ -101,6 +109,7 @@ bool parent_process_alive() {
     return parent_pid != 1 && (kill(parent_pid, 0) != -1 || errno != ESRCH);
 }
 
+// editor typeahead must not consume input intended for a foreground job.
 bool typeahead_capture_allowed(void*) {
     return !JobManager::instance().foreground_job_reads_stdin();
 }
@@ -120,16 +129,20 @@ std::string history_working_directory() {
     return ec ? std::string() : directory.string();
 }
 
+// evaluate one submitted buffer, including multiline input, and attach history
+// metadata to the expanded command rather than to its history shorthand.
 CommandProcessResult process_command_line(const std::string& command) {
-    // this condition theoretically should never be hit due to earlier checks, but just in case
+    // an empty submission should not run hooks or advance exit-warning tracking.
     if (command.empty()) {
         return {cjsh_env::exit_requested(), 0};
     }
 
-    // tracking for exit commands
+    // exit uses this sequence to distinguish a repeated request after a job warning
+    // from an exit request made after another command.
     cjsh_env::increment_command_sequence();
 
-    // handle history expansion early before any tokenization or parsing
+    // expand history before hooks and parsing so both observe the command that
+    // will actually run. expansion errors leave execution and history untouched.
     std::string expanded_command = command;
     Parser* parser = (g_shell != nullptr) ? g_shell->get_parser() : nullptr;
     if (parser != nullptr) {
@@ -152,13 +165,15 @@ CommandProcessResult process_command_line(const std::string& command) {
         }
     }
 
-    // execute preexec hooks and debug traps
+    // native preexec hooks receive the expanded text as an argument. the DEBUG
+    // trap follows them and is dispatched independently of native hook support.
     if (!config::is_posix_mode()) {
         g_shell->execute_hooks(HookType::Preexec, {expanded_command});
     }
     trap_manager_execute_debug_trap();
 
-    // actually execute the command now
+    // time the command after preexec and DEBUG handling, before terminal recovery.
+    // capture the starting directory because the command itself may change it.
     const std::string command_directory = history_working_directory();
     const auto command_start_time = std::chrono::steady_clock::now();
     int exit_code = g_shell->execute(expanded_command);
@@ -170,13 +185,15 @@ CommandProcessResult process_command_line(const std::string& command) {
 
     recover_prompt_terminal();
 
-    // handle post command execution tasks
+    // publish the result before the next prompt can inspect status or duration.
+    // pipeline status comes from the execution layer rather than the scalar result.
     Exec* exec_ptr = (g_shell && g_shell->shell_exec) ? g_shell->shell_exec.get() : nullptr;
     pipeline_status_utils::apply_execution_status_env(exit_code, exec_ptr);
     (void)cjsh_env::set_shell_variable_value("CJSH_COMMAND_DURATION_MS",
                                              std::to_string(static_cast<long long>(elapsed_ms)));
 
-    // add to history
+    // history is added explicitly after execution so its metadata includes status,
+    // elapsed time, and the directory from which this command was invoked.
     if (config::history_enabled) {
         const std::string exit_code_str = std::to_string(exit_code);
         const std::string elapsed_ms_str = std::to_string(static_cast<long long>(elapsed_ms));
@@ -190,7 +207,7 @@ CommandProcessResult process_command_line(const std::string& command) {
         ic_history_add_with_metadata(expanded_command.c_str(), metadata,
                                      sizeof(metadata) / sizeof(metadata[0]));
     }
-    // Amortize allocator maintenance across commands instead of trimming after each builtin.
+    // amortize allocator maintenance across commands instead of trimming after each builtin.
     static auto last_memory_cleanup = command_end_time;
     if (command_end_time - last_memory_cleanup >= std::chrono::seconds(5)) {
 #if defined(__APPLE__) && MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
@@ -204,11 +221,15 @@ CommandProcessResult process_command_line(const std::string& command) {
     return {cjsh_env::exit_requested(), exit_code};
 }
 
+// collect child state before retiring completed jobs. editor callbacks pass false
+// so job notifications can be queued rather than disrupting the active input line.
 void update_job_management(bool at_prompt = true) {
     SignalHandler::reap_pending_children(g_shell->shell_exec.get(), true);
     JobManager::instance().cleanup_finished_jobs(at_prompt);
 }
 
+// wake readline through editor events instead of running shutdown or interrupt
+// handling inside its polling callback. the outer loop dispatches pending signals.
 void handle_readline_event(void*) {
     if (cjsh_env::exit_requested() || SignalHandler::has_pending_termination_signal()) {
         (void)ic_push_key_event(IC_KEY_EVENT_STOP);
@@ -218,7 +239,7 @@ void handle_readline_event(void*) {
         (void)ic_push_key_event(IC_KEY_EVENT_INTERRUPT);
         return;
     }
-    // Poll children without executing signal traps inside the editor. Notifications
+    // poll children without executing signal traps inside the editor. notifications
     // are copied into isocline's queue and printed after this callback returns.
     update_job_management(false);
 }
@@ -232,6 +253,8 @@ struct ReadlinePromptState {
     std::string inline_right_text;
 };
 
+// run prompt commands before rendering dependent text. keep the primary and right
+// prompt strings alive together for the subsequent readline calls.
 ReadlinePromptState prepare_readline_prompt() {
     if (!config::is_posix_mode()) {
         prompt::execute_prompt_command();
@@ -261,13 +284,16 @@ ReadlinePromptState prepare_readline_prompt() {
     return state;
 }
 
+// return submitted text, or no value when this read was interrupted or stopped.
+// no value is not itself an exit request: the outer loop checks shell state and
+// may prompt again after dispatching signals.
 std::optional<std::string> get_next_command() {
-    // main input getting
     std::string command_to_run;
 
     recover_prompt_terminal();
 
-    // handle hooks
+    // precmd runs once per new prompt, not each time an idle callback resumes
+    // the same buffer. hooks can run external commands and disturb terminal state.
     if (!config::is_posix_mode()) {
         g_shell->execute_hooks(HookType::Precmd);
         recover_prompt_terminal();
@@ -280,7 +306,7 @@ std::optional<std::string> get_next_command() {
     ReadlinePromptState prompt_state = prepare_readline_prompt();
 
     while (true) {
-        // Prompt expansion and idle hooks may also execute external programs.
+        // prompt expansion and idle hooks may also execute external programs.
         recover_prompt_terminal();
         const char* inline_right_ptr = prompt_state.inline_right_text.empty()
                                            ? nullptr
@@ -293,6 +319,8 @@ std::optional<std::string> get_next_command() {
         }
         (void)ic_set_idle_timeout(idle_timeout_ms);
 
+        // commands or idle hooks may change bindings, paths, or the working
+        // directory. refresh editor-facing state before handing control back.
         refresh_command_palette_entries();
         cjsh_filesystem::reset_interactive_path_cache();
         (void)ic_set_history_directory(history_working_directory().c_str());
@@ -303,11 +331,15 @@ std::optional<std::string> get_next_command() {
                                       resume_input.c_str(), resume_cursor_pos)
                                 : ic_readline_with_status(prompt_state.prompt_text.c_str(),
                                                           inline_right_ptr, nullptr);
+        // leave editor terminal modes before dispatching hooks or shell code.
+        // async prompt refresh is allowed only while readline owns the display.
         prompt::set_prompt_refresh_allowed(false);
         ic_prepare_terminal_for_command();
         g_shell->mark_terminal_dirty();
 
         char* input = readline_result.input;
+        // idle is a temporary handoff, not a submission. retain the buffer and
+        // cursor, release editor-owned memory, and resume after running the hooks.
         if (readline_result.disposition == IC_READLINE_DISPOSITION_IDLE) {
             resume_input = (input == nullptr ? "" : input);
             resume_cursor_pos = readline_result.cursor_pos;
@@ -325,6 +357,8 @@ std::optional<std::string> get_next_command() {
             continue;
         }
 
+        // terminal loss must not create an endless retry loop. a stop event also
+        // gives deferred termination handling a chance to request shell exit.
         if (readline_result.disposition == IC_READLINE_DISPOSITION_STOP ||
             (readline_result.disposition == IC_READLINE_DISPOSITION_ERROR &&
              readline_result.tty_lost)) {
@@ -339,6 +373,8 @@ std::optional<std::string> get_next_command() {
             return std::nullopt;
         }
 
+        // route EOF through the exit builtin so job warnings and repeated-exit
+        // rules match an explicit exit command, unless ignoreeof keeps us reading.
         if (readline_result.disposition == IC_READLINE_DISPOSITION_EOF) {
             if (input != nullptr) {
                 ic_free(input);
@@ -352,7 +388,8 @@ std::optional<std::string> get_next_command() {
             return std::nullopt;
         }
 
-        // handle empty buffer and exit early
+        // allow a transient read error to recover at the next prompt, but stop
+        // after repeated failures. a null buffer from an interrupt is not an error.
         if (input == nullptr) {
             if (readline_result.disposition == IC_READLINE_DISPOSITION_ERROR) {
                 consecutive_readline_errors += 1;
@@ -369,7 +406,8 @@ std::optional<std::string> get_next_command() {
 
         consecutive_readline_errors = 0;
 
-        // there was actual input, assign it to command to run
+        // copy before releasing the editor allocation. interrupted text is never
+        // submitted, even when readline returned a partial buffer.
         (void)command_to_run.assign(input);
         ic_free(input);
 
@@ -377,11 +415,12 @@ std::optional<std::string> get_next_command() {
             return std::nullopt;
         }
 
-        // if none early exit hits then we actually have a command to run
         return command_to_run;
     }
 }
 
+// expose the active buffer and cursor through temporary widget variables. run
+// the binding with readline suspended, then apply edits before resuming input.
 bool execute_custom_editor_command(const std::string& command) {
     if (command.empty() || g_shell == nullptr) {
         return false;
@@ -402,6 +441,8 @@ bool execute_custom_editor_command(const std::string& command) {
         (void)ic_resume_readline_terminal();
     }
 
+    // bindings may leave either value unchanged or unset it to skip that update.
+    // isocline owns the actual buffer replacement and cursor positioning.
     if (cjsh_env::shell_variable_is_set("CJSH_LINE")) {
         std::string new_buffer_env = cjsh_env::get_shell_variable_value("CJSH_LINE");
         if (original_buffer != new_buffer_env) {
@@ -438,6 +479,8 @@ bool execute_custom_palette_command(const std::string& palette_id) {
     return execute_custom_editor_command(get_custom_palette_command(palette_id));
 }
 
+// dispatch by stable ids rather than display titles, which users can customize.
+// prefixes keep keybinding and named-command entries in separate namespaces.
 bool handle_command_palette_entry(const ic_command_palette_entry_t* entry, void*) {
     if (entry == nullptr || entry->id == nullptr || entry->id[0] == '\0') {
         return false;
@@ -473,6 +516,8 @@ bool handle_command_palette_entry(const ic_command_palette_entry_t* entry, void*
     return false;
 }
 
+// rebuild only when custom bindings or agent-entry visibility changes. a failed
+// install clears the cached revision so the next read can retry.
 void refresh_command_palette_entries() {
     static std::optional<std::pair<std::uint64_t, bool>> installed_revision;
     const auto revision =
@@ -545,6 +590,8 @@ void refresh_command_palette_entries() {
         keywords.back().append(id).append(" ").append(title).append(" ").append(command_preview);
     }
 
+    // take string pointers only after the backing vectors are fully populated.
+    // isocline copies the strings during installation rather than retaining our pointers.
     std::vector<ic_command_palette_entry_t> entries(ids.size());
     for (size_t i = 0; i < ids.size(); ++i) {
         entries[i].id = ids[i].c_str();
@@ -562,7 +609,8 @@ void refresh_command_palette_entries() {
 }
 
 bool handle_runoff_bind(ic_keycode_t key, void*) {
-    // handle custom keybindings from the user
+    // prompt refresh is an internal event, not a user binding. custom bindings
+    // otherwise take precedence over the agent and browser fallback handlers.
     if (key == IC_KEY_EVENT_PROMPT_REFRESH) {
         return prompt::handle_async_prompt_refresh();
     }
@@ -575,7 +623,8 @@ bool handle_runoff_bind(ic_keycode_t key, void*) {
 }
 
 bool should_show_creator_line() {
-    // only used during startup for the title line if you want to see the creator line
+    // consume a nonempty startup-only flag so later shell code does not inherit
+    // a pending request to show this optional attribution line.
     if (!cjsh_env::shell_variable_is_set("CJSH_SHOW_CREATED")) {
         return false;
     }
@@ -595,8 +644,9 @@ bool buffer_has_line_continuation_suffix(const std::string& buffer) {
     return has_line_continuation_suffix(buffer, true);
 }
 
+// distinguish incomplete shell syntax from a complete command without executing
+// the buffer. a trailing continuation escape needs another line immediately.
 bool buffer_requires_additional_input(const std::string& buffer) {
-    // does input need continuation
     if (buffer.empty()) {
         return false;
     }
@@ -615,7 +665,8 @@ bool buffer_requires_additional_input(const std::string& buffer) {
         return false;
     }
 
-    // Validation can parse function bodies and replace the parser's cache.
+    // keep our own prepared lines: validation can parse function bodies and replace
+    // the parser's cache while checking whether this buffer is complete.
     const auto lines = parser->prepare_interactive_input(buffer);
     if (lines.empty()) {
         return false;
@@ -625,7 +676,8 @@ bool buffer_requires_additional_input(const std::string& buffer) {
 }
 
 bool continuation_or_return_callback(const char* input_buffer, void*) {
-    // handle if input buffer needs continuation
+    // the editor expects true for submission and false for another input line.
+    // replace the displayed prompt only when this buffer is ready to submit.
     if (input_buffer == nullptr) {
         return true;
     }
@@ -640,9 +692,10 @@ bool continuation_or_return_callback(const char* input_buffer, void*) {
 
 }  // namespace
 
+// install shell-facing editor callbacks after startup has established terminal
+// ownership and configuration. history insertion stays with command processing
+// so entries can include the eventual execution result.
 void initialize_isocline() {
-    // setup isocline environment and ui styling
-    // Defer editor initialization until after the shell owns the terminal.
     if (config::minimal_mode) {
         (void)ic_enable_line_numbers(false);
     }
@@ -673,9 +726,9 @@ void main_process_loop() {
     (void)ic_enable_typeahead(true);
 
     std::string command_to_run;
-    // main input loop, runs until exit
     while (true) {
-        // handle any pending signals before each prompt
+        // dispatch traps and termination outside readline before starting another
+        // prompt. this also handles signals that interrupted the previous read.
         (void)g_shell->process_pending_signals();
 
         if (cjsh_env::exit_requested()) {
@@ -688,10 +741,9 @@ void main_process_loop() {
             break;
         }
 
-        // check job statuses
+        // report completed jobs at a prompt boundary before rendering new input.
         update_job_management();
 
-        // fetch the next command from the user
         std::optional<std::string> next_command = get_next_command();
 
         if (cjsh_env::exit_requested()) {
@@ -704,11 +756,12 @@ void main_process_loop() {
 
         command_to_run = std::move(*next_command);
 
-        // handle the command from the user
+        // bracket execution with terminal command markers for supported terminals.
         ic_mark_command_start();
         CommandProcessResult command_result = process_command_line(command_to_run);
 
-        // handle styling configuration
+        // avoid an extra blank line when the prompt already supplies one, when
+        // clear was submitted, or when there will not be another prompt.
         if (!command_result.exit_requested && !cjsh_env::exit_requested() &&
             config::newline_after_execution && command_to_run != "clear" &&
             !last_prompt_started_with_newline) {
@@ -725,10 +778,13 @@ void main_process_loop() {
     (void)ic_enable_typeahead(false);
 }
 
+// transition from startup into a real prompt session. interactive -c and script
+// invocations bypass this path even though they can load interactive startup files.
 void start_interactive_process() {
     g_shell->begin_interactive_input();
-    // activate the line editor
     initialize_isocline();
+    // sample startup cancellation before clearing startup state, which disables
+    // the signal handler's startup-specific interruption query.
     (void)g_shell->process_pending_signals();
     if (SignalHandler::startup_interrupted()) {
         pipeline_status_utils::set_last_status_env(128 + SIGINT);
@@ -736,7 +792,7 @@ void start_interactive_process() {
     cjsh_env::set_startup_active(false);
     bool first_boot = cjsh_filesystem::is_first_boot();
 
-    // calculate startup time
+    // stop timing before printing banners so their output is not part of the duration.
     std::chrono::microseconds startup_duration(0);
     if (config::show_startup_time || first_boot) {
         auto startup_end_time = std::chrono::steady_clock::now();
@@ -782,7 +838,7 @@ void start_interactive_process() {
         std::cout << "\n";
     }
 
-    // calculate the display for startup time
+    // scale the startup duration for readability without losing subsecond detail.
     if (config::show_startup_time || first_boot) {
         long long microseconds = startup_duration.count();
         std::string startup_time_str;
@@ -803,6 +859,6 @@ void start_interactive_process() {
         std::cout << "\n";
     }
 
-    // go into read input loop
+    // returning from the loop leaves exit hooks and destruction to cjsh.cpp.
     main_process_loop();
 }

@@ -63,6 +63,9 @@
 #include <mach-o/dyld.h>
 #endif
 
+// centralize shell paths, executable lookup, descriptor helpers, and startup-file
+// loading. cjsh.cpp chooses lifecycle stages; this layer enforces storage, dialect,
+// and file-access policy without turning optional resources into startup failures.
 namespace cjsh_filesystem {
 
 namespace {
@@ -70,6 +73,8 @@ enum class CacheUsage : std::uint8_t;
 std::string resolve_command_with_cache(const std::string& name, CacheUsage usage);
 }  // namespace
 
+// capture HOME lazily for persistent shell paths. later variable changes do not
+// relocate already selected storage; an unset or empty HOME falls back to /tmp.
 const std::filesystem::path& g_user_home_path() {
     static const std::filesystem::path path = [] {
         std::string home = cjsh_env::get_shell_variable_value("HOME");
@@ -87,6 +92,8 @@ const std::filesystem::path& g_user_home_path() {
 }
 
 namespace {
+// expand only ~ and ~/ against the shell's captured home. configuration path
+// overrides are not command text and do not perform general word expansion.
 std::filesystem::path expand_leading_tilde_path(std::string_view raw_value) {
     std::filesystem::path candidate;
 
@@ -125,6 +132,8 @@ void close_fd_if_valid(int fd) {
     }
 }
 
+// own temporary descriptors across early returns. release is reserved for the
+// point where ownership passes to a caller or a redirection's target descriptor.
 class ScopedFd {
    public:
     explicit ScopedFd(int fd = -1) : fd_(fd) {
@@ -167,6 +176,9 @@ class ScopedFd {
 };
 }  // namespace
 
+// settle relative overrides against the current directory without requiring the
+// target to exist. lexical normalization keeps symlinks unresolved, unlike the
+// executable-identity normalization used later in this file.
 std::filesystem::path normalize_override_path(std::string_view raw_value) {
     if (raw_value.empty()) {
         return {};
@@ -185,6 +197,9 @@ std::filesystem::path normalize_override_path(std::string_view raw_value) {
     return candidate.lexically_normal();
 }
 
+// cjsh.cpp settles command-line and environment override precedence before these
+// first-use caches are consulted. the default config and cache roots are separate;
+// changing the configuration directory does not relocate cache storage.
 const std::filesystem::path& g_cjsh_config_path() {
     static const std::filesystem::path path = config::config_directory.empty()
                                                   ? g_user_home_path() / ".config" / "cjsh"
@@ -197,6 +212,8 @@ const std::filesystem::path& g_cjsh_cache_path() {
     return path;
 }
 
+// native startup files prefer HOME by default, with the config root as fallback.
+// an explicit config directory makes primary and alternate paths share that root.
 const std::filesystem::path& g_cjsh_profile_path() {
     static const std::filesystem::path path =
         (config::config_directory.empty() ? g_user_home_path() : g_cjsh_config_path()) /
@@ -256,6 +273,9 @@ HistoryPathState& history_path_state() {
 }
 }  // namespace
 
+// unlike other cached paths, history follows changes to CJSH_HISTORY_FILE during
+// startup. after finalization, retain an already selected path; if history was
+// never consulted, its first later use still performs the initial lookup lazily.
 const std::filesystem::path& g_cjsh_history_path() {
     auto& state = history_path_state();
     if (!state.override_value || !state.finalized) {
@@ -271,7 +291,7 @@ const std::filesystem::path& g_cjsh_history_path() {
 
 void finalize_history_path() {
     auto& state = history_path_state();
-    // Refresh an early startup lookup, but leave scripts that never used history lazy.
+    // refresh an early startup lookup, but leave scripts that never used history lazy.
     if (state.override_value) {
         (void)g_cjsh_history_path();
     }
@@ -302,6 +322,8 @@ std::string strip_login_prefix(std::string token) {
     return token;
 }
 
+// executable identity benefits from resolving symlinks. degrade to partial or
+// lexical normalization when the filesystem cannot resolve the entire path.
 std::filesystem::path normalize_path(const std::filesystem::path& raw_path) {
     if (raw_path.empty()) {
         return raw_path;
@@ -322,6 +344,8 @@ std::filesystem::path normalize_path(const std::filesystem::path& raw_path) {
     return raw_path.lexically_normal();
 }
 
+// ask the platform for the running image before trusting argv[0] or SHELL, which
+// can name a symlink, script, or another shell. unsupported platforms use fallbacks.
 std::optional<std::filesystem::path> resolve_running_executable_path() {
 #if defined(__APPLE__)
     uint32_t size = 0;
@@ -350,6 +374,9 @@ std::optional<std::filesystem::path> resolve_running_executable_path() {
 #endif
 }
 
+// interpret an invocation token as an explicit path or PATH name after removing
+// login syntax. fallback identity candidates must exist and not be directories;
+// this helper does not prove an explicit candidate is executable.
 std::optional<std::filesystem::path> resolve_executable_token(const std::string& token) {
     std::string cleaned = strip_login_prefix(token);
     if (cleaned.empty()) {
@@ -410,6 +437,8 @@ bool for_each_path_segment(std::string_view path_str, Callback&& callback) {
 
 namespace {
 
+// queries can populate the cache without counting as executions. manual lookups
+// record hash-builtin intent, while only execution lookups increment hit counts.
 enum class CacheUsage : std::uint8_t {
     Query,
     Execution,
@@ -447,6 +476,8 @@ std::string resolve_explicit_command(const std::string& name) {
     return path_is_executable(candidate) ? candidate.string() : std::string{};
 }
 
+// preserve PATH order and stop at the first executable candidate. this lookup
+// skips empty components; it does not reinterpret them as the current directory.
 std::string scan_path_for_command(const std::string& name, std::string_view path_value) {
     std::string resolved;
     (void)for_each_path_segment(path_value, [&](std::string_view raw_segment) {
@@ -464,6 +495,9 @@ std::string scan_path_for_command(const std::string& name, std::string_view path
     return resolved;
 }
 
+// retain command hashes across lookups and a separate name index for editor work.
+// the mutex protects cache containers, not the shell's broader variable state.
+// execution validates cached paths even when a redraw can reuse a query result.
 class PathHashCache {
    public:
     std::string resolve(const std::string& name, CacheUsage usage) {
@@ -471,6 +505,8 @@ class PathHashCache {
         std::lock_guard<std::mutex> lock(mutex_);
         ensure_snapshot_locked(current_path);
 
+        // only explicit editor lookup scopes reuse per-read results. execution and
+        // manual hashing must still check the candidate's current executability.
         const bool interactive = usage == CacheUsage::Query && interactive_path_lookup_depth > 0;
         if (interactive) {
             auto cached = interactive_results_.find(name);
@@ -483,6 +519,8 @@ class PathHashCache {
 
         auto it = entries_.find(name);
         if (it != entries_.end()) {
+            // a valid hash keeps its selected path until invalidated or reset;
+            // a missing or no-longer-executable target falls through to a fresh scan.
             if (entry_is_valid(it->second)) {
                 if (usage == CacheUsage::Execution) {
                     it->second.hits++;
@@ -507,7 +545,7 @@ class PathHashCache {
         if (interactive) {
             index_interactive_names_locked(current_path);
             if (!interactive_index_complete_) {
-                // A searchable directory need not be readable. Preserve lookup
+                // a searchable directory need not be readable. preserve lookup
                 // semantics when its names cannot be enumerated.
                 resolved = scan_path_for_command(name, current_path);
             } else {
@@ -541,6 +579,8 @@ class PathHashCache {
         return resolved;
     }
 
+    // seed an inventory for callers needing all known executable names rather
+    // than one lookup. seeding does not count those names as command executions.
     std::vector<std::string> executables_in_path() {
         std::string current_path = current_path_env_value();
         std::lock_guard<std::mutex> lock(mutex_);
@@ -557,6 +597,8 @@ class PathHashCache {
         return executables;
     }
 
+    // expose a sorted copy for hash listings without leaking references beyond
+    // the mutex lifetime. do not enumerate PATH merely to display existing entries.
     std::vector<PathHashEntry> entries() {
         std::string current_path = current_path_env_value();
         std::lock_guard<std::mutex> lock(mutex_);
@@ -595,8 +637,8 @@ class PathHashCache {
             return;
         }
         ensure_snapshot_locked(current_path_env_value());
-        // Always recheck emitted candidates' permissions and symlink targets.
-        // Reuse the name index when directory metadata is unchanged and old
+        // always recheck emitted candidates' permissions and symlink targets.
+        // reuse the name index when directory metadata is unchanged and old
         // enough to distinguish edits on filesystems with coarse timestamps.
         interactive_results_.clear();
         if (std::any_of(interactive_directories_.begin(), interactive_directories_.end(),
@@ -608,6 +650,8 @@ class PathHashCache {
         }
     }
 
+    // return names cheaply; directory enumeration alone does not establish that
+    // each name is executable. completion callers validate their matched candidates.
     std::vector<std::string> completion_candidates() {
         const std::string current_path = current_path_env_value();
         std::lock_guard<std::mutex> lock(mutex_);
@@ -619,7 +663,7 @@ class PathHashCache {
             (void)paths;
             names.push_back(name);
         }
-        // Retain known commands in searchable directories that cannot be listed.
+        // retain known commands in searchable directories that cannot be listed.
         for (const auto& [name, entry] : entries_) {
             (void)entry;
             if (interactive_paths_.count(name) == 0) {
@@ -640,7 +684,7 @@ class PathHashCache {
 
     void index_interactive_names_locked(const std::string& path_value) {
         if (!interactive_names_ready_) {
-            // Incomplete words usually do not exist anywhere in PATH. Read names
+            // incomplete words usually do not exist anywhere in PATH. read names
             // once, without stat/access on every file (especially costly on WSL
             // mounts), then reject all those prefixes entirely in memory.
             std::unordered_set<std::string> visited;
@@ -671,6 +715,8 @@ class PathHashCache {
         return path_is_executable(entry.path);
     }
 
+    // PATH changes invalidate every lookup layer. cwd matters only when a
+    // nonempty relative PATH component can resolve to a different directory.
     void ensure_snapshot_locked(const std::string& current_path) {
         if (current_path != path_snapshot_) {
             relative_path_ = false;
@@ -737,6 +783,7 @@ class PathHashCache {
                     continue;
                 }
 
+                // earlier PATH entries and existing hashes win over later names.
                 std::string command = entry.path().filename().string();
                 if (entries_.find(command) != entries_.end()) {
                     continue;
@@ -793,6 +840,8 @@ void reset_path_cache_entries() {
 
 }  // namespace
 
+// allow nested editor consumers to share query results without enabling that
+// shortcut for execution. the next prompt boundary resets per-read results.
 ScopedInteractivePathLookup::ScopedInteractivePathLookup() {
     ++interactive_path_lookup_depth;
 }
@@ -809,6 +858,9 @@ std::vector<std::string> get_path_completion_candidates() {
     return path_hash_cache().completion_candidates();
 }
 
+// deleted or inaccessible working directories can make getcwd fail. provide a
+// best-effort path for callers, but do not treat the PWD/home fallback as proof of
+// the process's actual filesystem location.
 std::string safe_current_directory() {
     char* cwd = ::getcwd(nullptr, 0);
     if (cwd != nullptr) {
@@ -896,9 +948,13 @@ void safe_close(int fd) {
     close_fd_if_valid(fd);
 }
 
+// install a file on the target descriptor, closing only the temporary open fd.
+// restoration of an earlier target belongs to the caller's redirection scope.
 Result<void> redirect_fd(const std::string& file, int target_fd, int flags, bool force_overwrite) {
     const bool noclobber = !force_overwrite && (flags & O_TRUNC) && g_shell &&
                            g_shell->get_shell_option(ShellOption::Noclobber);
+    // under noclobber, inspect an existing target without truncating it. if absent,
+    // exclusive creation prevents overwriting a file created between open attempts.
     auto open_result = safe_open(file, noclobber ? flags & ~(O_TRUNC | O_CREAT) : flags, 0666);
     if (noclobber && open_result.is_error() && errno == ENOENT) {
         open_result = safe_open(file, (flags & ~O_TRUNC) | O_CREAT | O_EXCL, 0666);
@@ -915,6 +971,8 @@ Result<void> redirect_fd(const std::string& file, int target_fd, int flags, bool
     }
 
     ScopedFd file_fd(open_result.value());
+    // open may reuse a closed target slot. transfer that fd instead of allowing
+    // the temporary owner to close the newly installed redirection on return.
     if (file_fd.get() == target_fd) {
         (void)file_fd.release();
         return Result<void>::ok();
@@ -928,6 +986,8 @@ Result<void> redirect_fd(const std::string& file, int target_fd, int flags, bool
     return Result<void>::ok();
 }
 
+// preserve existing descriptor flags while preventing inheritance through exec.
+// the descriptor remains usable by the shell and by forked children before exec.
 Result<void> set_close_on_exec(int fd) {
     int flags = ::fcntl(fd, F_GETFD);
     if (flags == -1) {
@@ -943,6 +1003,8 @@ Result<void> set_close_on_exec(int fd) {
     return Result<void>::ok();
 }
 
+// retain ownership of both ends until both close-on-exec updates succeed. errors
+// close the pair; only a successful return gives the caller live descriptors.
 Result<void> create_pipe_cloexec(int pipe_fds[2]) {
     if (::pipe(pipe_fds) == -1) {
         return Result<void>::error("failed to create pipe: " + describe_errno(errno));
@@ -967,6 +1029,8 @@ Result<void> create_pipe_cloexec(int pipe_fds[2]) {
     return Result<void>::ok();
 }
 
+// consume this pipe pair: close the writer, install its reader on the target,
+// and invalidate the supplied slots so later cleanup cannot close reused numbers.
 Result<void> duplicate_pipe_read_end_to_fd(int (&pipe_fds)[2], int target_fd) {
     safe_close(pipe_fds[1]);
 
@@ -995,6 +1059,8 @@ void close_pipe(int pipe_fds[2]) {
 }
 
 namespace {
+// create owner-only files and optionally correct permissions on existing files
+// too. this truncates in place; it is not an atomic temporary-file replacement.
 Result<void> write_content_with_permissions(const std::string& path, std::string_view content,
                                             bool enforce_secure_permissions) {
     auto open_result = safe_open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
@@ -1024,6 +1090,9 @@ Result<void> write_file_content(const std::string& path, const std::string& cont
     return write_content_with_permissions(path, std::string_view{content}, true);
 }
 
+// advance through partial writes and retry transient failures until all bytes
+// are accepted. no-progress writes and permanent errors return to the caller;
+// this helper does not close the descriptor or wait for nonblocking readiness.
 Result<void> write_all(int fd, std::string_view data) {
     size_t total_written = 0;
     while (total_written < data.size()) {
@@ -1064,6 +1133,8 @@ bool error_indicates_broken_pipe(std::string_view message) {
            (message.find("EPIPE") != std::string::npos);
 }
 
+// expand the here-string value, append its required newline, and replace stdin
+// with the pipe reader. callers own restoring stdin after scoped execution.
 std::optional<HereStringError> setup_here_string_stdin(const std::string& here_string) {
     int here_pipe[2];
     auto pipe_result = create_pipe_cloexec(here_pipe);
@@ -1092,6 +1163,8 @@ std::optional<HereStringError> setup_here_string_stdin(const std::string& here_s
     return std::nullopt;
 }
 
+// provide a policy precheck for regular files. this path inspection alone is not
+// race protection; redirect_fd also checks the opened target before installing it.
 bool should_noclobber_prevent_overwrite(const std::string& filename, bool force_overwrite) {
     if (force_overwrite) {
         return false;
@@ -1105,6 +1178,8 @@ bool should_noclobber_prevent_overwrite(const std::string& filename, bool force_
     return stat(filename.c_str(), &file_stat) == 0 && S_ISREG(file_stat.st_mode);
 }
 
+// explicit paths only require existence here. callers needing execute permission
+// and a non-directory target must use resolves_to_executable instead.
 bool command_exists(const std::string& command_path) {
     if (command_path.empty()) {
         return false;
@@ -1159,6 +1234,9 @@ bool token_has_explicit_path_hint(const std::string& value) {
            value.rfind("-/", 0) == 0 || value.find('/') != std::string::npos;
 }
 
+// resolve directory shortcuts without evaluating shell code: ~ uses captured
+// HOME, while - and -/ use the caller's previous directory. missing previous
+// directory state yields no candidate instead of silently resolving against cwd.
 std::filesystem::path expand_shell_path_token(const std::string& value, const std::string& cwd,
                                               const std::string& previous_directory) {
     if (value.empty()) {
@@ -1247,6 +1325,9 @@ bool is_auto_cd_directory_token(const std::string& value, const std::string& cwd
     return is_directory_path(candidate);
 }
 
+// read and, when requested, validate the same opened object. nonblocking open
+// prevents a substituted FIFO from hanging regular-file-only startup reads;
+// fstat then rejects non-regular targets before any content is consumed.
 Result<std::string> read_file_content(const std::string& path, bool require_regular_file) {
     const int flags = O_RDONLY | (require_regular_file ? O_NONBLOCK | O_NOCTTY | O_CLOEXEC : 0);
     auto open_result = safe_open(path, flags);
@@ -1314,6 +1395,9 @@ bool prepare_persistence_directory(const std::filesystem::path& path) {
 }
 }  // namespace
 
+// attempt cache setup once without making storage a prerequisite for running
+// the shell. availability is reported through feature flags and warnings, not the
+// return value; unavailable completion persistence disables learning as well.
 bool initialize_cjsh_directories() {
     static bool initialized = false;
     if (initialized) {
@@ -1321,7 +1405,7 @@ bool initialize_cjsh_directories() {
     }
     initialized = true;
 
-    // Never create a missing HOME as a side effect of starting a shell.
+    // never create a missing HOME as a side effect of starting a shell.
     const bool home_exists = path_is_directory(g_user_home_path());
     const bool cache_ok = home_exists && prepare_persistence_directory(g_cjsh_cache_path());
     config::cache_persistence_enabled = cache_ok;
@@ -1339,6 +1423,8 @@ bool initialize_cjsh_directories() {
     return true;
 }
 
+// prepare the selected history path, including early requests from startup code.
+// failure disables disk persistence without disabling history itself or input.
 void initialize_history_storage() {
     if (!config::history_enabled) {
         return;
@@ -1351,11 +1437,15 @@ void initialize_history_storage() {
     }
     prepared_path = path;
 
-    // An early history command may have prepared a different path before .cjshrc.
+    // an early history command may have prepared a different path before .cjshrc.
+    // retry for a changed selection, and let custom storage work even when the
+    // default cache directory is unavailable.
     const bool custom = !history_path_state().override_value->empty();
     const bool cache_ok = config::cache_persistence_enabled;
     const bool directory_ok =
         (custom || cache_ok) && prepare_persistence_directory(path.parent_path());
+    // append/create without truncating existing history. nonblocking open avoids
+    // waiting on a FIFO, and descriptor inspection rejects non-regular storage.
     int fd = directory_ok
                  ? open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NONBLOCK, 0600)
                  : -1;
@@ -1376,6 +1466,9 @@ std::string resolve_executable_for_execution(const std::string& name) {
     return resolve_command_with_cache(name, CacheUsage::Execution);
 }
 
+// prefer the running image, then invocation identity, shell variables, and finally
+// PATH. $0 can become a script name and SHELL can be inherited from another shell,
+// so neither should outrank the platform's executable path.
 std::string resolve_cjsh_executable_path(const std::vector<std::string>& startup_args) {
     if (auto executable_path = resolve_running_executable_path(); executable_path.has_value()) {
         std::filesystem::path normalized = normalize_path(*executable_path);
@@ -1424,6 +1517,8 @@ std::string resolve_cjsh_executable_directory(const std::vector<std::string>& st
     return safe_current_directory();
 }
 
+// choose an invocation name separately from the executable location. preserve
+// names such as sh, but strip directories and the login prefix from saved argv[0].
 std::string resolve_cjsh_argv0(const std::vector<std::string>& startup_args,
                                const std::string& executable_path) {
     if (!startup_args.empty()) {
@@ -1503,6 +1598,9 @@ bool write_configuration_file(const std::filesystem::path& target_path,
     return true;
 }
 
+// return whether a file was loaded and submitted, not whether its commands
+// succeeded. optional mode suppresses read diagnostics; missing or non-regular
+// candidates are skipped in either mode, and interruption prevents execution.
 bool execute_startup_file_if_present(const std::filesystem::path& path, bool optional_mode) {
     if (SignalHandler::startup_interrupted()) {
         return false;
@@ -1511,7 +1609,7 @@ bool execute_startup_file_if_present(const std::filesystem::path& path, bool opt
         return false;
     }
 
-    // Validate and read the same descriptor. A FIFO swapped in after the path
+    // validate and read the same descriptor. a FIFO swapped in after the path
     // check must not block startup, and regular-file symlinks remain supported.
     auto content = read_file_content(path.string(), true);
     if (content.is_error()) {
@@ -1523,6 +1621,8 @@ bool execute_startup_file_if_present(const std::filesystem::path& path, bool opt
     if (SignalHandler::startup_interrupted()) {
         return false;
     }
+    // capture the diagnostic path before sourced commands can change cwd. the
+    // shell's source-content entry point supplies nested source and return context.
     std::error_code ec;
     auto source_path = std::filesystem::absolute(path, ec);
     if (ec) {
@@ -1532,6 +1632,8 @@ bool execute_startup_file_if_present(const std::filesystem::path& path, bool opt
     return true;
 }
 
+// source at most one candidate. a command failure in a loaded primary is not a
+// reason to source the alternate; only failure to load/submit reaches the fallback.
 bool process_startup_file_with_fallback(const std::filesystem::path& primary,
                                         const std::filesystem::path& alternate,
                                         bool optional_mode) {
@@ -1553,6 +1655,8 @@ bool create_default_startup_file(const std::filesystem::path& target_path,
     return write_configuration_file(target_path, content);
 }
 
+// apply the shared execution gate at each startup stage. -n must avoid executing
+// configuration too, and an interrupted startup must not resume at a later file.
 bool startup_files_disabled() {
     return config::secure_mode || config::no_config || config::no_exec ||
            SignalHandler::startup_interrupted();
@@ -1586,6 +1690,8 @@ bool is_first_boot() {
     return config::cache_persistence_enabled && !file_exists(g_cjsh_first_boot_path());
 }
 
+// the caller selects login invocations. POSIX profiles run system then user code;
+// native mode uses one primary-or-alternate profile instead of both locations.
 void process_profile_files() {
     if (startup_files_disabled()) {
         return;
@@ -1602,6 +1708,9 @@ void process_profile_files() {
                                              true);
 }
 
+// native environment files precede login and interactive configuration. a nonempty
+// CJSH_ENV selects only that file, even if it cannot be loaded; an empty override
+// leaves the ordinary primary-or-alternate search in place.
 void process_env_files() {
     if (startup_files_disabled() || config::is_posix_mode()) {
         return;
@@ -1620,6 +1729,8 @@ void process_env_files() {
     (void)process_startup_file_with_fallback(g_cjsh_env_path(), g_cjsh_env_alt_path(), true);
 }
 
+// interactive POSIX startup uses ENV after any login profiles. keep the identity
+// check here too so this entry point never loads ENV under mismatched privileges.
 void process_posix_env_file() {
     if (!config::is_posix_mode() || !config::interactive_mode || startup_files_disabled() ||
         getuid() != geteuid() || getgid() != getegid()) {
@@ -1629,7 +1740,7 @@ void process_posix_env_file() {
     if (path.empty()) {
         return;
     }
-    // Expand parameters (and arithmetic), without splitting, globbing, tilde
+    // expand parameters (and arithmetic), without splitting, globbing, tilde
     // expansion, PATH search, or evaluating ENV as a command string.
     g_shell->get_parser()->expand_env_vars(path);
     if (!path.empty() && !cjsh_env::exit_requested()) {
@@ -1637,6 +1748,8 @@ void process_posix_env_file() {
     }
 }
 
+// the shell's exit sequence selects login sessions and runs this after exit hooks.
+// retain the native configuration gates rather than sourcing a logout file in POSIX mode.
 void process_logout_file() {
     if (startup_files_disabled() || config::is_posix_mode()) {
         return;
@@ -1645,6 +1758,8 @@ void process_logout_file() {
     (void)process_startup_file_with_fallback(g_cjsh_logout_path(), g_cjsh_logout_alt_path(), true);
 }
 
+// the caller selects interactive startup, including -i with a command or script.
+// --no-source suppresses this native rc stage without disabling all startup files.
 void process_source_files() {
     if (!config::source_enabled || startup_files_disabled() || config::is_posix_mode()) {
         return;

@@ -69,6 +69,10 @@
 #include "tokenizer.h"
 #include "variable_expander.h"
 
+// turn shell text into logical lines, expanded words, and command/redirection
+// records. parsing and expansion are interleaved here: execution-facing entry
+// points can evaluate expansions, while input-completeness callers use the line
+// splitter and retain syntax rather than caching expanded command results.
 Command::Command() {
     args.reserve(8);
     process_substitutions.reserve(2);
@@ -97,6 +101,8 @@ void Command::set_fd_duplication(int fd, int target) {
     }
 }
 
+// preserve every operation in source order in addition to the convenient summary
+// fields. 2>&1 >file and >file 2>&1 must remain distinguishable to the executor.
 void Command::add_redirection(CommandRedirectionType type, std::string value, int fd,
                               int target_fd) {
     redirection_order.push_back(CommandRedirection{type, fd, target_fd, std::move(value)});
@@ -172,6 +178,8 @@ bool redirection_requires_value(RedirectionToken token) {
     return redirection_utils::requires_operand(token);
 }
 
+// whitespace splitting is valid only when no shell syntax needs tokenization.
+// POSIX tilde handling belongs to the full path because its value can change.
 bool is_simple_command_candidate(std::string_view cmdline) {
     bool seen_non_space = false;
     constexpr std::string_view kSpecialChars = "\\\"'|&;<>(){}[]$`#*?=!";
@@ -414,6 +422,8 @@ std::vector<std::string> merge_line_continuations(const std::vector<std::string>
 
 }  // namespace
 
+// history substitution is an input-stage operation, not ordinary variable
+// expansion. leave text unchanged when disabled or stdin is not a terminal.
 Parser::HistoryExpansionResult Parser::perform_history_expansion(const std::string& command) const {
     HistoryExpansionResult result;
     result.expanded_command = command;
@@ -431,7 +441,7 @@ Parser::HistoryExpansionResult Parser::perform_history_expansion(const std::stri
     }
 
     auto history_entries = HistoryExpansion::read_history_entries();
-    // The interactive loop records commands after execution; the current input is not staged.
+    // the interactive loop records commands after execution; the current input is not staged.
     auto expansion = HistoryExpansion::expand(command, history_entries);
 
     if (expansion.has_error) {
@@ -449,6 +459,8 @@ Parser::HistoryExpansionResult Parser::perform_history_expansion(const std::stri
     return result;
 }
 
+// quoted delimiters store literal bodies; unquoted delimiters carry an expansion
+// marker. defer that expansion until the heredoc is attached to an executing command.
 void Parser::process_heredoc_content(std::string& content) {
     if (content.length() >= 10 && content.substr(0, 10) == "__EXPAND__") {
         content = content.substr(10);
@@ -531,6 +543,8 @@ bool Parser::handle_fd_redirection(const std::string& value, size_t& i,
     }
 }
 
+// construct expansion helpers lazily with this parser's shell context and variable
+// map. callers that only split input need not initialize every expansion subsystem.
 void Parser::ensure_parsers_initialized() {
     if (!tokenizer) {
         tokenizer = std::make_unique<Tokenizer>();
@@ -564,12 +578,18 @@ void Parser::set_shell(Shell* new_shell) {
     ensure_parsers_initialized();
 }
 
+// retain one prepared buffer for the next matching parse. the returned reference
+// is borrowed: nested parsing can replace or consume it, so validation callers
+// needing stable lines must copy them before re-entering the parser.
 const std::vector<std::string>& Parser::prepare_interactive_input(const std::string& script) {
     auto lines = parse_into_lines(script);
     prepared_input = PreparedInput{script, std::move(lines)};
     return prepared_input->lines;
 }
 
+// split physical input into logical chunks without executing commands. quotes,
+// continuations, groups, and heredoc bodies must survive this stage so interpreter
+// dispatch and interactive completeness checks see the same boundaries.
 std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
     bool incomplete_documents = false;
     std::string rewritten =
@@ -583,6 +603,8 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
         }
     }
     const std::string& script = rewritten.empty() ? source : rewritten;
+    // consume rather than retain the prepared snapshot. a subsequent nested parse
+    // must not reuse stale lines after preprocessing has changed heredoc state.
     if (prepared_input) {
         auto prepared = std::move(*prepared_input);
         prepared_input.reset();
@@ -590,9 +612,9 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
             return std::move(prepared.lines);
         }
     }
-    // shared script splitter used by shell::execute and interactive continuation checks
+    // expose incomplete heredocs separately from ordinary line structure so the
+    // editor or streaming stdin reader knows it must collect more body text.
     incomplete_here_document = incomplete_documents;
-    // control-flow blocks like if/then/fi depend on this producing stable logical line chunks
     std::vector<std::string> lines;
 
     lines.reserve(std::min(script.length() / 30 + 2, size_t(64)));
@@ -618,6 +640,9 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
     bool line_is_comment = false;
     bool in_parameter_brace = false;
 
+    // replace a collected body with a private placeholder while retaining whether
+    // its delimiter permits expansion. later pipeline preprocessing reconnects the
+    // stored body to a redirection rather than treating it as more command text.
     auto add_here_doc_placeholder_line = [&](std::string before, const std::string& rest) {
         std::string placeholder;
         placeholder.reserve(32);
@@ -1019,6 +1044,8 @@ std::vector<std::string> Parser::parse_into_lines(const std::string& source) {
     return merge_command_group_lines(lines);
 }
 
+// perform word-shape changes while quote tags are still available. brace expansion
+// and quoted $@ can produce multiple words before ordinary variable/IFS handling.
 std::vector<std::string> Parser::prepare_expansion_tokens(std::vector<std::string> args) {
     ensure_parsers_initialized();
 
@@ -1082,6 +1109,8 @@ std::vector<std::string> Parser::prepare_expansion_tokens(std::vector<std::strin
         const std::vector<size_t> at_positions =
             qi.is_double ? find_expandable_dollar_ats(qi.value) : std::vector<size_t>{};
         if (!at_positions.empty()) {
+            // quoted $@ preserves each parameter as a separate field. prefixes
+            // attach to the first field and suffixes to the last, not every word.
             auto params = flags::get_positional_parameters();
             std::vector<std::string> fields(1);
             size_t cursor = 0;
@@ -1112,6 +1141,9 @@ std::vector<std::string> Parser::prepare_expansion_tokens(std::vector<std::strin
     return args;
 }
 
+// expand aliases in source text where they can introduce shell syntax. command
+// position, quoting, redirection operands, and case patterns control eligibility;
+// the active-name set prevents recursive aliases from expanding forever.
 std::string Parser::expand_aliases(const std::string& source) const {
     if (shell && !shell->get_shell_option(ShellOption::ExpandAliases)) {
         return source;
@@ -1222,6 +1254,8 @@ std::string Parser::expand_aliases(const std::string& source) const {
                 active.insert(word);
                 output += expand(alias->second);
                 active.erase(word);
+                // trailing alias whitespace permits the next word to be considered
+                // for alias expansion even after the command position was consumed.
                 next_alias = !alias->second.empty() &&
                              (alias->second.back() == ' ' || alias->second.back() == '\t');
                 continue;
@@ -1254,6 +1288,9 @@ std::string Parser::expand_aliases(const std::string& source) const {
     return expand(source);
 }
 
+// produce execution words, not just lexical tokens. fast paths must preserve
+// alias, quote, IFS, tilde, and glob behavior; the general path retains provenance
+// until each expansion stage has decided whether a word may split or expand.
 std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
     ensure_parsers_initialized();
 
@@ -1269,6 +1306,8 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
         (void)args.emplace_back(cmdline);
     } else {
         try {
+            // cache lexical tokens only, under syntax-affecting options. expanded
+            // values depend on live variables and files and must be recomputed.
             if (command_tokens_extglob != config::extglob_enabled ||
                 command_tokens_dialect != static_cast<int>(config::shell_dialect())) {
                 command_tokens.clear();
@@ -1276,6 +1315,8 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
                 command_tokens_dialect = static_cast<int>(config::shell_dialect());
             }
             const auto cached = command_tokens.find(cmdline);
+            // POSIX tokenization can resolve tilde against current environment
+            // state, so even this lexical cache must bypass those inputs.
             const bool dynamic_tilde =
                 config::is_posix_mode() && cmdline.find('~') != std::string::npos;
             if (cached != command_tokens.end() && !dynamic_tilde) {
@@ -1354,12 +1395,14 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
                         }
                     }
 
+                    // hand introduced pipeline syntax back to the interpreter;
+                    // a literal argv separator cannot express multiple processes.
                     if (has_pipe) {
                         return {"__ALIAS_PIPELINE__", alias_it->second};
                     }
                 }
             } catch (const std::exception&) {
-                // Alias expansion is optional; keep original args on failure.
+                // alias expansion is optional; keep original args on failure.
             }
         }
     }
@@ -1453,6 +1496,8 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
                                        command_name == "typeset" || command_name == "local" ||
                                        command_name == "readonly";
 
+    // POSIX field splitting needs to distinguish bytes introduced by expansion
+    // from literal source bytes. quote tags alone cannot describe that provenance.
     std::vector<std::vector<bool>> expanded_bytes(args.size());
     for (size_t arg_index = 0; arg_index < args.size(); ++arg_index) {
         std::string& raw_arg = args[arg_index];
@@ -1462,6 +1507,8 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
             continue;
         }
 
+        // assignment builtins preserve the target name and expand the value side
+        // separately, rather than treating the whole operand as a variable reference.
         if (is_assignment_builtin && arg_index > 0) {
             std::string value = qi.value;
             size_t eq_pos = value.find('=');
@@ -1496,8 +1543,8 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
 
     std::vector<std::string> ifs_expanded_args;
     ifs_expanded_args.reserve(args.size() * 2);
-    // Expansion above may assign IFS; resolve it after expansion, once for this
-    // field-splitting pass. Never retain it across commands or function scopes.
+    // expansion above may assign IFS; resolve it after expansion, once for this
+    // field-splitting pass. never retain it across commands or function scopes.
     const std::string ifs = cjsh_env::get_ifs_delimiters();
     for (size_t index = 0; index < args.size(); ++index) {
         std::string& raw_arg = args[index];
@@ -1525,6 +1572,8 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
     bool is_double_bracket_command =
         !tilde_expanded_args.empty() && QuoteInfo(tilde_expanded_args[0]).value == "[[";
 
+    // pathname expansion follows field splitting. quoted words, assignments, and
+    // [[ operands bypass ordinary globbing; remove quote/escape metadata last.
     for (const auto& raw_arg : tilde_expanded_args) {
         QuoteInfo qi(raw_arg);
 
@@ -1539,6 +1588,9 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
     return final_args;
 }
 
+// separate pipeline stages, extract redirection/background metadata, and expand
+// each stage's argv. logical-list selection belongs to the interpreter before this
+// call; this function should not expand a branch that short-circuiting will skip.
 std::vector<Command> Parser::parse_pipeline(const std::string& command) {
     std::vector<Command> commands;
     commands.reserve(4);
@@ -1604,6 +1656,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
         bool auto_background_on_stop_silent = false;
         std::string trimmed = trim_trailing_whitespace(cmd_part);
 
+        // ! applies to the pipeline result, not just the first stage's child status.
         if (cmd_idx == 0) {
             std::string leading_trimmed = trim_leading_whitespace(trimmed);
             if (!leading_trimmed.empty() && leading_trimmed.front() == '!') {
@@ -1689,6 +1742,8 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             cmd.auto_background_on_stop_silent = true;
         }
 
+        // preserve source for structured commands that must re-enter the interpreter.
+        // joining expanded argv later would lose quoting and syntactic boundaries.
         cmd.original_text = trim_trailing_whitespace(trim_leading_whitespace(cmd_part));
 
         if (!cmd_part.empty()) {
@@ -1710,6 +1765,8 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                         }
                     }
 
+                    // pass group bodies as deferred text to the runtime marker;
+                    // expansion of their contents belongs to the group's context.
                     cmd.args.push_back(is_brace_group ? "__INTERNAL_BRACE_GROUP__"
                                                       : "__INTERNAL_SUBSHELL__");
                     cmd.args.push_back(group_content);
@@ -1795,6 +1852,8 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                 dst_fd = std::stoi(left);
             }
 
+            // closing a descriptor is an ordered operation too; represent it
+            // explicitly instead of confusing it with a negative duplication source.
             if (right == "-") {
                 cmd.set_fd_duplication(dst_fd, -1);
                 cmd.add_redirection(CommandRedirectionType::Close, "", dst_fd, -1);
@@ -1939,7 +1998,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                         filtered_args = std::move(new_args);
                     }
                 } catch (const std::exception&) {
-                    // Alias expansion is optional; keep original args on failure.
+                    // alias expansion is optional; keep original args on failure.
                 }
             }
         }
@@ -1984,7 +2043,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                         (void)cjsh_env::posix_error_exit(2);
                         throw;
                     }
-                    // Ignore optional env expansion failures; use unexpanded value.
+                    // ignore optional env expansion failures; use unexpanded value.
                 }
                 (void)strip_subst_literal_markers(val);
                 auto stripped_pair = strip_noenv_sentinels(val);
@@ -2026,6 +2085,8 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
         if (!variableExpander) {
             variableExpander = std::make_unique<VariableExpander>(shell, env_vars);
         }
+        // redirection operands use their own expansion path, not argv field
+        // splitting. keep both ordered operations and summary paths synchronized.
         variableExpander->expand_command_redirection_paths(cmd);
 
         if (cjsh_env::shell_variable_is_set("HOME")) {
@@ -2046,8 +2107,11 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
     return commands;
 }
 
+// translate groups and heredocs into parser-friendly markers, then restore body
+// data to the resulting commands. markers are internal transport, not filenames
+// that should ever be opened by the execution layer.
 std::vector<Command> Parser::parse_pipeline_with_preprocessing(const std::string& command) {
-    // Preprocessing can replace heredoc placeholders retained by the input splitter.
+    // preprocessing can replace heredoc placeholders retained by the input splitter.
     prepared_input.reset();
     auto preprocessed = CommandPreprocessor::preprocess(command);
 
@@ -2101,6 +2165,8 @@ std::vector<Command> Parser::parse_pipeline_with_preprocessing(const std::string
 
     std::vector<Command> commands = parse_pipeline(preprocessed.processed_text);
 
+    // materialize heredoc contents after parsing has attached each placeholder to
+    // its command. the stored expansion marker decides literal versus expanded input.
     for (auto& cmd : commands) {
         for (auto& redirection : cmd.redirection_order) {
             if (redirection.type != CommandRedirectionType::Input &&
@@ -2138,10 +2204,13 @@ bool Parser::is_env_assignment(const std::string& command, std::string& var_name
     return true;
 }
 
+// retain text for each logical-list member without expanding it. the operator
+// stored on a member determines whether its successor runs, allowing evaluation
+// to defer side effects until after short-circuit selection.
 std::vector<LogicalCommand> Parser::parse_logical_commands(const std::string& command) {
     std::vector<LogicalCommand> logical_commands;
-    // Without a logical operator the result is the original command, even when
-    // it contains semicolons. Avoid scanning delimiters only to discard the split.
+    // without a logical operator the result is the original command, even when
+    // it contains semicolons. avoid scanning delimiters only to discard the split.
     if (command.find("&&") == std::string::npos && command.find("||") == std::string::npos) {
         if (!command.empty()) {
             logical_commands.push_back({command, ""});
@@ -2297,6 +2366,9 @@ std::vector<LogicalCommand> Parser::parse_logical_commands(const std::string& co
     return logical_commands;
 }
 
+// split top-level list separators without dismantling groups or control blocks.
+// keep a terminating & on its preceding command so later pipeline parsing retains
+// background intent; &&, fd duplication, and native &^ forms are not separators here.
 std::vector<std::string> Parser::parse_semicolon_commands(const std::string& command,
                                                           bool split_on_newlines) {
     std::vector<std::string> commands;

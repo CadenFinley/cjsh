@@ -77,6 +77,10 @@ extern "C" char** environ;
 #include "string_utils.h"
 #include "version_command.h"
 
+// bridge shell-visible variables, the inherited process environment, and parser
+// state. startup bootstraps through getenv/setenv before importing variables;
+// runtime helpers use the interpreter where scope and dialect rules matter.
+// this file also owns invocation-wide exit tracking and non-prompt input reading.
 namespace config {
 bool login_mode = false;
 bool interactive_mode = true;
@@ -120,8 +124,11 @@ namespace cjsh_env {
 
 namespace {
 
+// retain export declarations even when a name has no process-environment value yet.
 std::unordered_set<std::string> exported_names;
 
+// native mode mirrors these shared process settings on ordinary scalar updates.
+// other names remain in shell state unless a separate export path publishes them.
 bool is_process_mirrored_shell_var(const std::string& name) {
     return name == "PATH" || name == "PWD" || name == "HOME" || name == "USER" || name == "SHELL";
 }
@@ -138,6 +145,7 @@ inline char** cjsh_environ() {
 
 std::unordered_map<std::string, std::string> g_env_vars;
 bool g_exit_flag = false;
+// signal handling reads startup state, so keep it separate from ordinary shell flags.
 volatile sig_atomic_t g_startup_active = 1;
 std::uint64_t g_command_sequence = 0;
 
@@ -152,12 +160,14 @@ void apply_env_vars_to_parser(Shell* shell) {
 
 }  // namespace
 
+// establish process variables before cjsh.cpp imports them into the shell and
+// parser. account defaults fill gaps without replacing deliberate caller identity.
 void setup_environment_variables(const char* argv0) {
     setup_path_variables();
 
     std::string shell_value = "cjsh";
     std::string existing_shell_value;
-    // Raw getenv here: bootstrap from process env before shell vars exist.
+    // raw getenv here: bootstrap from process env before shell vars exist.
     if (const char* existing_shell_env = getenv("SHELL");
         existing_shell_env != nullptr && existing_shell_env[0] != '\0') {
         existing_shell_value = existing_shell_env;
@@ -166,6 +176,8 @@ void setup_environment_variables(const char* argv0) {
 
     std::string candidate_shell;
 
+    // $0 preserves the supplied invocation name. SHELL gets a separate candidate
+    // with any login prefix removed and relative executable paths resolved now.
     if (argv0 != nullptr) {
         (void)setenv("0", argv0, 1);
         std::string argv0_str(argv0);
@@ -197,6 +209,8 @@ void setup_environment_variables(const char* argv0) {
         candidate_shell = existing_shell_value.substr(1);
     }
 
+    // a usable inherited SHELL describes the caller's chosen shell and wins over
+    // our executable candidate. repair only missing or placeholder values.
     if (!candidate_shell.empty()) {
         bool existing_invalid = existing_shell_value.empty() ||
                                 existing_shell_value.front() == '-' || shell_value == "cjsh";
@@ -215,7 +229,7 @@ void setup_environment_variables(const char* argv0) {
     (void)setenv("SHELL", shell_value.c_str(), 1);
     (void)setenv("_", shell_value.c_str(), 1);
 
-    // Account lookup only supplies missing identity fields. Inherited empty user
+    // account lookup only supplies missing identity fields. inherited empty user
     // labels are intentional, while an empty HOME still needs the account default.
     const char* inherited_home = getenv("HOME");
     const bool needs_account = getenv("USER") == nullptr || getenv("LOGNAME") == nullptr ||
@@ -232,13 +246,15 @@ void setup_environment_variables(const char* argv0) {
     }
 }
 
+// use interpreter lookup once available so callers see shell bindings, not just
+// exported variables. process lookup remains available during early bootstrap.
 std::string get_shell_variable_value(const std::string& name) {
     if (g_shell) {
         if (auto* interpreter = g_shell->get_shell_script_interpreter()) {
             return interpreter->get_variable_value(name);
         }
     }
-    // Raw getenv fallback: interpreter not available yet.
+    // raw getenv fallback: interpreter not available yet.
     const char* value = getenv(name.c_str());
     return value != nullptr ? value : "";
 }
@@ -250,13 +266,14 @@ std::string get_shell_variable_value(const char* name) {
     return get_shell_variable_value(std::string(name));
 }
 
+// existence is distinct from an empty value, notably for IFS and startup overrides.
 bool shell_variable_is_set(const std::string& name) {
     if (g_shell) {
         if (auto* interpreter = g_shell->get_shell_script_interpreter()) {
             return interpreter->get_variable_manager().variable_is_set(name);
         }
     }
-    // Raw getenv fallback: interpreter not available yet.
+    // raw getenv fallback: interpreter not available yet.
     return getenv(name.c_str()) != nullptr;
 }
 
@@ -267,6 +284,9 @@ bool shell_variable_is_set(const char* name) {
     return shell_variable_is_set(std::string(name));
 }
 
+// write a global scalar through variable management so parser state and the
+// dialect's process-mirroring policy are updated together. this requires a live
+// interpreter; unlike reads, writes do not fall back to bootstrap process state.
 bool set_shell_variable_value(const std::string& name, const std::string& value) {
     if (!g_shell) {
         return false;
@@ -279,6 +299,8 @@ bool set_shell_variable_value(const std::string& name, const std::string& value)
     return true;
 }
 
+// remove the global environment-map binding and its parser copy. this is not
+// local-scope removal; callers targeting a local binding use the helper below.
 bool unset_shell_variable_value(const std::string& name) {
     if (!g_shell) {
         return false;
@@ -301,6 +323,8 @@ bool unset_shell_variable_value(const std::string& name) {
     return true;
 }
 
+// indicate whether a name participates in mirroring policy. in POSIX mode this
+// does not itself mean the variable is exported; the setter checks export state.
 bool should_mirror_to_process_env(const std::string& name) {
     return config::is_posix_mode() || is_process_mirrored_shell_var(name);
 }
@@ -309,6 +333,8 @@ void mark_exported(const std::string& name) {
     exported_names.insert(name);
 }
 
+// merge explicit declarations with inherited environment entries, then sort so
+// export listings are stable regardless of hash iteration or process-env order.
 std::vector<std::string> exported_variable_names() {
     auto names = exported_names;
     for (char** env = cjsh_environ(); *env != nullptr; ++env) {
@@ -320,6 +346,8 @@ std::vector<std::string> exported_variable_names() {
     return result;
 }
 
+// produce reusable shell text: literal quotes require ending the single-quoted
+// segment, emitting an escaped quote, and reopening the segment.
 std::string quote_shell_value(const std::string& value) {
     std::string result = "'";
     for (const char c : value) {
@@ -332,6 +360,9 @@ std::string quote_shell_value(const std::string& value) {
     return result + "'";
 }
 
+// POSIX assignments preserve inherited exports and explicit export declarations;
+// allexport publishes new assignments too. native assignments only mirror the
+// shared process settings listed above, not every shell variable.
 void mirror_set_to_process_env(const std::string& name, const std::string& value) {
     if (config::is_posix_mode()) {
         if (getenv(name.c_str()) != nullptr || exported_names.count(name) != 0 ||
@@ -359,6 +390,8 @@ void mirror_unset_from_process_env(const std::string& name) {
     (void)unsetenv(name.c_str());
 }
 
+// prefer an existing local binding rather than accidentally updating a hidden
+// global of the same name. names without a local binding use the global helper.
 bool set_shell_or_local_variable_value(Shell* shell, const std::string& name,
                                        const std::string& value) {
     if (shell != nullptr) {
@@ -385,20 +418,22 @@ bool unset_shell_or_local_variable_value(Shell* shell, const std::string& name) 
 }
 
 void setup_path_variables(const std::string& paths_file, const std::string& paths_directory) {
-    // Read system paths before native startup files, which may override PATH.
-    // Clean invocations preserve PATH exactly, including empty and absent values.
+    // read system paths before native startup files, which may override PATH.
+    // clean invocations preserve PATH exactly, including empty and absent values.
     if (config::no_system_paths || config::no_config || config::secure_mode ||
         config::is_posix_mode() || config::no_exec) {
         return;
     }
 
-    // Preserve toolchain precedence and all PATH components in non-login shells.
-    // Raw getenv here: PATH bootstrap before shell vars exist.
+    // preserve toolchain precedence and all PATH components in non-login shells
+    // with a nonempty inherited PATH. use process state before shell vars exist.
     const char* inherited_path = getenv("PATH");
     if (!config::login_mode && inherited_path != nullptr && inherited_path[0] != '\0') {
         return;
     }
 
+    // when rebuilding PATH, retain the first occurrence of each nonempty component.
+    // unlike the early-return path above, this drops duplicates and empty entries.
     std::vector<std::string> paths;
     auto append_paths = [&](const std::string& value) {
         size_t start = 0;
@@ -429,6 +464,8 @@ void setup_path_variables(const std::string& paths_file, const std::string& path
         }
     };
 
+    // load the main system list before sorted drop-ins for deterministic precedence.
+    // unreadable or non-regular files contribute nothing rather than aborting startup.
     read_paths_file(paths_file);
     std::vector<std::filesystem::path> path_files;
     std::error_code ec;
@@ -444,8 +481,9 @@ void setup_path_variables(const std::string& paths_file, const std::string& path
         read_paths_file(file);
     }
 
-    // File entries are literal data; no shell expansion or external path_helper
-    // process is needed.
+    // file entries are literal data; no shell expansion or external path_helper
+    // process is needed. inherited components follow the system entries, and the
+    // built-in search path is only a fallback when neither source supplied any.
     if (inherited_path != nullptr) {
         append_paths(inherited_path);
     }
@@ -455,11 +493,13 @@ void setup_path_variables(const std::string& paths_file, const std::string& path
     (void)setenv("PATH", string_utils::join_strings(paths, ":").c_str(), 1);
 }
 
+// return identity and shell defaults for the caller to publish, while installing
+// some bootstrap values such as PWD, SHLVL, and prompts directly in process state.
 std::vector<std::pair<std::string, std::string>> setup_user_system_vars(
     const struct passwd* pw, const std::string& directory) {
     std::vector<std::pair<std::string, std::string>> env_vars;
 
-    // Preserve caller identity labels, even when explicitly empty. Only fill
+    // preserve caller identity labels, even when explicitly empty. only fill
     // absent labels from the real user's account database.
     if (getenv("USER") == nullptr && pw != nullptr) {
         (void)env_vars.emplace_back("USER", std::string(pw->pw_name));
@@ -469,7 +509,7 @@ std::vector<std::pair<std::string, std::string>> setup_user_system_vars(
     }
 
     std::string home_value;
-    // Raw getenv here: HOME bootstrap before shell vars exist.
+    // raw getenv here: HOME bootstrap before shell vars exist.
     if (const char* current_home = getenv("HOME");
         current_home != nullptr && current_home[0] != '\0') {
         home_value = current_home;
@@ -486,7 +526,8 @@ std::vector<std::pair<std::string, std::string>> setup_user_system_vars(
 
     std::string current_path =
         directory.empty() ? cjsh_filesystem::safe_current_directory() : directory;
-    // Startup already resolved this through Built_ins; standalone callers still validate PWD.
+    // startup already resolved this through Built_ins. standalone callers retain
+    // a logical PWD only if it names the same device and inode as the actual cwd.
     if (const char* inherited_pwd = getenv("PWD");
         directory.empty() && inherited_pwd && inherited_pwd[0] == '/') {
         struct stat logical{};
@@ -501,7 +542,8 @@ std::vector<std::pair<std::string, std::string>> setup_user_system_vars(
     (void)env_vars.emplace_back("IFS", std::string(" \t\n"));
 
     int shlvl = 1;
-    // Raw getenv here: SHLVL bootstrap before shell vars exist.
+    // raw getenv here: each new shell increments the inherited nesting level;
+    // a missing or unparsable value starts at one.
     if (const char* current_shlvl = getenv("SHLVL")) {
         try {
             shlvl = std::stoi(current_shlvl) + 1;
@@ -517,9 +559,9 @@ std::vector<std::pair<std::string, std::string>> setup_user_system_vars(
     auto version_str = get_version();
     (void)env_vars.emplace_back("CJSH_VERSION", version_str);
 
-    // Raw getenv here: PS1 bootstrap before shell vars exist.
-    // Older shells exported their built-in prompt, so refresh that inherited default.
-    // Startup files are sourced later and can still explicitly select the old template.
+    // raw getenv here: prompts are bootstrapped before shell vars exist. older
+    // shells exported their built-in PS1, so refresh that inherited default while
+    // preserving other values. later startup files may still choose the old template.
     const char* inherited_ps1 = getenv("PS1");
     constexpr const char* legacy_default_ps1 = "\\S  [color=#5fd7ff]\\W[/color] \\g";
     if (inherited_ps1 == nullptr || std::strcmp(inherited_ps1, legacy_default_ps1) == 0) {
@@ -527,13 +569,13 @@ std::vector<std::pair<std::string, std::string>> setup_user_system_vars(
         (void)setenv("PS1", default_ps1.c_str(), 1);
     }
 
-    // Raw getenv here: PS2 bootstrap before shell vars exist.
+    // only absent secondary and trace prompts get defaults; explicit empty values
+    // must remain empty, just as a custom primary prompt is preserved.
     if (getenv("PS2") == nullptr) {
         std::string default_ps2 = prompt::default_secondary_prompt_template();
         (void)setenv("PS2", default_ps2.c_str(), 1);
     }
 
-    // Raw getenv here: PS4 bootstrap before shell vars exist.
     if (getenv("PS4") == nullptr) {
         (void)setenv("PS4", "+ ", 1);
     }
@@ -545,6 +587,8 @@ bool is_valid_env_name(const std::string& name) {
     return is_valid_identifier(name);
 }
 
+// an explicitly empty IFS disables delimiter splitting; only an unset IFS uses
+// the shell's default whitespace delimiters.
 std::string get_ifs_delimiters() {
     if (shell_variable_is_set("IFS")) {
         return get_shell_variable_value("IFS");
@@ -552,6 +596,8 @@ std::string get_ifs_delimiters() {
     return " \t\n";
 }
 
+// collect only the contiguous assignment prefix. after the first command word,
+// assignment-looking tokens are ordinary arguments and must remain in argv.
 size_t collect_env_assignments(const std::vector<std::string>& args,
                                std::vector<std::pair<std::string, std::string>>& env_assignments) {
     size_t cmd_start_idx = 0;
@@ -569,6 +615,8 @@ size_t collect_env_assignments(const std::vector<std::string>& args,
     return cmd_start_idx;
 }
 
+// keep original words for tracing while providing assignment-free argv to dispatch.
+// this separates words already supplied by the caller; it does not expand them.
 PreparedCommand prepare_command(std::vector<std::string> args) {
     PreparedCommand command;
     command.original_args = std::move(args);
@@ -578,6 +626,8 @@ PreparedCommand prepare_command(std::vector<std::string> args) {
     return command;
 }
 
+// publish command-prefix values to the process environment only. parent-shell
+// execution that needs restoration uses TemporaryEnvAssignmentScope instead.
 void apply_env_assignments(
     const std::vector<std::pair<std::string, std::string>>& env_assignments) {
     for (const auto& env : env_assignments) {
@@ -589,6 +639,9 @@ std::vector<std::string> parse_shell_command(const std::string& command) {
     return command_line_utils::tokenize_shell_words(command);
 }
 
+// provide mutable, null-terminated strings for exec APIs without borrowing the
+// caller's storage. returned pointers last only until the next call on this thread;
+// the returned vector owns the pointer array, not the argument buffers.
 std::vector<char*> build_exec_argv(const std::vector<std::string>& args) {
     static thread_local std::vector<std::unique_ptr<char[]>> arg_buffers;
     arg_buffers.clear();
@@ -605,6 +658,9 @@ std::vector<char*> build_exec_argv(const std::vector<std::string>& args) {
     return c_args;
 }
 
+// probe standard descriptors in order because stdin may be redirected while
+// stdout or stderr still names a terminal. preserve each old dimension when the
+// terminal reports zero rather than replacing useful values with unknown sizes.
 bool update_terminal_dimensions() {
     struct winsize ws{};
 
@@ -639,6 +695,8 @@ bool update_terminal_dimensions() {
     return updated;
 }
 
+// import process entries after bootstrap, then give the parser the same snapshot.
+// this overlays existing shell variables; it does not erase shell-only bindings.
 void sync_env_vars_from_system(Shell& shell) {
     auto& env_map = env_vars();
     for (char** env = cjsh_environ(); *env != nullptr; env++) {
@@ -672,6 +730,9 @@ void sync_parser_env_var(Shell* shell, const std::string& name) {
     }
 }
 
+// make assignment prefixes visible to a command in all three variable stores.
+// persistent prefixes deliberately skip backups; other prefixes restore process
+// and shell values independently because they may have differed before dispatch.
 TemporaryEnvAssignmentScope::TemporaryEnvAssignmentScope(
     Shell* shell, const std::vector<std::pair<std::string, std::string>>& assignments, bool persist)
     : shell_(shell) {
@@ -679,6 +740,8 @@ TemporaryEnvAssignmentScope::TemporaryEnvAssignmentScope(
         return;
     }
     if (!persist) {
+        // repeated assignments to one name must restore its value from before
+        // the entire prefix, not an intermediate value from another assignment.
         std::unordered_set<std::string> saved;
         backups_.reserve(assignments.size());
         for (const auto& [name, value] : assignments) {
@@ -702,6 +765,8 @@ TemporaryEnvAssignmentScope::TemporaryEnvAssignmentScope(
     }
 }
 
+// restore both presence and value, then refresh the parser from the restored
+// shell map. a persistent scope has no backups and leaves its assignments in place.
 TemporaryEnvAssignmentScope::~TemporaryEnvAssignmentScope() {
     for (auto it = backups_.rbegin(); it != backups_.rend(); ++it) {
         if (it->process_value) {
@@ -730,6 +795,8 @@ void clear_exit_request() {
     g_exit_flag = false;
 }
 
+// callers select errors that are fatal to a non-interactive POSIX shell. request
+// exit rather than terminating here so evaluation can unwind and cleanup can run.
 int posix_error_exit(int status) {
     if (status != 0 && config::is_posix_mode() && !config::interactive_mode) {
         (void)set_shell_variable_value("EXIT_CODE", std::to_string(status));
@@ -738,8 +805,10 @@ int posix_error_exit(int status) {
     return status;
 }
 
+// replacing this shell via exec should not add a nesting level if the replacement
+// is another shell. restore the previous process value if exec returns on failure.
 ReplacementShellLevel::ReplacementShellLevel() {
-    // Only the exec environment changes; shell variables retain their current level.
+    // only the exec environment changes; shell variables retain their current level.
     if (const char* value = getenv("SHLVL")) {
         previous = value;
         was_set = true;
@@ -774,6 +843,8 @@ void increment_command_sequence() {
     ++g_command_sequence;
 }
 
+// reset invocation bookkeeping before startup. this is not a full variable-table
+// reset and does not replace importing the environment into a newly created shell.
 void reset_shell_state() {
     exported_names.clear();
     g_exit_flag = false;
@@ -783,12 +854,17 @@ void reset_shell_state() {
 
 }  // namespace cjsh_env
 
+// execute a named script or standard input without entering the prompt loop.
+// interactive -i invocations can still use this path. stdin streaming differs
+// from whole-file execution because commands may consume their own input bytes.
 int handle_non_interactive_mode(const std::string& script_file) {
     std::string script_content;
 
+    // temporarily publish the script identity in process, shell, and parser state.
+    // unwind it on input errors as well as normal execution returns.
     struct ScriptZeroGuard {
         ScriptZeroGuard(Shell* shell, const std::string& new_value) : shell_(shell) {
-            // Raw getenv here: preserve process env $0 during script guard.
+            // use process $0 as the snapshot to restore across all three stores.
             const char* current = std::getenv("0");
             if (current != nullptr) {
                 previous_ = current;
@@ -840,6 +916,8 @@ int handle_non_interactive_mode(const std::string& script_file) {
     if (!script_file.empty()) {
         auto read_result = cjsh_filesystem::read_file_content(script_file);
         if (!read_result.is_ok()) {
+            // distinguish a missing script from one that cannot be read or is a
+            // directory, using the conventional 127 and 126 invocation statuses.
             ErrorType error_type = ErrorType::FILE_NOT_FOUND;
             int exit_code = 127;
 
@@ -867,7 +945,7 @@ int handle_non_interactive_mode(const std::string& script_file) {
 
         script_content = read_result.value();
     } else if ((config::is_posix_mode() || config::read_stdin) && g_shell) {
-        // Do not buffer past a complete command: read and external commands
+        // do not buffer past a complete command: read and external commands
         // must be able to consume subsequent bytes from this same descriptor.
         int status = 0;
         char byte;
@@ -891,7 +969,9 @@ int handle_non_interactive_mode(const std::string& script_file) {
             if (byte != '\n' || has_line_continuation_suffix(script_content, true)) {
                 continue;
             }
-            // Validation can parse function bodies and replace the parser's cache.
+            // retain our own prepared lines while completeness checks inspect
+            // syntax. validation may parse functions and replace the parser cache;
+            // pending heredocs and open constructs keep accumulating input.
             const auto lines = g_shell->get_parser()->prepare_interactive_input(script_content);
             if (g_shell->get_parser()->awaiting_here_document()) {
                 continue;
@@ -899,6 +979,8 @@ int handle_non_interactive_mode(const std::string& script_file) {
             if (g_shell->get_shell_script_interpreter()->needs_additional_input(lines)) {
                 continue;
             }
+            // comment-only and blank input should not replace the last command's
+            // status with the success result of executing an empty block.
             if (std::all_of(lines.begin(), lines.end(), [](const std::string& line) {
                     return shell_script_interpreter::detail::trim(
                                shell_script_interpreter::detail::strip_inline_comment(line))
@@ -910,11 +992,15 @@ int handle_non_interactive_mode(const std::string& script_file) {
             status = g_shell->execute(script_content);
             script_content.clear();
         }
+        // submit a final unterminated line at EOF too. the interpreter owns any
+        // syntax error for an incomplete construct left in the final buffer.
         if (!script_content.empty()) {
             status = g_shell->execute(script_content);
         }
         return read_exit_code_or(status);
     } else {
+        // native stdin without -s retains whole-input evaluation. retry interrupted
+        // reads, but dispatch pending signals between reads so exit can stop loading.
         char buffer[4096];
         for (;;) {
             if (g_shell) {
@@ -935,6 +1021,8 @@ int handle_non_interactive_mode(const std::string& script_file) {
         }
     }
 
+    // loaded files and buffered stdin share evaluation. an explicit exit override
+    // takes precedence over the interpreter's ordinary result.
     if (!script_content.empty()) {
         int code = g_shell ? g_shell->execute(script_content) : 1;
         return read_exit_code_or(code);

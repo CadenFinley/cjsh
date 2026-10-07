@@ -59,6 +59,9 @@
 #include "signal_handler.h"
 #include "wait_status_utils.h"
 
+// manage execution-side job records, foreground waits, output relays, and child
+// cleanup. JobManager supplies jobspecs and user-facing lifecycle state; waiters
+// here publish reports there rather than treating the two tables as interchangeable.
 namespace {
 
 int extract_exit_code(int status) {
@@ -74,6 +77,8 @@ void Exec::set_error_from_wait_status(const std::string& command, int status) {
     set_error(exit_result.type, command, exit_result.message, exit_result.suggestions);
 }
 
+// callers hold jobs_mutex while using the returned pointer. reacquire by id after
+// an unlocked wait rather than retaining a pointer across possible table mutation.
 Job* Exec::find_job_locked(int job_id) {
     auto it = jobs.find(job_id);
     if (it == jobs.end()) {
@@ -101,6 +106,8 @@ void Exec::report_missing_job(int job_id) {
     print_last_error();
 }
 
+// resume only a requested stopped job. use one group signal where available;
+// ungrouped jobs require per-pid delivery and tolerate children that already exited.
 void Exec::resume_job(Job& job, bool cont, std::string_view context) {
     if (!cont || !job.stopped) {
         return;
@@ -144,6 +151,9 @@ void Exec::remove_job(int job_id) {
     }
 }
 
+// arrange output and terminal ownership before allowing foreground work to run,
+// then wait without holding the job-table mutex. stopped jobs keep terminal modes
+// for a later fg; attempt to restore shell ownership before returning to the caller.
 void Exec::put_job_in_foreground(int job_id, bool cont) {
     std::unique_lock<std::mutex> lock(jobs_mutex);
 
@@ -152,6 +162,8 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
         return;
     }
 
+    // copied shell state in a forked child is not authority to take the tty.
+    // require the original interactive shell and a job with its own process group.
     const bool main_shell_controls_terminal =
         job->process_group && g_shell && g_shell->is_job_control_enabled() &&
         g_shell->manages_terminal() && shell_is_interactive && (isatty(shell_terminal) != 0) &&
@@ -176,10 +188,14 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
         }
     }
 
+    // restore a stopped program's terminal settings before sending SIGCONT, not
+    // afterward when it could already be reading or rewriting terminal state.
     if (terminal_control_acquired && cont && job->tmodes_saved) {
         (void)tcsetattr(shell_terminal, TCSADRAIN, &job->tmodes);
     }
 
+    // children launched behind a barrier must not touch the tty before handoff.
+    // release one byte per member, then close our writer so none wait indefinitely.
     if (job->launch_barrier_fd >= 0) {
         const std::string ready(job->pids.size(), 'x');
         size_t written = 0;
@@ -223,6 +239,8 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
             }
         }
 
+        // recover pre-command modes after a stop or signal death. a normal exit
+        // may intentionally leave changed settings, as with an stty invocation.
         const bool restore_modes = current != jobs.end() &&
                                    (current->second.stopped || WIFSIGNALED(current->second.status));
         if (restore_modes && shell_modes_saved &&
@@ -232,9 +250,8 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
         }
     }
 
-    // Exec and JobManager retain complementary job state. Keep the terminal modes captured by
-    // the initial foreground wait available to a later `fg` builtin as well. Do this after
-    // releasing jobs_mutex so the two job-table locks cannot be acquired in opposite order.
+    // make stopped terminal modes available to the user-facing fg path too.
+    // release the execution-table lock before updating the other subsystem.
     lock.unlock();
     if (stopped_modes_saved) {
         if (auto managed_job = JobManager::instance().get_job_by_pid_or_pgid(stopped_job_pgid)) {
@@ -244,6 +261,8 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
     }
 }
 
+// background continuation does not transfer the terminal. silence an available
+// relay before resuming so its output policy matches the selected background mode.
 void Exec::put_job_in_background(int job_id, bool cont) {
     std::lock_guard<std::mutex> lock(jobs_mutex);
 
@@ -268,6 +287,9 @@ void Exec::set_job_output_forwarding(pid_t pgid, bool forward) {
     }
 }
 
+// own foreground wait reports until the job completes, fully stops, or shell exit
+// interrupts the wait. preserve launch order for PIPESTATUS and the last member's
+// status separately from whichever child happens to report last.
 void Exec::wait_for_job(int job_id) {
     std::unique_lock<std::mutex> lock(jobs_mutex);
 
@@ -276,6 +298,8 @@ void Exec::wait_for_job(int job_id) {
         return;
     }
 
+    // snapshot wait inputs before releasing the mutex. signal processing and
+    // job-management callbacks must remain able to access the execution table.
     pid_t job_pgid = it->second.pgid;
     bool process_group = it->second.process_group;
     std::vector<pid_t> remaining_pids = it->second.pids;
@@ -295,7 +319,7 @@ void Exec::wait_for_job(int job_id) {
     std::unordered_set<pid_t> stopped_pids;
 
     const auto process_wait_signals = [&] {
-        // This waiter owns the foreground children's status reports. Reaping
+        // this waiter owns the foreground children's status reports. reaping
         // a stop elsewhere could leave us waiting for a child that cannot run.
         if (g_shell) {
             (void)g_shell->process_pending_signals(false);
@@ -304,7 +328,7 @@ void Exec::wait_for_job(int job_id) {
         }
     };
     while (!remaining_pids.empty()) {
-        // Signals received during launch will not interrupt a later waitpid.
+        // signals received during launch will not interrupt a later waitpid.
         process_wait_signals();
         if (cjsh_env::exit_requested()) {
             last_exit_code = SignalHandler::termination_signal() != 0
@@ -337,6 +361,8 @@ void Exec::wait_for_job(int job_id) {
             stopped_pids.erase(pid);
         }
 
+        // status arrival order is unrelated to pipeline order. only final child
+        // results populate numeric pipeline statuses, not stop/continue reports.
         auto order_it = std::find(pid_order.begin(), pid_order.end(), pid);
         if (order_it != pid_order.end()) {
             size_t index = static_cast<size_t>(std::distance(pid_order.begin(), order_it));
@@ -357,6 +383,8 @@ void Exec::wait_for_job(int job_id) {
             JobManager::instance().handle_child_status(pid, status);
         }
 
+        // a pipeline is stopped only after every remaining member has stopped.
+        // finished members no longer prevent that aggregate transition.
         if (WIFSTOPPED(status)) {
             stopped_pids.insert(pid);
             stop_signal = WSTOPSIG(status);
@@ -391,6 +419,8 @@ void Exec::wait_for_job(int job_id) {
 
             auto job_control = JobManager::instance().get_job_by_pid_or_pgid(job_pgid);
 
+            // native auto-background behavior applies only to terminal-stop
+            // requests, not every stop cause such as a background tty read.
             const bool should_auto_background =
                 job.auto_background_on_stop && stop_signal == SIGTSTP && job.pgid > 0;
 
@@ -445,6 +475,9 @@ void Exec::wait_for_job(int job_id) {
     }
 }
 
+// apply an already consumed wait report from a normal-context reaper. despite
+// the name, this is not an asynchronous signal callback: it takes a mutex and may
+// allocate. keep pipeline ordering even as final reports remove live pids.
 void Exec::handle_child_signal(pid_t pid, int status) {
     static bool use_signal_masking = false;
     static int signal_count = 0;
@@ -496,11 +529,14 @@ void Exec::handle_child_signal(pid_t pid, int status) {
     }
 }
 
+// return a snapshot so callers need not retain jobs_mutex while inspecting jobs.
 std::map<int, Job> Exec::get_jobs() {
     std::lock_guard<std::mutex> lock(jobs_mutex);
     return jobs;
 }
 
+// signal a snapshot during shell teardown, then give children a bounded chance
+// to exit. disown-style hangup protection applies to SIGHUP, not all shutdown causes.
 void Exec::terminate_all_child_process(int signal) {
     struct JobRecord {
         int id;
@@ -517,7 +553,7 @@ void Exec::terminate_all_child_process(int signal) {
     }
 
     const auto send_signal_to_job = [](const Job& job, int signum) {
-        // Signal the group once so handlers are not invoked twice for group leaders.
+        // signal the group once so handlers are not invoked twice for group leaders.
         if (job.process_group && job.pgid > 0 && killpg(job.pgid, signum) == 0) {
             return;
         }
@@ -537,14 +573,14 @@ void Exec::terminate_all_child_process(int signal) {
         send_signal_to_job(job, signal);
         pending_children.insert(pending_children.end(), job.pids.begin(), job.pids.end());
 #ifdef SIGCONT
-        // Queue the shutdown signal before resuming a stopped job.
+        // queue the shutdown signal before resuming a stopped job.
         if (job.stopped) {
             send_signal_to_job(job, SIGCONT);
         }
 #endif
     }
 
-    // Give ordinary children a bounded opportunity to exit and be reaped. Signal
+    // give ordinary children a bounded opportunity to exit and be reaped. signal
     // handlers and ignored dispositions are respected even after the grace period.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
     while (!pending_children.empty()) {
@@ -585,6 +621,8 @@ void Exec::set_job_hup_protected(pid_t pgid, bool protected_from_hup) {
     }
 }
 
+// discard execution records without signaling children. cleanup must not deadlock
+// if reached while the table is locked, so a failed try_lock leaves records alone.
 void Exec::abandon_all_child_processes() {
     if (!jobs_mutex.try_lock()) {
         return;

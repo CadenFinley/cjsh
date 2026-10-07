@@ -74,12 +74,17 @@
 #include "string_utils.h"
 #include "trap_command.h"
 
+// own and connect the execution subsystems, dispatch commands, and manage the
+// shell's terminal and option state. cjsh.cpp owns the process lifetime; this
+// layer is shared by startup files, the interactive loop, and script evaluation.
 namespace {
 
 constexpr size_t to_index(ShellOption option) {
     return static_cast<size_t>(option);
 }
 
+// keep invocation parsing and builtin option listings on the same names. shopt
+// entries use a separate lookup path from the options accepted by set -o.
 constexpr std::array<ShellOptionDescriptor, static_cast<size_t>(ShellOption::Count)>
     kShellOptionDescriptors = {{{ShellOption::Errexit, 'e', "errexit"},
                                 {ShellOption::Noclobber, 'C', "noclobber"},
@@ -171,17 +176,20 @@ std::optional<ShellOption> parse_shell_option_short(char short_flag) {
     return std::nullopt;
 }
 
+// build the subsystem graph before attaching process-wide managers or installing
+// signal dispositions that depend on terminal ownership.
 Shell::Shell() : shell_pid(getpid()) {
     trap_manager_initialize();
 
-    // construct core subsystems before wiring them together
+    // the shell owns these objects; their cross-references below are non-owning.
     shell_exec = std::make_unique<Exec>();
     signal_handler = std::make_unique<SignalHandler>();
     shell_parser = std::make_unique<Parser>();
     built_ins = std::make_unique<Built_ins>();
     shell_script_interpreter = std::make_unique<ShellScriptInterpreter>();
 
-    // share references so the parser interpreter and builtins can coordinate through shell
+    // let parsing, evaluation, and builtins share this shell's state rather than
+    // creating independent variable, option, or directory contexts.
     if (shell_script_interpreter && shell_parser) {
         shell_script_interpreter->set_parser(shell_parser.get());
         shell_parser->set_shell(this);
@@ -189,16 +197,17 @@ Shell::Shell() : shell_pid(getpid()) {
     built_ins->set_shell(this);
     built_ins->set_current_directory();
 
-    // use stdin as the controlling terminal for cjsh which is validated during job-control setup
+    // start with stdin; job-control setup prefers a private terminal descriptor
+    // so later command redirections do not change the terminal used for handoff.
     shell_terminal = STDIN_FILENO;
 
     // job and trap managers need every subsystem initialized before they attach to the shell
     JobManager::instance().set_shell(this);
     trap_manager_set_shell(this);
 
-    // A nested interactive shell must let the kernel stop it with SIGTTIN until its parent
-    // places it in the foreground.  Install the shell's ignored job-control dispositions only
-    // after this handshake has completed.
+    // a nested interactive shell must let the kernel stop it with SIGTTIN until
+    // its parent foregrounds it. install ignored job-control dispositions only
+    // after this handshake, or the shell could spin instead of stopping.
     setup_job_control();
 
     // signal dispatch depends on the prior wiring so register handlers after setup completes
@@ -206,7 +215,8 @@ Shell::Shell() : shell_pid(getpid()) {
 }
 
 Shell::~Shell() {
-    // on shell destruction, handle any remaining child processes
+    // exit hooks run before destruction. now either signal remaining children
+    // or detach them according to the shutdown cause and huponexit setting.
     if (shell_exec) {
         const int terminating_signal = SignalHandler::termination_signal();
         const bool hang_up_on_exit = get_shell_option(ShellOption::Huponexit);
@@ -218,17 +228,18 @@ Shell::~Shell() {
         }
     }
 
-    // after terminating or abandoning child processes, clear all get_jobs
+    // discard job records only after execution-side child cleanup has used them.
     JobManager::instance().clear_all_jobs();
 
-    // restore terminal state on exit to how we found it
-    // again, if we restore it to a broken state, then we probably inherited a broken state
+    // restore the terminal modes captured at startup, then close only a descriptor
+    // owned by this shell. inherited stdin must remain open for other cleanup.
     restore_terminal_state();
     if (owns_shell_terminal) {
         (void)close(shell_terminal);
     }
 
-    // output a final exit line only in interactive modes
+    // -i alone does not imply a prompt session. suppress the farewell unless
+    // interactive input actually began and startup has ended.
     if (interactive_input_started && !cjsh_env::startup_active()) {
         if (config::login_mode) {
             std::cout << "cjsh logout";
@@ -239,15 +250,18 @@ Shell::~Shell() {
     }
 }
 
+// run shutdown code while the interpreter and terminal are still available.
+// preserve the order: native exit function, EXIT trap, then login logout file.
 void Shell::run_exit_handlers(int status) {
-    // A hook can launch another subshell. Its copy of this guard must prevent
-    // recursively running the same exit handlers again.
+    // an exit hook can launch a subshell. its inherited guard must prevent that
+    // subshell from recursively invoking the same shutdown sequence.
     if (exit_handlers_invoked) {
         return;
     }
     exit_handlers_invoked = true;
 
-    // Each exit handler starts with the original status and a cleared exit request.
+    // each stage sees the original status, not the previous hook's return value.
+    // clear the exit request so one stage cannot prevent the next from executing.
     const auto prepare_handler = [status] {
         cjsh_env::clear_exit_request();
         pipeline_status_utils::set_last_status_env(status);
@@ -269,20 +283,21 @@ void Shell::run_exit_handlers(int status) {
     }
 }
 
+// evaluate shell text in the current shell. the interpreter owns control flow
+// and expansion; only commands that need simple dispatch come back through the
+// command entry points below.
 int Shell::execute(const std::string& script, bool skip_validation) {
     mark_terminal_dirty();
-    // main execution entry point for cjsh
     if (script.empty()) {
         return 0;
     }
 
-    // convert command into lines for execution
+    // preserve shell-aware line boundaries rather than splitting blindly on newlines.
     std::vector<std::string> lines = shell_parser->parse_into_lines(script);
 
     if (shell_script_interpreter) {
-        // execute the parsed lines
-        // the block is tokenized, parsed, and interpreted and then passed to the execute_command
-        // function
+        // remember the submitted text after evaluation so nested execution cannot
+        // leave last_command pointing at an inner command instead.
         int exit_code = shell_script_interpreter->execute_block(lines, skip_validation, false);
         last_command = script;
         return exit_code;
@@ -291,6 +306,8 @@ int Shell::execute(const std::string& script, bool skip_validation) {
     return 1;
 }
 
+// separate leading assignments once, then share dispatch with callers that
+// already prepared the command during interpretation.
 int Shell::execute_command(std::vector<std::string> args, bool run_in_background,
                            bool auto_background_on_stop, bool auto_background_on_stop_silent) {
     return execute_prepared_command(cjsh_env::prepare_command(std::move(args)), run_in_background,
@@ -301,6 +318,8 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
                                     bool auto_background_on_stop,
                                     bool auto_background_on_stop_silent) {
     const auto& args = command.original_args;
+    // reject readonly assignment prefixes before executing any part of the command.
+    // the POSIX error helper also requests exit for non-interactive shells.
     if (config::is_posix_mode()) {
         for (const auto& [name, value] : command.assignments) {
             if (!readonly_manager_can_assign(name, "assignment")) {
@@ -308,29 +327,28 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
             }
         }
     }
-    // fast path back out, this condition should never hit as many other things would have failed
-    // beforehand
+    // dispatch requires both the builtin and external execution paths to be wired.
     if (!shell_exec || !built_ins) {
         print_error({ErrorType::FATAL_ERROR, "", "shell not initialized properly", {}});
     }
 
     mark_terminal_dirty();
-    // main single command executor that dirives from execute_block in interpreter.cpp
     if (args.empty()) {
         return 0;
     }
 
-    // xtrace handling
+    // trace the original words, including assignment prefixes, before noexec can
+    // suppress dispatch. the trace prompt is expanded at execution time.
     if (get_shell_option(ShellOption::Xtrace)) {
         std::cerr << prompt::render_trace_prompt() << string_utils::join_strings(args, " ") << '\n';
     }
 
-    // noexec handling
     if (get_shell_option(ShellOption::Noexec)) {
         return 0;
     }
 
-    // handle simple env var assignment with no command
+    // a lone assignment changes shell state instead of launching a process.
+    // expand its value through the parser and store it through variable management.
     if (args.size() == 1 && shell_parser) {
         std::string var_name;
         std::string var_value;
@@ -350,7 +368,8 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
         }
     }
 
-    // collect any env var assignments preceding the command
+    // prepared arguments exclude assignment prefixes. foreground POSIX special
+    // builtins retain those assignments; other direct commands restore them on return.
     const auto& env_assignments = command.assignments;
     const auto& command_args = command.args;
     const bool has_temporary_env = !env_assignments.empty() && !command_args.empty();
@@ -362,14 +381,16 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
 
     command.is_builtin = is_direct_command;
 
-    // check for built-in and keyword-runtime command execution
+    // builtins and runtime commands execute in the current process context, which
+    // may itself be a subshell. scope their environment changes around dispatch.
     if (is_direct_command) {
         cjsh_env::TemporaryEnvAssignmentScope assignments(this, env_assignments,
                                                           assignments_persist);
         return built_ins->builtin_or_runtime_command(command_args);
     }
 
-    // not a builtin check for other things
+    // implicit cd is only considered for a lone foreground interactive token
+    // after builtin lookup; the lookup helper enforces autocd and dialect policy.
     if (interactive_mode && !run_in_background && command_args.size() == 1 && built_ins) {
         const std::string& candidate = command_args[0];
 
@@ -380,7 +401,8 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
         }
     }
 
-    // execute the command in the background if requested
+    // background launch returns without waiting. publish the job's last process
+    // as $! when launch produced a job record; its completion is handled later.
     if (run_in_background) {
         int job_id = shell_exec->execute_prepared_command_async(std::move(command));
         if (job_id > 0) {
@@ -396,18 +418,23 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
         return 0;
     }
 
-    // execute the command synchronously
+    // let the execution layer own foreground waiting and stopped-job handling,
+    // then report any launch error associated with its result.
     int exit_code = shell_exec->execute_prepared_command_sync(
         std::move(command), auto_background_on_stop, auto_background_on_stop_silent);
     shell_exec->print_error_if_needed(exit_code);
     return exit_code;
 }
 
+// read a source file into the current shell rather than starting a new process.
+// optional files suppress open failures, but still report errors in loaded code.
 int Shell::execute_script_file(const std::filesystem::path& path, bool optional) {
     if (!shell_script_interpreter) {
         print_error({ErrorType::FATAL_ERROR, "", "shell not initialized properly", {}});
     }
 
+    // settle the diagnostic path before the script can change directories. lexical
+    // normalization does not require resolving symlinks or an existing target.
     std::filesystem::path normalized = path.lexically_normal();
     std::string display_path = normalized.string();
 
@@ -459,6 +486,8 @@ int Shell::execute_script_content(const std::string& content, const std::string&
         return 0;
     }
 
+    // nested source calls temporarily replace diagnostic context and establish a
+    // return boundary without discarding the surrounding shell's state.
     const std::string previous_error_source = shell_script_interpreter->get_error_source();
     shell_script_interpreter->set_error_source(source_path);
     shell_script_interpreter->push_source_scope();
@@ -466,6 +495,8 @@ int Shell::execute_script_content(const std::string& content, const std::string&
     shell_script_interpreter->pop_source_scope();
     shell_script_interpreter->set_error_source(previous_error_source);
 
+    // return is interpreter control flow inside a sourced file. consume that
+    // sentinel here and expose its numeric status to the caller as an ordinary result.
     if (exit_code == ShellScriptInterpreter::exit_return) {
         exit_code = numeric_utils::parse_exit_status_or(
             cjsh_env::get_shell_variable_value("CJSH_RETURN_CODE"), 0, false);
@@ -475,6 +506,8 @@ int Shell::execute_script_content(const std::string& content, const std::string&
     return exit_code;
 }
 
+// consume a nonempty explicit exit status once. callers use their execution
+// result when no override is present or its value cannot be parsed.
 int read_exit_code_or(int fallback) {
     std::string exit_code_str = cjsh_env::get_shell_variable_value("EXIT_CODE");
     if (exit_code_str.empty()) {
@@ -486,6 +519,9 @@ int read_exit_code_or(int fallback) {
     return fallback;
 }
 
+// dispatch recorded signals from normal execution, not from a signal handler.
+// traps and child notifications may disturb the terminal, so invalidate recovery
+// before handing control to the signal subsystem.
 SignalProcessingResult Shell::process_pending_signals(bool reap_children) {
     if (!signal_handler) {
         return {};
@@ -526,6 +562,8 @@ void Shell::restore_terminal_state() {
     (void)fflush(stderr);
 }
 
+// separate process-group policy from terminal capability. monitor mode can be
+// useful without a tty, but foreground handoff requires a successful handshake.
 void Shell::setup_job_control() {
     const bool requested_interactive = config::interactive_mode || config::force_interactive;
     if (!requested_interactive) {
@@ -534,8 +572,8 @@ void Shell::setup_job_control() {
         interactive_job_control_available = false;
         return;
     }
-    // Stdio may point at a different PTY from /dev/tty (for example in a startup
-    // benchmark). Prefer that terminal, keeping a private fd across redirections.
+    // stdio may point at a different pty from /dev/tty. prefer that terminal and
+    // keep a private close-on-exec descriptor across builtin redirections.
     int tty_fd = -1;
     for (const int fd : {STDIN_FILENO, STDOUT_FILENO}) {
         if (isatty(fd) == 0) {
@@ -558,7 +596,7 @@ void Shell::setup_job_control() {
         owns_shell_terminal = true;
     }
     if (isatty(shell_terminal) == 0) {
-        // Forced interactive execution without a controlling terminal still has job groups.
+        // forced interactive execution without a terminal still has job groups.
         job_control_enabled = true;
         shell_options[to_index(ShellOption::Monitor)] = true;
         interactive_job_control_available = false;
@@ -567,12 +605,10 @@ void Shell::setup_job_control() {
 
     shell_pgid = getpgrp();
 
-    // If cjsh was started in the background, wait until the parent shell foregrounds this
-    // process group. An ignored SIGTTIN disposition survives exec, so explicitly restore the
-    // default before using the signal for the standard foreground handshake. Login launchers
-    // may create the shell's process group before assigning the terminal to it. In that case the
-    // shell must claim the terminal itself: stopping here can deadlock with a launcher that only
-    // waits for its login shell to exit.
+    // a background shell waits for its parent to foreground the process group.
+    // restore SIGTTIN first because ignored dispositions survive exec. login
+    // launchers may instead expect this shell to claim the terminal itself;
+    // stopping in that case could deadlock with a launcher waiting for shell exit.
     (void)signal(SIGTTIN, SIG_DFL);
     constexpr unsigned kMaxForegroundAttempts = 16;
     unsigned foreground_attempts = 0;
@@ -590,8 +626,8 @@ void Shell::setup_job_control() {
         if (flags::is_login_shell_invocation()) {
             break;
         }
-        // Orphaned process groups discard SIGTTIN. Bound repeated attempts,
-        // without imposing a timeout on a shell stopped normally until `fg`.
+        // orphaned process groups discard SIGTTIN. bound repeated attempts without
+        // imposing a timeout on a shell stopped normally until fg.
         if (foreground_attempts++ == kMaxForegroundAttempts) {
             print_error({ErrorType::RUNTIME_ERROR,
                          ErrorSeverity::WARNING,
@@ -614,8 +650,8 @@ void Shell::setup_job_control() {
 
     shell_pgid = getpid();
 
-    // A session leader is already the leader of its process group and setpgid then reports
-    // EPERM. Treat that as success only when the desired group is actually in place.
+    // a session leader already leads its process group and setpgid reports EPERM.
+    // accept that failure only when the desired group is actually in place.
     if (setpgid(shell_pgid, shell_pgid) < 0 && getpgrp() != shell_pgid) {
         const auto error_text = std::system_category().message(errno);
         print_error({ErrorType::RUNTIME_ERROR,
@@ -629,6 +665,8 @@ void Shell::setup_job_control() {
         return;
     }
 
+    // claiming the terminal can itself raise SIGTTOU while we are in the background.
+    // block it during the handoff and preserve the caller's signal mask afterward.
     sigset_t sigttou_mask{};
     sigset_t previous_mask{};
     sigemptyset(&sigttou_mask);
@@ -665,11 +703,16 @@ void Shell::setup_job_control() {
     save_terminal_state();
 }
 
+// terminal ownership belongs to the original foreground shell, not to forked
+// copies of this object or to any process that merely has monitor mode enabled.
 bool Shell::manages_terminal() const {
     return interactive_job_control_available && shell_pgid > 0 && getpid() == shell_pgid &&
            getpgrp() == shell_pgid;
 }
 
+// avoid repeated editor recovery when nothing ran between prompt operations.
+// clear first so a concurrent invalidation remains visible; retry failed handoff
+// on the next call rather than treating an unrecovered terminal as clean.
 void Shell::recover_prompt_terminal() {
     if (!prompt_terminal_dirty.exchange(false, std::memory_order_relaxed)) {
         return;
@@ -678,14 +721,12 @@ void Shell::recover_prompt_terminal() {
         mark_terminal_dirty();
         return;
     }
-    // Clear before recovery so an asynchronous prompt worker cannot lose its invalidation.
     ic_recover_terminal();
 }
 
 bool Shell::reclaim_terminal() const {
-    // Only the interactive shell that completed the startup foreground handshake may
-    // reclaim this terminal. Forked subshells must not take it from their parent.
-    // This remains necessary when the user disables monitor mode with `set +m`.
+    // forked subshells must not take the terminal from their parent. conversely,
+    // the original shell still needs recovery after the user disables monitor mode.
     if (!manages_terminal()) {
         return false;
     }
@@ -728,15 +769,15 @@ bool Shell::suspend() const {
         return false;
     }
 
-    // Readline may be suspended by a widget; commands must expose ordinary
-    // terminal modes while the parent shell handles the stop notification.
+    // a widget can suspend the shell from inside readline. expose ordinary terminal
+    // modes while the parent shell handles the stop notification.
     const bool editor_active = ic_suspend_readline_terminal();
     ic_prepare_terminal_for_command();
     (void)fflush(stdout);
     (void)fflush(stderr);
     const bool stopped = kill(getpid(), SIGSTOP) == 0;
 
-    // A background continuation must wait for fg instead of stealing the tty.
+    // a background continuation must wait for fg instead of stealing the tty.
     struct sigaction previous{};
     struct sigaction action{};
     action.sa_handler = SIG_DFL;
@@ -760,9 +801,9 @@ bool Shell::suspend() const {
 }
 
 bool Shell::set_job_control_enabled(bool enabled) {
-    // Monitor mode is still meaningful for a non-interactive shell: it controls process-group
-    // creation even though there is no terminal to hand off. An interactive shell with a TTY
-    // may only enable it after the startup foreground handshake succeeded.
+    // monitor mode controls process-group creation even without terminal handoff.
+    // an interactive shell with a tty may enable it only after startup established
+    // that the shell can manage that terminal.
     const bool requested_interactive = config::interactive_mode || config::force_interactive;
     if (enabled && requested_interactive && isatty(shell_terminal) != 0 &&
         !interactive_job_control_available) {
@@ -843,6 +884,8 @@ void Shell::apply_abbreviations_to_line_editor() {
     }
 }
 
+// apply options in invocation order so repeated settings have last-option-wins
+// behavior and use the same side effects as later set or shopt commands.
 void Shell::apply_startup_options(const std::vector<std::pair<std::string, bool>>& options) {
     for (const auto& [name, enabled] : options) {
         auto option = parse_shell_option(name);
@@ -855,6 +898,8 @@ void Shell::apply_startup_options(const std::vector<std::pair<std::string, bool>
     }
 }
 
+// remember explicit choices separately from defaults. some options also live in
+// shared configuration or require terminal checks instead of a plain flag update.
 void Shell::set_shell_option(ShellOption option, bool value) {
     explicit_shell_options[to_index(option)] = true;
     if (option == ShellOption::Extglob) {
@@ -869,6 +914,8 @@ void Shell::set_shell_option(ShellOption option, bool value) {
     shell_options[to_index(option)] = value;
 }
 
+// resolve effective values at lookup time: dialect restrictions take precedence,
+// and untouched options can depend on the current dialect or invocation mode.
 bool Shell::get_shell_option(ShellOption option) const {
     if (option == ShellOption::Extglob) {
         return config::extglob_enabled;
@@ -914,6 +961,8 @@ std::string Shell::get_errexit_severity() const {
     return errexit_severity_name(errexit_severity_level);
 }
 
+// conditional evaluation can temporarily suppress errexit without changing the
+// user's option. without a specific status, treat failure as ordinary error severity.
 bool Shell::should_abort_on_nonzero_exit() const {
     if (!is_errexit_enabled() || errexit_suppression_depth != 0) {
         return false;
@@ -922,6 +971,8 @@ bool Shell::should_abort_on_nonzero_exit() const {
     return errexit_severity_level != ErrorSeverity::CRITICAL;
 }
 
+// callers supply a failing status. map conventional launch and syntax failures
+// to their diagnostic severity before applying the configured errexit threshold.
 bool Shell::should_abort_on_nonzero_exit(int exit_code) const {
     if (!is_errexit_enabled() || errexit_suppression_depth != 0) {
         return false;
@@ -940,6 +991,8 @@ bool Shell::should_abort_on_nonzero_exit(int exit_code) const {
     return error_severity >= errexit_severity_level;
 }
 
+// collect shell-defined command names only. external executables require PATH
+// lookup and are intentionally outside this inventory.
 std::unordered_set<std::string> Shell::get_available_commands() const {
     std::unordered_set<std::string> cmds;
     if (built_ins) {
