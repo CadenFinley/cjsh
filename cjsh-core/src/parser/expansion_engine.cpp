@@ -71,7 +71,7 @@ std::optional<std::vector<std::string>> expand_simple_glob(const std::string& pa
                (std::strcmp(locale, "C") == 0 || std::strcmp(locale, "POSIX") == 0);
     };
     if (!c_locale(LC_COLLATE) || !c_locale(LC_CTYPE) ||
-        pattern.find_first_of("[\\\x1f~") != std::string::npos ||
+        pattern.find_first_of("\\\x1f~") != std::string::npos ||
         std::any_of(pattern.begin(), pattern.end(),
                     [](unsigned char c) { return c == 0 || c >= 128; })) {
         return std::nullopt;
@@ -79,8 +79,15 @@ std::optional<std::vector<std::string>> expand_simple_glob(const std::string& pa
     const size_t slash = pattern.find_last_of('/');
     const std::string prefix = slash == std::string::npos ? "" : pattern.substr(0, slash + 1);
     const std::string component = pattern.substr(prefix.size());
-    if (component.empty() || prefix.find_first_of("*?") != std::string::npos) {
+    if (component.empty() || prefix.find_first_of("*?[") != std::string::npos) {
         return std::nullopt;
+    }
+    // Bracket classes, collation, and caret negation differ between glob and
+    // fnmatch on supported platforms. Preserve libc's behavior for those forms.
+    for (const char* complex_bracket : {"[^", "[:", "[.", "[="}) {
+        if (component.find(complex_bracket) != std::string::npos) {
+            return std::nullopt;
+        }
     }
     const std::string directory = prefix.empty() ? "." : prefix;
     std::unique_ptr<DIR, decltype(&closedir)> entries(opendir(directory.c_str()), &closedir);
@@ -340,7 +347,22 @@ void globstar_recurse(const ParsedGlobPattern& pattern, size_t index,
                 ? pattern_matcher.matches_pattern(name, component.text)
                 : fnmatch(component.text.c_str(), name.c_str(), fnmatch_flags) == 0;
         if (component_matches) {
-            globstar_recurse(pattern, index + 1, entry.path(), matches);
+            if (index + 1 == pattern.components.size()) {
+                // The iterator already knows ordinary entry types. Only symlinks
+                // and unknown types need another lookup to mark directories.
+                std::error_code type_ec;
+                const bool directory = entry.is_directory(type_ec);
+                if (pattern.trailing_slash && (!directory || type_ec)) {
+                    continue;
+                }
+                std::string formatted = format_match_path(entry.path(), pattern.absolute);
+                if (directory && !type_ec && formatted.back() != '/') {
+                    formatted.push_back('/');
+                }
+                matches.push_back(std::move(formatted));
+            } else {
+                globstar_recurse(pattern, index + 1, entry.path(), matches);
+            }
         }
     }
 }

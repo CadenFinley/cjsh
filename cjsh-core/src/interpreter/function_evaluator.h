@@ -31,9 +31,11 @@
 
 #include <cstddef>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace function_evaluator {
@@ -49,12 +51,17 @@ std::optional<FunctionHeader> parse_function_header(const std::string& source,
                                                     bool allow_missing_body = false);
 size_t find_function_body_end(const std::string& source, const FunctionHeader& header);
 
+struct SyntaxValidationCache {
+    std::optional<std::pair<int, bool>> validated_options;
+};
+
 struct FunctionDefinition {
     std::vector<std::string> body_lines;
     bool uses_subshell_body = false;
+    SyntaxValidationCache syntax_cache;
 };
 
-using FunctionMap = std::unordered_map<std::string, FunctionDefinition>;
+using FunctionMap = std::unordered_map<std::string, std::shared_ptr<FunctionDefinition>>;
 using LocalVariableStack = std::vector<std::unordered_map<std::string, std::string>>;
 
 struct FunctionParseResult {

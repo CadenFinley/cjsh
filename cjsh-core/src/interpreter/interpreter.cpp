@@ -585,7 +585,8 @@ int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>
         return set_last_status(127);
     }
 
-    const function_evaluator::FunctionDefinition function_definition = function_it->second;
+    // Keep the active definition alive if the body unsets or redefines itself.
+    const auto function_definition = function_it->second;
 
     push_function_scope();
 
@@ -598,18 +599,19 @@ int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>
     flags::set_positional_parameters(func_params);
 
     int exit_code = 0;
-    if (function_definition.uses_subshell_body) {
+    if (function_definition->uses_subshell_body) {
         std::ostringstream body_stream;
-        for (size_t body_line_index = 0; body_line_index < function_definition.body_lines.size();
+        for (size_t body_line_index = 0; body_line_index < function_definition->body_lines.size();
              ++body_line_index) {
             if (body_line_index > 0) {
                 body_stream << '\n';
             }
-            body_stream << function_definition.body_lines[body_line_index];
+            body_stream << function_definition->body_lines[body_line_index];
         }
         exit_code = execute_subshell(body_stream.str(), config::is_posix_mode());
     } else {
-        exit_code = execute_block(function_definition.body_lines, false, config::is_posix_mode());
+        exit_code = execute_block(function_definition->body_lines, false, config::is_posix_mode(),
+                                  &function_definition->syntax_cache);
     }
 
     if ((exit_code == exit_return) && cjsh_env::shell_variable_is_set("CJSH_RETURN_CODE")) {
@@ -719,8 +721,172 @@ int ShellScriptInterpreter::handle_env_assignment(const std::vector<std::string>
     return assignment_success_status();
 }
 
+std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
+    const std::string& command_text, bool* function_call) {
+    if (!shell_parser || command_text.find_first_of("|&;<>!(){}`") != std::string::npos) {
+        return std::nullopt;
+    }
+
+    std::vector<std::string> quick_args = shell_parser->parse_command(command_text);
+    if (quick_args.empty()) {
+        return 0;
+    }
+
+    const std::string& program = quick_args[0];
+    if (program == "coproc") {
+        return std::nullopt;
+    }
+    if (should_interpret_as_cjsh_script(program)) {
+        std::ifstream f(program);
+        if (!f) {
+            print_error(
+                {ErrorType::RUNTIME_ERROR, "", "Failed to open script file: " + program, {}});
+            return 1;
+        }
+        std::stringstream buffer;
+        buffer << f.rdbuf();
+        const auto content = buffer.str();
+        auto nested_lines = shell_parser->parse_into_lines(content);
+        return execute_block(nested_lines);
+    }
+
+    int env_result = handle_env_assignment(quick_args);
+    if (env_result >= 0) {
+        return env_result;
+    }
+
+    if (functions.count(program) != 0U) {
+        if (function_call) {
+            *function_call = true;
+        }
+        return execute_function_call(quick_args);
+    }
+
+    auto prepared = cjsh_env::prepare_command(std::move(quick_args));
+    if (!prepared.assignments.empty() && !prepared.args.empty() &&
+        functions.count(prepared.args.front()) != 0U) {
+        Command function_command;
+        function_command.args = std::move(prepared.original_args);
+        if (function_call) {
+            *function_call = true;
+        }
+        return run_pipeline({function_command});
+    }
+
+    int exit_code = g_shell->execute_prepared_command(std::move(prepared));
+    return set_last_status(exit_code);
+}
+
+std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
+    const std::vector<std::string>& lines) {
+    if (lines.size() != 1) {
+        return std::nullopt;
+    }
+    std::string_view command = lines.front();
+    auto trim_view = [&] {
+        while (!command.empty() && std::isspace(static_cast<unsigned char>(command.front()))) {
+            command.remove_prefix(1);
+        }
+        while (!command.empty() && std::isspace(static_cast<unsigned char>(command.back()))) {
+            command.remove_suffix(1);
+        }
+    };
+    trim_view();
+    if (!command.empty() && command.back() == ';') {
+        command.remove_suffix(1);
+        trim_view();
+    }
+    if (command.empty() || command.find_first_of("|&;<>!(){}`#\\\n\r") != std::string_view::npos) {
+        return std::nullopt;
+    }
+    size_t word_end = 0;
+    while (word_end < command.size() &&
+           !std::isspace(static_cast<unsigned char>(command[word_end]))) {
+        ++word_end;
+    }
+    const std::string_view word = command.substr(0, word_end);
+    if (parse_parser_control_token(word) || word == "select" || word == "coproc" ||
+        word == "time" || word == "return" || word == "break" || word == "continue" ||
+        word.find_first_of("$~'\"*?[") < word.find('=')) {
+        return std::nullopt;
+    }
+    // Alias expansion may introduce a list or structured statement. Leave it
+    // with the full dispatcher, including POSIX expansion before tokenization.
+    const std::string program(word);
+    if ((!config::is_posix_mode() || !aliases_preexpanded) &&
+        (g_shell->get_aliases().count(program) != 0 ||
+         (word.find('=') != std::string_view::npos && !g_shell->get_aliases().empty()))) {
+        return std::nullopt;
+    }
+
+    current_line_number = 1;
+    if (auto signal = collect_pending_signal_exit_code()) {
+        return set_last_status(*signal);
+    }
+    // Signal traps can change aliases while pending signals are dispatched.
+    if ((!config::is_posix_mode() || !aliases_preexpanded) &&
+        (g_shell->get_aliases().count(program) != 0 ||
+         (word.find('=') != std::string_view::npos && !g_shell->get_aliases().empty()))) {
+        return std::nullopt;
+    }
+    if (cjsh_env::exit_requested()) {
+        return numeric_utils::parse_exit_status_or(cjsh_env::get_shell_variable_value("EXIT_CODE"),
+                                                   1, false);
+    }
+    if (SignalHandler::startup_interrupted() && !SignalHandler::executing_trap()) {
+        return set_last_status(128 + SIGINT);
+    }
+    const std::string text(command);
+    if (g_shell->get_shell_option(ShellOption::Verbose)) {
+        std::cerr << text << '\n';
+    }
+    bool function_call = false;
+    int code = 0;
+    try {
+        Shell::ErrexitScope scope(g_shell.get(), false);
+        const auto result = try_execute_quick_command(text, &function_call);
+        if (!result) {
+            return std::nullopt;
+        }
+        code = *result;
+    } catch (const std::runtime_error&) {
+        code = 1;
+    }
+    (void)set_last_status(code);
+    if (g_parameter_expansion_fatal_error || is_terminating_signal_exit_code(code)) {
+        return code;
+    }
+    if (auto signal = collect_pending_signal_exit_code()) {
+        return set_last_status(*signal);
+    }
+    if (code != 0 && !is_control_flow_exit_code(code) &&
+        g_shell->should_abort_on_nonzero_exit(code)) {
+        return cjsh_env::posix_error_exit(code);
+    }
+    if (!function_call && is_control_flow_exit_code(code)) {
+        const char* invalid_control = nullptr;
+        if (code == exit_return && !in_function_scope() && !in_source_scope()) {
+            invalid_control = "return";
+        } else if (code == exit_continue && !in_loop_scope()) {
+            invalid_control = "continue";
+        } else if (code == exit_break && !in_loop_scope()) {
+            invalid_control = "break";
+        }
+        if (invalid_control) {
+            print_error({ErrorType::INVALID_ARGUMENT,
+                         invalid_control,
+                         std::string(invalid_control) + " outside " +
+                             (code == exit_return ? "function" : "loop"),
+                         {}});
+            return set_last_status(1);
+        }
+    }
+    return code;
+}
+
 int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
-                                          bool skip_validation, std::optional<bool> preexpanded) {
+                                          bool skip_validation, std::optional<bool> preexpanded,
+                                          function_evaluator::SyntaxValidationCache* syntax_cache) {
     struct AliasScope {
         bool& value;
         bool previous;
@@ -766,19 +932,31 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         return 1;
     }
 
-    if (!effective_skip && has_syntax_errors(lines)) {
-        std::vector<std::string> empty_suggestions;
-        ErrorInfo error(ErrorType::SYNTAX_ERROR, ErrorSeverity::CRITICAL, "",
-                        "Critical syntax errors detected in script block, process aborted",
-                        empty_suggestions);
-        print_error(error);
-        return cjsh_env::posix_error_exit(2);
+    const auto syntax_options =
+        std::make_pair(static_cast<int>(config::shell_dialect()), config::extglob_enabled);
+    if (!effective_skip && (!syntax_cache || syntax_cache->validated_options != syntax_options)) {
+        if (has_syntax_errors(lines)) {
+            std::vector<std::string> empty_suggestions;
+            ErrorInfo error(ErrorType::SYNTAX_ERROR, ErrorSeverity::CRITICAL, "",
+                            "Critical syntax errors detected in script block, process aborted",
+                            empty_suggestions);
+            print_error(error);
+            return cjsh_env::posix_error_exit(2);
+        }
+        // This skips only this immutable body's syntax pass. Nested eval/source
+        // calls retain their own validation and every command still runs checks.
+        if (syntax_cache) {
+            syntax_cache->validated_options = syntax_options;
+        }
     }
 
-    std::function<int(const std::string&, bool, bool*)> execute_simple_or_pipeline_impl;
     if (config::is_posix_mode() && g_shell->get_shell_option(ShellOption::Noexec)) {
         return 0;
     }
+    if (auto simple_result = try_execute_simple_block(lines)) {
+        return *simple_result;
+    }
+    std::function<int(const std::string&, bool, bool*)> execute_simple_or_pipeline_impl;
     std::function<int(const std::string&)> execute_simple_or_pipeline;
     bool last_result_errexit_exempt = false;
 
@@ -820,63 +998,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             return 0;
         }
 
-        auto has_control_operators = [](const std::string& input) {
-            return input.find_first_of("|&;<>!(){}`") != std::string::npos;
-        };
-
-        auto try_execute_quick_command =
-            [&](const std::string& command_text) -> std::optional<int> {
-            if (!shell_parser || has_control_operators(command_text)) {
-                return std::nullopt;
-            }
-
-            std::vector<std::string> quick_args = shell_parser->parse_command(command_text);
-            if (quick_args.empty()) {
-                return 0;
-            }
-
-            const std::string& program = quick_args[0];
-            if (program == "coproc") {
-                return std::nullopt;
-            }
-            if (should_interpret_as_cjsh_script(program)) {
-                std::ifstream f(program);
-                if (!f) {
-                    print_error({ErrorType::RUNTIME_ERROR,
-                                 "",
-                                 "Failed to open script file: " + program,
-                                 {}});
-                    return 1;
-                }
-                std::stringstream buffer;
-                buffer << f.rdbuf();
-                const auto content = buffer.str();
-                auto nested_lines = shell_parser->parse_into_lines(content);
-                return execute_block(nested_lines);
-            }
-
-            int env_result = handle_env_assignment(quick_args);
-            if (env_result >= 0) {
-                return env_result;
-            }
-
-            if (functions.count(program) != 0U) {
-                return call_function(quick_args);
-            }
-
-            auto prepared = cjsh_env::prepare_command(std::move(quick_args));
-            if (!prepared.assignments.empty() && !prepared.args.empty() &&
-                functions.count(prepared.args.front()) != 0U) {
-                Command function_command;
-                function_command.args = std::move(prepared.original_args);
-                if (function_call) {
-                    *function_call = true;
-                }
-                return run_pipeline({function_command});
-            }
-
-            int exit_code = g_shell->execute_prepared_command(std::move(prepared));
-            return set_last_status(exit_code);
+        auto try_execute_quick_command = [&](const std::string& command) {
+            return this->try_execute_quick_command(command, function_call);
         };
 
         if (auto quick_result = try_execute_quick_command(text)) {
@@ -1722,7 +1845,10 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                                                  {}});
                                     last_code = 1;
                                 } else {
-                                    functions[func_name] = {body_lines, opening_delim == '('};
+                                    functions[func_name] =
+                                        std::make_shared<function_evaluator::FunctionDefinition>(
+                                            function_evaluator::FunctionDefinition{
+                                                std::move(body_lines), opening_delim == '(', {}});
                                     last_code = 0;
                                 }
                                 (void)set_last_status(last_code);

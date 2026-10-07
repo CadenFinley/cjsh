@@ -128,7 +128,8 @@ class Exec {
     int execute_pipeline(const std::vector<Command>& commands);
     int run_with_command_redirections(Command cmd, const std::function<int()>& action,
                                       const std::string& command_name, bool persist_fd_changes,
-                                      bool* action_invoked = nullptr);
+                                      bool* action_invoked = nullptr,
+                                      bool preserve_action_fds = true);
 
     int add_job(const Job& job);
     void remove_job(int job_id);

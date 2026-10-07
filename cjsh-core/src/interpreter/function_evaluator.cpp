@@ -27,6 +27,7 @@
 */
 
 #include "function_evaluator.h"
+#include <memory>
 
 #include <cctype>
 #include <cstddef>
@@ -169,7 +170,8 @@ FunctionParseResult parse_and_register_functions(
                          header->name + ": readonly function",
                          {}});
         } else {
-            functions[header->name] = {parse_lines_func(body), header->opening == '('};
+            functions[header->name] = std::make_shared<FunctionDefinition>(
+                FunctionDefinition{parse_lines_func(body), header->opening == '(', {}});
         }
         result.found = true;
         current_line = trim_func(current_line.substr(body_close));

@@ -13,6 +13,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Added
 
+- Add a repeatable hotspot benchmark with alternating before/after runs for loops, direct function calls, redirections, and glob expansion.
 - Agent mode can answer general questions with `{"text":"..."}` responses printed to stdout. Executors can return `{"error":"..."}` to report a problem through `error_out`; executor failures and malformed responses also use standard stderr diagnostics instead of an error menu.
 
 ### Removed
@@ -21,6 +22,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Fixed
 
+- Reduce repeated function-body validation and copying, simple-command dispatch overhead, and descriptor backups for redirected leaf builtins while preserving nested execution and shell error handling.
+- Avoid redundant metadata lookups during supported bracket and extglob expansion, and use bounded directory snapshots when highlighting many file arguments. Filesystem answers refresh on each redraw.
 - Preserve interactive input while validating function bodies, preventing parser-cache invalidation from crashing the shell.
 - Process signals received during foreground process launch before waiting for the child, so TERM can exit the shell promptly.
 - Wait for redirected agent replies before checking stdout in interactive tests, including executors that pause while the editor is quiet.

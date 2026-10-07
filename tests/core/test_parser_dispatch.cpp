@@ -334,6 +334,7 @@ void test_simple_glob_matches_libc() {
     fs::create_symlink("folder", root / "dirlink");
     fs::create_symlink("a.txt", root / "filelink");
     fs::create_symlink("missing", root / "broken");
+    std::ofstream(root / "folder" / "nested.txt") << "nested";
     fs::current_path(root);
     ExpansionEngine expansion;
     for (bool unicode_file : {false, true}) {
@@ -342,8 +343,12 @@ void test_simple_glob_matches_libc() {
         }
         for (const std::string& prefix :
              std::vector<std::string>{"", "./", root.string() + "/", root.string() + "//"}) {
-            for (const char* suffix : {"*", "*.txt", "a?", ".*", "f*", "*link", "b*", "no*",
-                                       "[ab]*", "*/", "folder/*"}) {
+            for (const char* suffix :
+                 {"*",      "*.txt",  "a?",           ".*",           "f*",
+                  "*link",  "b*",     "no*",          "[ab]*",        "[!a]*",
+                  "[^a]*",  "[a-z]*", "[[:alpha:]]*", "[[:upper:]]*", "[.]hidden",
+                  "[",      "[[]*",   "[]a]*",        "[z-a]*",       "[bf]*/",
+                  "[fd]*/", "*/",     "folder/*",     "[fd]*/*",      "f[io]*link"}) {
                 const auto pattern = prefix + suffix;
                 glob_t results{};
                 const int status = glob(pattern.c_str(), GLOB_TILDE | GLOB_MARK, nullptr, &results);
@@ -354,12 +359,23 @@ void test_simple_glob_matches_libc() {
                     expected.push_back(pattern);
                 }
                 globfree(&results);
-                expect(
-                    expansion.expand_wildcards(pattern) == expected,
-                    "glob matches libc sorting, dotfiles, prefixes, directory marks, and symlinks");
+                expect(expansion.expand_wildcards(pattern) == expected,
+                       ("glob matches libc: " + pattern).c_str());
             }
         }
     }
+    const bool old_extglob = config::extglob_enabled;
+    config::extglob_enabled = true;
+    expect(expansion.expand_wildcards("@(filelink|dirlink|broken)") ==
+               std::vector<std::string>{"broken", "dirlink/", "filelink"},
+           "extglob preserves file, directory, and dangling symlink matches");
+    expect(expansion.expand_wildcards("@(filelink|dirlink|broken)/") ==
+               std::vector<std::string>{"dirlink/"},
+           "extglob trailing slash keeps only directories");
+    expect(expansion.expand_wildcards("@(folder|dirlink)/*.txt") ==
+               std::vector<std::string>{"dirlink/nested.txt", "folder/nested.txt"},
+           "extglob preserves traversal through directory symlinks");
+    config::extglob_enabled = old_extglob;
     fs::current_path(original_cwd);
     fs::remove_all(root);
 }

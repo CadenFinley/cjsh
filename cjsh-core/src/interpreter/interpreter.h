@@ -62,7 +62,8 @@ class ShellScriptInterpreter {
     const std::string& get_error_source() const;
 
     int execute_block(const std::vector<std::string>& lines, bool skip_validation = false,
-                      std::optional<bool> aliases_preexpanded = std::nullopt);
+                      std::optional<bool> aliases_preexpanded = std::nullopt,
+                      function_evaluator::SyntaxValidationCache* syntax_cache = nullptr);
     std::vector<std::string> parse_into_lines(const std::string& script);
     bool needs_additional_input(const std::vector<std::string>& lines);
 
@@ -183,6 +184,8 @@ class ShellScriptInterpreter {
     int execute_subshell(const std::string& subshell_content, bool preexpanded = false);
     int execute_function_call(const std::vector<std::string>& expanded_args);
     int handle_env_assignment(const std::vector<std::string>& expanded_args);
+    std::optional<int> try_execute_quick_command(const std::string& command, bool* function_call);
+    std::optional<int> try_execute_simple_block(const std::vector<std::string>& lines);
 
     size_t current_line_number = 1;
     std::optional<int> last_substitution_exit_status;

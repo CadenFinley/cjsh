@@ -27,17 +27,21 @@
 */
 
 #include "cjsh_syntax_highlighter.h"
+#include <dirent.h>
 #include <algorithm>
 #include <cstdint>
 
 #include <cctype>
+#include <cerrno>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <system_error>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "agent_mode.h"
@@ -65,10 +69,15 @@ bool is_opening_grouping_delimiter_token(const std::string& token) {
 enum class ExistingPathType : std::uint8_t {
     None,
     RegularFile,
-    Other
+    Other,
+    Unresolved
 };
 
 constexpr size_t kMaxHighlightCacheEntries = 64;
+
+bool is_plain_basename(const std::string& token) {
+    return token != "." && token != ".." && token.find_first_of("/\\~$'\"") == std::string::npos;
+}
 
 struct HighlightPathContext {
     std::optional<std::string> cwd;
@@ -83,6 +92,73 @@ struct HighlightPathContext {
     std::unordered_map<std::string, command_analysis::CommandTokenClassification> classifications;
     std::unordered_map<std::string, ExistingPathType> argument_paths;
     std::unordered_map<std::string, bool> split_candidates;
+    size_t basename_lookups = 0;
+    size_t directory_entry_limit = 0;
+    bool directory_observed = false;
+    std::optional<std::unordered_map<std::string, ExistingPathType>> directory_paths;
+
+    std::optional<ExistingPathType> classify_basename(const std::string& token) {
+        if (directory_entry_limit == 0 || !is_plain_basename(token)) {
+            return std::nullopt;
+        }
+        // Short commands are cheaper to inspect directly. For a large redraw,
+        // a bounded directory snapshot avoids a stat for every missing word.
+        if (++basename_lookups < kMaxHighlightCacheEntries) {
+            return std::nullopt;
+        }
+        if (!directory_observed) {
+            directory_observed = true;
+            initialize();
+            std::unique_ptr<DIR, decltype(&closedir)> entries(opendir(cwd->c_str()), &closedir);
+            if (entries) {
+                std::vector<std::pair<std::string, ExistingPathType>> observed;
+                observed.reserve(directory_entry_limit);
+                bool complete = true;
+                while (true) {
+                    errno = 0;
+                    const dirent* entry = readdir(entries.get());
+                    if (!entry) {
+                        complete = errno == 0;
+                        break;
+                    }
+                    if (std::strcmp(entry->d_name, ".") == 0 ||
+                        std::strcmp(entry->d_name, "..") == 0) {
+                        continue;
+                    }
+                    if (observed.size() >= directory_entry_limit) {
+                        complete = false;
+                        break;
+                    }
+                    ExistingPathType type = ExistingPathType::Unresolved;
+#if defined(DT_REG) && defined(DT_DIR)
+                    if (entry->d_type == DT_REG) {
+                        type = ExistingPathType::RegularFile;
+                    } else if (entry->d_type == DT_DIR) {
+                        type = ExistingPathType::Other;
+                    }
+#endif
+                    observed.emplace_back(entry->d_name, type);
+                }
+                if (complete) {
+                    directory_paths.emplace();
+                    directory_paths->reserve(observed.size());
+                    for (auto& [name, type] : observed) {
+                        directory_paths->emplace(std::move(name), type);
+                    }
+                }
+            }
+        }
+        if (!directory_paths) {
+            return std::nullopt;
+        }
+        const auto entry = directory_paths->find(token);
+        if (entry == directory_paths->end()) {
+            return ExistingPathType::None;
+        }
+        return entry->second == ExistingPathType::Unresolved
+                   ? std::nullopt
+                   : std::optional<ExistingPathType>{entry->second};
+    }
 
     command_analysis::CommandTokenClassification classify(const std::string& token,
                                                           size_t absolute_start) {
@@ -142,18 +218,27 @@ ExistingPathType classify_existing_path_argument(const std::string& token,
     if (found != paths.argument_paths.end()) {
         return found->second;
     }
-    paths.initialize();
-    const std::string path_to_check =
-        cjsh_filesystem::resolve_shell_token_path(token, *paths.cwd, paths.previous_directory);
+    if (const auto type = paths.classify_basename(token)) {
+        return *type;
+    }
+    // Plain basenames need no shell expansion or absolute-path normalization.
+    // This also keeps the fallback cheap in directories too large to snapshot.
+    std::filesystem::path path_to_check(token);
+    if (!is_plain_basename(token)) {
+        paths.initialize();
+        path_to_check =
+            cjsh_filesystem::resolve_shell_token_path(token, *paths.cwd, paths.previous_directory);
+    }
     std::error_code status_error;
     const std::filesystem::file_status status =
         std::filesystem::status(path_to_check, status_error);
     const auto result = status_error || !std::filesystem::exists(status) ? ExistingPathType::None
                         : std::filesystem::is_regular_file(status) ? ExistingPathType::RegularFile
                                                                    : ExistingPathType::Other;
-    if (paths.argument_paths.size() < kMaxHighlightCacheEntries) {
-        paths.argument_paths.emplace(token, result);
+    if (paths.argument_paths.size() >= kMaxHighlightCacheEntries) {
+        paths.argument_paths.clear();
     }
+    paths.argument_paths.emplace(token, result);
     return result;
 }
 
@@ -549,6 +634,16 @@ void SyntaxHighlighter::highlight(ic_highlight_env_t* henv, const char* input, v
 
     const auto& comparison_ops = token_constants::comparison_operators();
     HighlightPathContext paths;
+    // Bound the cost of an unsuccessful scan by the amount of input, and build
+    // the name index only after obtaining a complete listing.
+    if (len >= 1024) {
+        const size_t spaces = std::count_if(sanitized_input.begin(), sanitized_input.end(),
+                                            [](unsigned char c) { return std::isspace(c); });
+        if (spaces >= 512) {
+            paths.directory_entry_limit =
+                std::clamp(spaces / 8, kMaxHighlightCacheEntries, size_t{1024});
+        }
+    }
 
     (void)command_analysis::visit_command_ranges(
         sanitized_input,

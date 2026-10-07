@@ -33,6 +33,7 @@
 
 #include "interpreter.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "token_classifier.h"
 
@@ -187,6 +188,38 @@ bool test_function_brace_matching() {
     return ok;
 }
 
+bool test_function_definition_lifetime() {
+    bool ok = expect(g_shell->execute("self_unset() { unset -f self_unset; return 7; }") == 0 &&
+                         g_shell->execute("self_unset") == 7,
+                     "an active function body survives unsetting its definition");
+    ok = expect(
+             g_shell->execute("self_replace() { self_replace() { return 9; }; return 8; }") == 0 &&
+                 g_shell->execute("self_replace") == 8 && g_shell->execute("self_replace") == 9,
+             "redefinition preserves the active body and replaces subsequent calls") &&
+         ok;
+    return ok;
+}
+
+bool test_function_validation_after_dialect_change() {
+    const auto original_dialect = config::shell_dialect();
+    config::set_shell_dialect(config::ShellDialect::Cjsh);
+    bool ok =
+        expect(g_shell->execute("native_body() { [[ yes = yes ]]; }") == 0 &&
+                   g_shell->execute("native_body") == 0 && g_shell->execute("native_body") == 0,
+               "a valid native function can be invoked repeatedly");
+    config::set_shell_dialect(config::ShellDialect::Posix);
+    ok = expect(g_shell->execute("native_body") == 2,
+                "a previously invoked body is revalidated after changing dialect") &&
+         ok;
+    cjsh_env::clear_exit_request();
+    config::set_shell_dialect(config::ShellDialect::Cjsh);
+    ok = expect(g_shell->execute("native_body") == 0,
+                "the original body remains usable after restoring its dialect") &&
+         ok;
+    config::set_shell_dialect(original_dialect);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -212,16 +245,22 @@ int main() {
     if (!test_function_brace_matching()) {
         ++failures;
     }
+    if (!test_function_definition_lifetime()) {
+        ++failures;
+    }
+    if (!test_function_validation_after_dialect_change()) {
+        ++failures;
+    }
 
     // Match the executable's explicit teardown before process-wide registries
     // are destroyed by static finalization.
     g_shell.reset();
 
     if (failures != 0) {
-        (void)std::fprintf(stderr, "%zu/4 function syntax tests failed\n", failures);
+        (void)std::fprintf(stderr, "%zu/6 function syntax tests failed\n", failures);
         return 1;
     }
 
-    (void)std::printf("All 4 function syntax tests passed\n");
+    (void)std::printf("All 6 function syntax tests passed\n");
     return 0;
 }

@@ -27,6 +27,7 @@
 */
 
 #include <sys/types.h>
+#include <unistd.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -1954,6 +1955,62 @@ static bool test_agent_trigger_prefix_highlighting() {
     return ok;
 }
 
+static bool test_many_file_arguments_between_redraws() {
+    const char* test_name = "many_file_arguments_between_redraws";
+    namespace fs = std::filesystem;
+    const auto original_cwd = fs::current_path();
+    std::string directory_template = (fs::temp_directory_path() / "cjsh-highlight-XXXXXX").string();
+    const char* created = mkdtemp(directory_template.data());
+    EXPECT_TRUE(created != nullptr, test_name, "create isolated highlighting fixtures");
+    const fs::path root(created);
+    fs::create_directory(root / "directory");
+    std::ofstream(root / "file") << "fixture";
+    fs::create_symlink("file", root / "link");
+    fs::create_symlink("directory", root / "dirlink");
+    fs::create_symlink("missing", root / "broken");
+    fs::current_path(root);
+
+    std::string prefix = "cat";
+    for (size_t i = 0; i < 600; ++i) {
+        prefix += " absent_" + std::to_string(i);
+    }
+    auto check = [&](const std::string& name, const char* style, bool exists = true) {
+        const auto input = prefix + " " + name;
+        attrbuf_t* attrs = highlight_input(input, test_name);
+        if (attrs == nullptr) {
+            return false;
+        }
+        const size_t pos = prefix.size() + 1;
+        const bool result =
+            exists ? expect_style_range(attrs, ic_get_env()->bbcode, pos, name.size(), style,
+                                        test_name, "current path type")
+                   : expect_not_style_range(attrs, ic_get_env()->bbcode, pos, name.size(), style,
+                                            test_name, "missing paths must not appear to exist");
+        attrbuf_free(attrs);
+        return result;
+    };
+    bool ok = check("file", "cjsh-file-argument") && check("link", "cjsh-file-argument") &&
+              check("directory", "cjsh-path-exists") && check("dirlink", "cjsh-path-exists") &&
+              check("broken", "cjsh-path-exists", false) &&
+              check("new_file", "cjsh-file-argument", false);
+    std::ofstream(root / "new_file") << "new";
+    ok = check("new_file", "cjsh-file-argument") && ok;
+    fs::remove(root / "file");
+    ok = check("file", "cjsh-file-argument", false) && check("link", "cjsh-file-argument", false) &&
+         ok;
+
+    // An incomplete directory listing must fall back to individual lookups.
+    for (size_t i = 0; i < 4100; ++i) {
+        std::ofstream(root / ("large_" + std::to_string(i))) << "fixture";
+    }
+    ok = check("large_4099", "cjsh-file-argument") && ok;
+    fs::current_path(root / "directory");
+    ok = check("new_file", "cjsh-file-argument", false) && ok;
+    fs::current_path(original_cwd);
+    fs::remove_all(root);
+    return ok;
+}
+
 static bool test_command_membership_changes_between_redraws() {
     const char* test_name = "command_membership_changes_between_redraws";
     const std::string name = "__cjsh_redraw_command";
@@ -1992,6 +2049,7 @@ using test_case_t = struct test_case_s {
 };
 
 static const test_case_t kTests[] = {
+    {"many_file_arguments_between_redraws", test_many_file_arguments_between_redraws},
     {"command_membership_changes_between_redraws", test_command_membership_changes_between_redraws},
     {"variable_assignment_highlighting", test_variable_assignment_highlighting},
     {"comment_highlighting", test_comment_highlighting},

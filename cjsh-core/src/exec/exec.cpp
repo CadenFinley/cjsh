@@ -1264,8 +1264,14 @@ int Exec::execute_builtin_with_redirections(Command cmd) {
     auto action = [&]() -> int { return execute_builtin_or_special_command(cmd.args); };
 
     bool action_invoked = false;
+    // Only leaf builtins can omit untouched standard descriptors. Other
+    // builtins may run hooks, traps, or nested code that changes descriptors.
+    const bool preserve_action_fds =
+        !(command_name == ":" || command_name == "true" || command_name == "false" ||
+          command_name == "echo" || command_name == "printf" || command_name == "test" ||
+          command_name == "[");
     int exit_code = run_with_command_redirections(cmd, action, command_name, persist_fd_changes,
-                                                  &action_invoked);
+                                                  &action_invoked, preserve_action_fds);
 
     if (!action_invoked) {
         last_exit_code = exit_code;
@@ -2446,12 +2452,15 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
 
 int Exec::run_with_command_redirections(Command cmd, const std::function<int()>& action,
                                         const std::string& command_name, bool persist_fd_changes,
-                                        bool* action_invoked) {
+                                        bool* action_invoked, bool preserve_action_fds) {
     if (action_invoked) {
         *action_invoked = false;
     }
 
-    std::set<int> redirected_fds{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
+    std::set<int> redirected_fds;
+    if (preserve_action_fds) {
+        redirected_fds = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
+    }
     int highest_fd = 9;
     auto record_fd = [&](int fd, bool redirected) {
         if (fd >= 0) {
@@ -2464,6 +2473,40 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
     for (const auto& redirection : cmd.redirection_order) {
         record_fd(redirection.fd, true);
         record_fd(redirection.target_fd, false);
+        switch (redirection.type) {
+            case CommandRedirectionType::Input:
+            case CommandRedirectionType::HereDoc:
+            case CommandRedirectionType::HereString:
+                record_fd(STDIN_FILENO, true);
+                break;
+            case CommandRedirectionType::Output:
+            case CommandRedirectionType::Append:
+            case CommandRedirectionType::ForceOutput:
+                record_fd(STDOUT_FILENO, true);
+                break;
+            case CommandRedirectionType::StderrOutput:
+            case CommandRedirectionType::StderrAppend:
+                record_fd(STDERR_FILENO, true);
+                break;
+            case CommandRedirectionType::BothOutput:
+                record_fd(STDOUT_FILENO, true);
+                record_fd(STDERR_FILENO, true);
+                break;
+            default:
+                break;
+        }
+    }
+    if (cmd.redirection_order.empty()) {
+        if (!cmd.input_file.empty() || !cmd.here_doc.empty() || !cmd.here_string.empty()) {
+            record_fd(STDIN_FILENO, true);
+        }
+        if (!cmd.output_file.empty() || !cmd.append_file.empty() || cmd.stdout_to_stderr ||
+            cmd.both_output) {
+            record_fd(STDOUT_FILENO, true);
+        }
+        if (!cmd.stderr_file.empty() || cmd.stderr_to_stdout || cmd.both_output) {
+            record_fd(STDERR_FILENO, true);
+        }
     }
     for (const auto& [fd, spec] : cmd.fd_redirections) {
         record_fd(fd, true);
@@ -2484,10 +2527,11 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
         int dup_fd = -1;
 #ifdef F_DUPFD_CLOEXEC
         dup_fd = fcntl(fd, F_DUPFD_CLOEXEC, min_fd);
-#endif
-        if (dup_fd == -1) {
-            dup_fd = fcntl(fd, F_DUPFD, min_fd);
+        if (dup_fd != -1) {
+            return dup_fd;
         }
+#endif
+        dup_fd = fcntl(fd, F_DUPFD, min_fd);
         if ((dup_fd != -1) && (fcntl(dup_fd, F_SETFD, FD_CLOEXEC) == -1)) {
             cjsh_filesystem::safe_close(dup_fd);
             return -1;
