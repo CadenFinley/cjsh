@@ -860,6 +860,9 @@ static int run_case(const char* scenario) {
         (void)ic_set_hint_delay(0);
         ic_set_default_completer(pty_completion_dispatcher, NULL);
     } else if (strncmp(scenario, "menu_viewport_", 14) == 0) {
+        if (strstr(scenario, "_off") != NULL && strstr(scenario, "_marker_off") == NULL) {
+            (void)ic_enable_scrollbars(false);
+        }
         if (strstr(scenario, "_wide_marker") != NULL) {
             (void)ic_set_line_wrap_marker("界");
         } else if (strstr(scenario, "_marker_off") != NULL) {

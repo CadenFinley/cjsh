@@ -634,6 +634,7 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
              make_subcommand("script-extension-interpreter",
                              "Toggle extension-based script runners"),
              make_subcommand("line-numbers", "Configure multiline line numbers"),
+             make_subcommand("scrollbars", "Toggle input and menu scrollbars"),
              make_subcommand("line-numbers-replace-prompt",
                              "Replace the final prompt line with line numbers"),
              make_subcommand("line-numbers-continuation",
@@ -939,6 +940,10 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                 {make_subcommand("status", "Show current multiline height")});
         add_doc("cjshopt-multiline-max-lines", "",
                 {make_subcommand("status", "Show the multiline viewport limit")});
+        add_doc("cjshopt-scrollbars", "",
+                {make_subcommand("on", "Show input and menu scrollbars"),
+                 make_subcommand("off", "Hide input and menu scrollbars"),
+                 make_subcommand("status", "Show current setting")});
         add_doc("cjshopt-completion-menu-max-lines", "Limit completion menu content rows",
                 {make_subcommand("status", "Show the completion menu height limit")});
         add_doc("cjshopt-history-menu-max-lines", "Limit history menu content rows",

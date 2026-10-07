@@ -56,6 +56,7 @@ int smart_cd_command(const std::vector<std::string>& args);
 int dialect_command(const std::vector<std::string>& args);
 int script_extension_interpreter_command(const std::vector<std::string>& args);
 int line_numbers_command(const std::vector<std::string>& args);
+int scrollbars_command(const std::vector<std::string>& args);
 int line_numbers_continuation_command(const std::vector<std::string>& args);
 int line_numbers_replace_prompt_command(const std::vector<std::string>& args);
 int current_line_number_highlight_command(const std::vector<std::string>& args);

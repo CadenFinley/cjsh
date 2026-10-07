@@ -928,7 +928,9 @@ static void edit_menu_append_scrollbar(ic_env_t* env, editor_t* eb, edit_menu_sc
                                        ssize_t items_start, const edit_menu_window_t* window) {
     bar->rows = 0;
     const ssize_t content_width = edit_menu_content_width(env);
-    if (window->max_scroll <= 0 || window->display_count <= 0 || content_width < 4) {
+    if (!env->show_scrollbars || window->max_scroll <= 0 || window->display_count <= 0 ||
+        content_width < 4) {
+        edit_menu_scrollbar_release(env, eb, bar);
         return;
     }
     stringbuf_t* plain = sbuf_new(env->mem);

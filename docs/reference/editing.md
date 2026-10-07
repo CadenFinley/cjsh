@@ -83,6 +83,9 @@ cjshopt custom-menu-max-lines <count|status>
 
 # Configure the input and menu scroll margin (default: 3)
 cjshopt multiline-bottom-lines <count|status>
+
+# Show or hide input and menu scrollbars (default: on)
+cjshopt scrollbars on|off|status
 ```
 
 When a command exceeds the viewport limit, the visible rows scroll with the cursor while the full
@@ -90,6 +93,10 @@ command remains available for editing and submission. Completion menus and other
 laid out separately below the input viewport. The symmetric cursor margin keeps the viewport fixed
 while the cursor moves within it, uses only rows that exist in the command, and never pads the
 display with blank lines.
+
+`cjshopt scrollbars off` hides both input and menu scrollbars while preserving keyboard scrolling.
+Add the command to `~/.cjshrc` to persist it. Embedding applications can use
+`ic_enable_scrollbars(bool)` and query `ic_scrollbars_are_enabled()`.
 
 All menus default to at most 15 content rows. These limits include expanded item previews, and
 menus shrink to fit the terminal. Headers and help text use separate rows.

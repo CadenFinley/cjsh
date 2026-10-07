@@ -98,6 +98,12 @@ def check_scrollbars(binary: str) -> None:
         )
 
     for kind in OPENINGS:
+        disabled = observe(kind, "_off", [
+            ("send", pty_tests.DOWN * 119), ("idle", 0.15),
+        ])
+        if bar_cells(disabled) or not any("entry119" in line for line in screen(disabled)):
+            raise AssertionError(f"{kind}: disabling scrollbars must preserve keyboard scrolling")
+
         output = observe(kind, "", [("check", expect(0, selected=0)),
                                    ("send", pty_tests.DOWN * 119), ("idle", 0.15),
                                    ("check", expect(112, selected=119))])

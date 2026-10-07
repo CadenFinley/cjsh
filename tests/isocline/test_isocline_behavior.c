@@ -433,6 +433,15 @@ static bool test_multiline_start_line_count_clamp(void) {
     return true;
 }
 
+static bool test_scrollbar_toggle(void) {
+    EXPECT_TRUE(ic_scrollbars_are_enabled(), "scrollbars should default to enabled");
+    EXPECT_TRUE(ic_enable_scrollbars(false), "disabling should return the enabled setting");
+    EXPECT_FALSE(ic_scrollbars_are_enabled(), "scrollbars should be disabled");
+    EXPECT_FALSE(ic_enable_scrollbars(true), "enabling should return the disabled setting");
+    EXPECT_TRUE(ic_scrollbars_are_enabled(), "scrollbars should be enabled again");
+    return true;
+}
+
 static bool test_multiline_max_line_count_defaults_and_clamps(void) {
     ic_env_t* env = ensure_env();
     if (env == NULL) {
@@ -4865,6 +4874,7 @@ static const test_case_t kTests[] = {
     {"line_wrap_marker", test_line_wrap_marker},
     {"visible_whitespace_marker", test_visible_whitespace_marker},
     {"multiline_start_line_count_clamp", test_multiline_start_line_count_clamp},
+    {"scrollbar_toggle", test_scrollbar_toggle},
     {"multiline_max_line_count_defaults_and_clamps",
      test_multiline_max_line_count_defaults_and_clamps},
     {"multiline_bottom_line_count_defaults_and_clamps",

@@ -1318,6 +1318,23 @@ int menu_highlighting_command(const std::vector<std::string>& args) {
     return 0;
 }
 
+int scrollbars_command(const std::vector<std::string>& args) {
+    static const ToggleCommandConfig config{
+        "scrollbars",
+        {"Usage: scrollbars <on|off|status>",
+         "Examples:", "  scrollbars on      Show input and menu scrollbars",
+         "  scrollbars off     Hide input and menu scrollbars",
+         "  scrollbars status  Show the current setting"},
+        [] { return ic_scrollbars_are_enabled(); },
+        [](bool enable) { (void)ic_enable_scrollbars(enable); },
+        "Scrollbars",
+        true,
+        "Add `cjshopt {command} {state}` to your ~/.cjshrc to persist this change.\n",
+        {},
+        {}};
+    return handle_toggle_command(config, args);
+}
+
 int visible_whitespace_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
         "Usage: visible-whitespace <on|off|status>",

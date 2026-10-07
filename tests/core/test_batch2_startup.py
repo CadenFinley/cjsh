@@ -228,6 +228,26 @@ class StartupTests(unittest.TestCase):
         ] + ["Multiline input currently shows up to 15 lines.",
              "Multiline input currently uses a cursor margin of up to 3 content lines."])
 
+    def test_scrollbars_toggle_and_rc(self):
+        result = self.run_shell("-c", "cjshopt scrollbars status; cjshopt scrollbars off; "
+                                "cjshopt scrollbars status; cjshopt scrollbars on; "
+                                "cjshopt scrollbars status")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        statuses = [line for line in result.stdout.splitlines() if "currently" in line]
+        self.assertEqual(statuses, ["Scrollbars are currently enabled.",
+                                    "Scrollbars are currently disabled.",
+                                    "Scrollbars are currently enabled."])
+        for value in ("", "invalid", "on extra"):
+            result = self.run_shell("-c", f"cjshopt scrollbars {value}")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("scrollbars", result.stderr)
+        (self.home / ".cjshrc").write_text("cjshopt scrollbars off\ncjshopt scrollbars status\n")
+        result = self.run_shell("-i", "--no-titleline", "--no-history", "-c",
+                                "cjshopt scrollbars status")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "Scrollbars are currently disabled.\n")
+        self.assertEqual(result.stderr, "")
+
     def test_shared_menu_limit_command_removed(self):
         for value in ("8", "status", "--help"):
             result = self.run_shell("-c", f"cjshopt menu-max-lines {value}")

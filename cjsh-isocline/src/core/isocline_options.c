@@ -655,6 +655,21 @@ ic_public size_t ic_get_custom_menu_max_line_count(void) {
     return (env == NULL ? 15 : env->custom_menu_max_line_count);
 }
 
+ic_public bool ic_enable_scrollbars(bool enable) {
+    ic_env_t* env = ic_get_env();
+    if (env == NULL) {
+        return false;
+    }
+    bool prev = env->show_scrollbars;
+    env->show_scrollbars = enable;
+    return prev;
+}
+
+ic_public bool ic_scrollbars_are_enabled(void) {
+    const ic_env_t* env = ic_get_env();
+    return env != NULL && env->show_scrollbars;
+}
+
 ic_public bool ic_enable_line_numbers(bool enable) {
     ic_env_t* env = ic_get_env();
     if (env == NULL) {

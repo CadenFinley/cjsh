@@ -808,6 +808,7 @@ Available subcommands:
 - `current-line-number-highlight` - Toggle highlighting of the current line number
 - `multiline-start-lines` - Configure how many prompt lines are preallocated in multiline mode
 - `multiline-max-lines` - Limit how many multiline input rows are visible at once
+- `scrollbars` - Show or hide input and menu scrollbars (`on|off|status`, default: on)
 - `completion-menu-max-lines` - Limit active and passive completion menu content rows
 - `history-menu-max-lines` - Limit history menu content rows, including previews
 - `command-palette-max-lines` - Limit command palette content rows

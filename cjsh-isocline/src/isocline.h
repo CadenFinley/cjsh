@@ -980,6 +980,13 @@ size_t ic_get_history_menu_max_line_count(void);
 size_t ic_get_command_palette_max_line_count(void);
 size_t ic_get_custom_menu_max_line_count(void);
 
+/// Enable or disable scrollbars. (enabled by default)
+/// Disabling them keeps keyboard navigation available. Returns the previous setting.
+bool ic_enable_scrollbars(bool enable);
+
+/// Returns whether input and menu scrollbars are enabled.
+bool ic_scrollbars_are_enabled(void);
+
 /// Enable or disable line numbers in multiline input mode. (enabled by default)
 /// When enabled, each line will be prefixed with a line number (e.g., "2| ", "3| ", etc.).
 /// The first line continues to use the regular prompt.
