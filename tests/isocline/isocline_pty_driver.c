@@ -227,6 +227,16 @@ static bool pty_menu_viewport_handler(ic_keycode_t key, void* arg) {
     return true;
 }
 
+static bool pty_scrollbar_toggle_handler(ic_keycode_t key, void* arg) {
+    (void)arg;
+    if (key != IC_KEY_F3) {
+        return false;
+    }
+    (void)ic_enable_scrollbars(!ic_scrollbars_are_enabled());
+    size_t pos = 0;
+    return ic_get_cursor_pos(&pos) && ic_set_cursor_pos(pos);
+}
+
 static void pty_menu_viewport_completer(ic_completion_env_t* cenv, const char* prefix) {
     for (int i = 0; i < 120; ++i) {
         char entry[16];
@@ -628,6 +638,7 @@ static int run_case(const char* scenario) {
          strcmp(scenario, "prompt_guard_region_marking_external_visible") == 0);
     bool multiline_mode =
         (strncmp(scenario, "typeahead_", 10) == 0 ||
+         strncmp(scenario, "input_scrollbar_", 16) == 0 ||
          strcmp(scenario, "multiline_ctrl_j_insert_newline") == 0 ||
          strcmp(scenario, "multiline_backslash_continuation") == 0 ||
          strcmp(scenario, "multiline_backslash_continuation_retained") == 0 ||
@@ -818,6 +829,54 @@ static int run_case(const char* scenario) {
         initial_input = "ab\ncd\nef";
     } else if (strcmp(scenario, "multiline_ctrl_e_stays_on_line") == 0) {
         initial_input = "ab\ncd\nef";
+    } else if (strncmp(scenario, "input_scrollbar_", 16) == 0) {
+        if (strstr(scenario, "_screen_bottom") != NULL) {
+            for (int i = 0; i < 23; ++i) {
+                (void)printf("CONSOLE-LINE-%02d\n", i);
+            }
+            (void)fflush(stdout);
+        }
+        initial_input =
+            "input-line-00\ninput-line-01\ninput-line-02\ninput-line-03\ninput-line-04\n"
+            "input-line-05\ninput-line-06\ninput-line-07\ninput-line-08\ninput-line-09\n"
+            "input-line-10\ninput-line-11\ninput-line-12\ninput-line-13\ninput-line-14\n"
+            "input-line-15\ninput-line-16\ninput-line-17\ninput-line-18\ninput-line-19";
+        (void)ic_set_multiline_max_line_count(strstr(scenario, "_terminal") != NULL ? 256 : 8);
+        (void)ic_set_multiline_bottom_line_count(strstr(scenario, "_margin") != NULL ? 3 : 0);
+        if (strstr(scenario, "_uneven") != NULL) {
+            initial_input =
+                "input-line-00 LONG-FIRST-LINE-TAIL\ninput-line-01\n"
+                "input-line-02 LONG-THIRD-LINE-TAIL\ninput-line-03\ninput-line-04\n"
+                "input-line-05\ninput-line-06\ninput-line-07\ninput-line-08\ninput-line-09\n"
+                "input-line-10\ninput-line-11\ninput-line-12\ninput-line-13\ninput-line-14\n"
+                "input-line-15\ninput-line-16\ninput-line-17\ninput-line-18\ninput-line-19";
+        }
+        (void)ic_enable_mouse_reporting_status_line(false);
+        if (strstr(scenario, "_off") != NULL && strstr(scenario, "_marker_off") == NULL) {
+            (void)ic_enable_scrollbars(false);
+        }
+        if (strstr(scenario, "_mouse") != NULL) {
+            (void)ic_enable_mouse_clicking(true);
+        } else if (strstr(scenario, "_smart") != NULL) {
+            (void)ic_set_mouse_clicking_mode(IC_MOUSE_CLICKING_SMART);
+            (void)ic_enable_mouse_clicking(true);
+        }
+        if (strstr(scenario, "_prefix") != NULL) {
+            prompt_text = "PREFIX-TOP\nPREFIX-MIDDLE\npty";
+        }
+        if (strstr(scenario, "_wide_marker") != NULL) {
+            (void)ic_set_line_wrap_marker("界");
+        } else if (strstr(scenario, "_marker_off") != NULL) {
+            (void)ic_set_line_wrap_marker("");
+        }
+        if (strstr(scenario, "_right") != NULL) {
+            inline_right_text = "[12:34:56]";
+            (void)ic_enable_inline_right_prompt_cursor_follow(true);
+        }
+        if (!ic_bind_key(IC_KEY_F3, IC_KEY_ACTION_RUNOFF)) {
+            return 5;
+        }
+        ic_set_unhandled_key_handler(pty_scrollbar_toggle_handler, NULL);
     } else if (strcmp(scenario, "multiline_max_lines_viewport") == 0 ||
                strcmp(scenario, "multiline_max_lines_prompt_reset") == 0) {
         initial_input =

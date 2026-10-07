@@ -359,7 +359,7 @@ static void edit_refresh_completion_auto_menu(ic_env_t* env, editor_t* eb, bool 
         editor_append_completion(env, eb, idx, width, false);
         (void)sbuf_append(eb->extra, "\n");
     }
-    edit_menu_scrollbar_t scrollbar = {0};
+    edit_scrollbar_t scrollbar = {0};
     edit_menu_append_scrollbar(env, eb, &scrollbar, items_start, &window);
     edit_menu_append_scroll_hint(eb->extra, count, visible, window.scroll_offset);
     (void)sbuf_append(eb->extra, footer);
@@ -623,7 +623,7 @@ static void edit_completion_menu(ic_env_t* env, editor_t* eb, bool more_availabl
     bool menu_mouse_scroll_enabled = false;
     bool menu_mouse_suspended = false;
     bool menu_mouse_focus_reporting_added = false;
-    edit_menu_scrollbar_t scrollbar = {0};
+    edit_scrollbar_t scrollbar = {0};
     bool completion_applied = false;
     bool completion_accepted = false;
     const bool hints_enabled = !env->no_hint && !env->completion_auto_menu;
@@ -801,7 +801,7 @@ read_key:
         goto cleanup;
     }
     if (c == KEY_EVENT_RESIZE || tty_term_resize_event(env->tty)) {
-        edit_menu_scrollbar_release(env, eb, &scrollbar);
+        edit_scrollbar_release(env, eb, &scrollbar);
         (void)edit_resize(env, eb);
         if (c == KEY_EVENT_RESIZE) {
             goto again;
@@ -811,9 +811,9 @@ read_key:
 
     code_t key_no_mods = KEY_NO_MODS(c);
 
-    if (edit_menu_scrollbar_event(env, eb, &scrollbar, c,
-                                  menu_mouse_scroll_enabled || eb->mouse_reporting_enabled,
-                                  &scroll_offset, &selected)) {
+    if (edit_scrollbar_event(env, eb, &scrollbar, c,
+                             menu_mouse_scroll_enabled || eb->mouse_reporting_enabled,
+                             &scroll_offset, &selected)) {
         c = 0;
         goto again;
     }
@@ -1061,7 +1061,7 @@ read_key:
     }
 
 cleanup:
-    edit_menu_scrollbar_release(env, eb, &scrollbar);
+    edit_scrollbar_release(env, eb, &scrollbar);
     edit_menu_mouse_finish(env, eb, true, &menu_mouse_scroll_enabled, &menu_mouse_suspended,
                            &menu_mouse_focus_reporting_added);
     completions_clear(env->completions);

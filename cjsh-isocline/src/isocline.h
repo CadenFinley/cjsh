@@ -980,8 +980,10 @@ size_t ic_get_history_menu_max_line_count(void);
 size_t ic_get_command_palette_max_line_count(void);
 size_t ic_get_custom_menu_max_line_count(void);
 
-/// Enable or disable scrollbars. (enabled by default)
-/// Disabling them keeps keyboard navigation available. Returns the previous setting.
+/// Enable or disable scrollbars for input viewports and menus. (enabled by default)
+/// A scrollbar appears only when content exceeds the visible rows, including input clipped by
+/// the multiline line limit, terminal height, or helper/menu rows. Disabling it keeps scrolling
+/// and keyboard navigation available. Returns the previous setting.
 bool ic_enable_scrollbars(bool enable);
 
 /// Returns whether input and menu scrollbars are enabled.

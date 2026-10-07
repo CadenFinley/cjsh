@@ -72,6 +72,52 @@
 //-------------------------------------------------------------
 
 // editor state
+typedef struct edit_scrollbar_s {
+    ssize_t first_row;  // relative to the input or extra content
+    ssize_t column;
+    ssize_t rows;
+    ssize_t thumb_row;
+    ssize_t thumb_rows;
+    ssize_t display_count;
+    ssize_t max_scroll;
+    ssize_t scroll_offset;
+    bool in_input;
+    bool scroll_pending;
+    bool pressed;
+    bool dragging;
+    bool discard_release;
+    bool motion_reporting_added;
+    bool focus_reporting_added;
+    ssize_t drag_top;  // absolute terminal row, retained outside the viewport
+    ssize_t drag_grab;
+    ssize_t drag_last_row;
+} edit_scrollbar_t;
+
+static void edit_scrollbar_layout(edit_scrollbar_t* bar, ssize_t rows, ssize_t display_count,
+                                  ssize_t max_scroll, ssize_t scroll_offset) {
+    bar->rows = rows;
+    bar->display_count = display_count;
+    bar->max_scroll = max_scroll;
+    bar->scroll_offset = scroll_offset;
+    bar->scroll_pending = false;
+    bar->thumb_rows =
+        (ssize_t)((double)rows * (double)display_count / (double)(max_scroll + display_count));
+    if (bar->thumb_rows < 1) {
+        bar->thumb_rows = 1;
+    }
+    bar->thumb_row =
+        (ssize_t)((double)(rows - bar->thumb_rows) * (double)scroll_offset / (double)max_scroll +
+                  0.5);
+}
+
+static void edit_scrollbar_write_cell(ic_env_t* env, const edit_scrollbar_t* bar, ssize_t row) {
+    const bool thumb = (row >= bar->thumb_row && row < bar->thumb_row + bar->thumb_rows);
+    const bool utf8 = tty_is_utf8(env->tty);
+    bbcode_style_open(env->bbcode, thumb ? "ic-emphasis" : "ic-diminish");
+    term_write(env->term, thumb ? (utf8 ? "\xE2\x96\x88" : "#") : (utf8 ? "\xE2\x94\x82" : "|"));
+    bbcode_style_close(env->bbcode, NULL);
+}
+
 typedef struct editor_s {
     stringbuf_t* input;                   // current user input
     stringbuf_t* extra;                   // extra displayed info (for completion menu etc)
@@ -89,7 +135,9 @@ typedef struct editor_s {
     ssize_t view_rows;                    // total rows physically rendered in the current viewport
     ssize_t view_input_rows;              // physically rendered prompt/input rows in the viewport
     ssize_t termw;
+    ssize_t inputw;  // input layout width, reserving space for a visible scrollbar
     ssize_t termh;
+    edit_scrollbar_t input_scrollbar;
     bool modified;                      // has a modification happened? (used for history navigation
                                         // for example)
     bool disable_undo;                  // temporarily disable auto undo (for history search)
@@ -126,9 +174,10 @@ typedef struct editor_s {
     ssize_t inline_right_width;     // cached width of inline right text
     ssize_t line_number_column_width;  // cached total prefix width when line numbers are shown
     char* rendered_hint_snapshot;      // most recent hint text that was rendered on screen
-    ssize_t last_screen_cursor_row;    // cached absolute cursor row from the last successful query
-    ssize_t last_screen_cursor_col;    // cached absolute cursor col from the last successful query
+    ssize_t last_screen_cursor_row;    // absolute cursor row, kept current across redraws
+    ssize_t last_screen_cursor_col;    // absolute cursor column, kept current across redraws
     bool last_screen_cursor_known;     // whether absolute cursor position cache is valid
+    bool input_scrollbar_cursor_query_attempted;    // prime the cache once before waiting for input
     ic_mouse_clicking_mode_t mouse_reporting_mode;  // per-session mouse capture strategy
     bool mouse_reporting_enabled;             // whether terminal mouse capture is currently on
     bool mouse_reporting_manual_enabled;      // user/default preference for this session
@@ -138,6 +187,7 @@ typedef struct editor_s {
     bool mouse_focus_reporting_enabled;       // focus-in/focus-out reporting (CSI I/O) enabled
     ssize_t mouse_capture_depth;              // nested mouse tracking enablement depth
     bool mouse_left_button_down;              // track click origins for terminals without motion
+    bool input_scrollbar_suppressed;          // omit the scrollbar from submitted output
     ssize_t mouse_left_press_column;
     ssize_t mouse_left_press_row;
     alloc_t* mem;  // allocator
@@ -238,6 +288,7 @@ static bool edit_key_is_mouse_toggle_binding(const ic_env_t* env, code_t key);
 static void edit_set_mouse_reporting_enabled(ic_env_t* env, editor_t* eb, bool enabled);
 static void edit_toggle_mouse_reporting(ic_env_t* env, editor_t* eb);
 static void edit_reset_mouse_reporting_session(ic_env_t* env, editor_t* eb, bool apply_default);
+static void edit_scrollbar_release(ic_env_t* env, editor_t* eb, edit_scrollbar_t* bar);
 static bool edit_try_spell_correct_on_enter(ic_env_t* env, editor_t* eb);
 
 static void edit_reset_last_arg_state(editor_t* eb) {
@@ -708,7 +759,7 @@ static void edit_get_prompt_width(ic_env_t* env, editor_t* eb, bool in_extra, ss
 static ssize_t edit_get_rowcol(ic_env_t* env, editor_t* eb, rowcol_t* rc) {
     ssize_t promptw, cpromptw;
     edit_get_prompt_width(env, eb, false, &promptw, &cpromptw);
-    return sbuf_get_rc_at_pos(eb->input, eb->termw, promptw, cpromptw, env->line_wrap_marker_width,
+    return sbuf_get_rc_at_pos(eb->input, eb->inputw, promptw, cpromptw, env->line_wrap_marker_width,
                               eb->pos, rc);
 }
 
@@ -739,7 +790,7 @@ static ssize_t edit_visible_input_row_count(ic_env_t* env, editor_t* eb, ssize_t
 static void edit_set_pos_at_rowcol(ic_env_t* env, editor_t* eb, ssize_t row, ssize_t col) {
     ssize_t promptw, cpromptw;
     edit_get_prompt_width(env, eb, false, &promptw, &cpromptw);
-    ssize_t pos = sbuf_get_pos_at_rc(eb->input, eb->termw, promptw, cpromptw,
+    ssize_t pos = sbuf_get_pos_at_rc(eb->input, eb->inputw, promptw, cpromptw,
                                      env->line_wrap_marker_width, row, col);
     if (pos < 0) {
         return;
@@ -776,6 +827,18 @@ static bool edit_view_row_to_logical_row(const editor_t* eb, ssize_t view_row,
     return (*logical_row >= 0 && *logical_row < eb->cur_rows);
 }
 
+static bool edit_query_screen_cursor_pos(ic_env_t* env, editor_t* eb) {
+    ssize_t row = 0;
+    ssize_t column = 0;
+    if (!term_query_cursor_pos(env->term, &row, &column)) {
+        return false;
+    }
+    eb->last_screen_cursor_row = row;
+    eb->last_screen_cursor_col = column;
+    eb->last_screen_cursor_known = true;
+    return true;
+}
+
 static bool edit_mouse_event_to_target_rowcol(ic_env_t* env, editor_t* eb,
                                               const tty_mouse_event_t* mouse_event,
                                               ssize_t* target_row, ssize_t* target_col,
@@ -793,20 +856,8 @@ static bool edit_mouse_event_to_target_rowcol(ic_env_t* env, editor_t* eb,
         return false;
     }
 
-    ssize_t cursor_row = 0;
-    ssize_t cursor_col = 0;
-    bool has_cursor_pos = term_query_cursor_pos(env->term, &cursor_row, &cursor_col);
-    if (has_cursor_pos) {
-        eb->last_screen_cursor_row = cursor_row;
-        eb->last_screen_cursor_col = cursor_col;
-        eb->last_screen_cursor_known = true;
-    } else if (eb->last_screen_cursor_known) {
-        cursor_row = eb->last_screen_cursor_row;
-        cursor_col = eb->last_screen_cursor_col;
-        has_cursor_pos = true;
-    }
-
-    if (!has_cursor_pos) {
+    (void)edit_query_screen_cursor_pos(env, eb);
+    if (!eb->last_screen_cursor_known) {
         const ssize_t fallback_view_row = mouse_event->row - 1;
         ssize_t fallback_row = 0;
         if (!edit_view_row_to_logical_row(eb, fallback_view_row, &fallback_row)) {
@@ -822,11 +873,9 @@ static bool edit_mouse_event_to_target_rowcol(ic_env_t* env, editor_t* eb,
         *target_col = fallback_col;
         return true;
     }
-    ic_unused(cursor_col);
-
     const ssize_t visible_cursor_row = edit_view_cursor_row(eb);
 
-    ssize_t top_row = cursor_row - visible_cursor_row;
+    ssize_t top_row = eb->last_screen_cursor_row - visible_cursor_row;
     ssize_t clicked_visible_row = mouse_event->row - top_row;
     if (clicked_visible_row < 0) {
         if (clicked_above_viewport != NULL) {
@@ -906,8 +955,8 @@ static bool edit_handle_mouse_click(ic_env_t* env, editor_t* eb, const char* ren
 
     rowcol_t end_rc = {0};
     ssize_t input_rows =
-        sbuf_get_rc_at_pos(display_input, eb->termw, promptw, cpromptw, env->line_wrap_marker_width,
-                           sbuf_len(display_input), &end_rc);
+        sbuf_get_rc_at_pos(display_input, eb->inputw, promptw, cpromptw,
+                           env->line_wrap_marker_width, sbuf_len(display_input), &end_rc);
     if (target_row >= input_rows) {
         sbuf_free(display_input_with_hint);
         return false;
@@ -919,7 +968,7 @@ static bool edit_handle_mouse_click(ic_env_t* env, editor_t* eb, const char* ren
         target_col = 0;
     }
 
-    ssize_t new_pos = sbuf_get_pos_at_rc(display_input, eb->termw, promptw, cpromptw,
+    ssize_t new_pos = sbuf_get_pos_at_rc(display_input, eb->inputw, promptw, cpromptw,
                                          env->line_wrap_marker_width, target_row, target_col);
     if (new_pos < 0) {
         sbuf_free(display_input_with_hint);
@@ -1613,7 +1662,7 @@ static void edit_render_inline_right_prompt(refresh_info_t* info, ssize_t row, s
         return;
     }
 
-    ssize_t terminal_width = info->eb->termw;
+    ssize_t terminal_width = info->eb->inputw;
     if (terminal_width <= current_pos + right_text_width + 1) {
         return;
     }
@@ -1702,23 +1751,29 @@ static bool edit_refresh_rows_iter(const char* s, ssize_t row, ssize_t row_start
             edit_render_inline_right_prompt(info, row, row_len);
         }
 
-        // write line ending
+        if (show_wrap_marker) {
+            ic_term_mark_prompt_start(info->env, true);
+            bbcode_style_open(info->env->bbcode, "ic-diminish");
+            term_write(term, info->env->line_wrap_marker);
+            bbcode_style_close(info->env->bbcode, NULL);
+            ic_term_mark_input_start(info->env);
+        }
+        const edit_scrollbar_t* bar = &info->eb->input_scrollbar;
+        const bool show_scrollbar = (!info->in_extra && bar->rows > 0);
+        if (show_scrollbar) {
+            // Clear old text between this row's content and the track before jumping columns.
+            term_clear_to_end_of_line(term);
+            ic_term_mark_prompt_start(info->env, true);
+            term_start_of_line(term);
+            term_right(term, bar->column);
+            edit_scrollbar_write_cell(info->env, bar, row - info->first_row);
+            ic_term_mark_input_start(info->env);
+        }
+        if (show_scrollbar || (!should_attempt_inline_right && !row_fills_terminal)) {
+            term_clear_to_end_of_line(term);
+        }
         if (has_following_row) {
-            if (show_wrap_marker) {
-                ic_term_mark_prompt_start(info->env, true);
-                bbcode_style_open(info->env->bbcode, "ic-diminish");
-                term_write(term, info->env->line_wrap_marker);
-                bbcode_style_close(info->env->bbcode, NULL);
-                ic_term_mark_input_start(info->env);
-            }
-            if (!should_attempt_inline_right && !row_fills_terminal) {
-                term_clear_to_end_of_line(term);
-            }
             term_writeln(term, "");
-        } else {
-            if (!should_attempt_inline_right && !row_fills_terminal) {
-                term_clear_to_end_of_line(term);
-            }
         }
     }
 
@@ -1753,8 +1808,8 @@ static void edit_refresh_rows(ic_env_t* env, editor_t* eb, stringbuf_t* input, a
     info.cursor_logical_line = cursor_logical_line;
     info.continuation_row = false;
     info.has_following_row = has_following_row;
-    (void)sbuf_for_each_row(input, eb->termw, promptw, cpromptw, env->line_wrap_marker_width,
-                            &edit_refresh_rows_iter, &info, NULL);
+    (void)sbuf_for_each_row(input, in_extra ? eb->termw : eb->inputw, promptw, cpromptw,
+                            env->line_wrap_marker_width, &edit_refresh_rows_iter, &info, NULL);
 }
 
 static bool sbuf_ends_with_newline(stringbuf_t* sbuf) {
@@ -1893,10 +1948,22 @@ static void edit_refresh(ic_env_t* env, editor_t* eb) {
         cursor_logical_line = logical_line_count - 1;
     }
     ssize_t cursor_line_for_display = 0;
+    const ssize_t visible_termh = edit_available_terminal_rows(env, eb);
+    const ssize_t scrollbar_margin =
+        (env->line_wrap_marker_width > 1 ? env->line_wrap_marker_width : 1);
+    const ssize_t scrollbar_column = eb->termw - scrollbar_margin - 1;
+    // Keep the last rendered viewport intact until the redraw has located its screen origin.
+    const ssize_t requested_first_row =
+        (eb->input_scrollbar.scroll_pending ? eb->input_scrollbar.scroll_offset
+                                            : eb->view_first_row);
+    // Explicit mouse scrolling owns the viewport; margins apply again on keyboard navigation.
+    const size_t scroll_margin =
+        (eb->input_scrollbar.scroll_pending ? 0 : env->multiline_bottom_line_count);
+    eb->inputw = eb->termw;
 
     while (true) {
         rc = (rowcol_t){0};
-        rows_input = sbuf_get_rc_at_pos(eb->input, eb->termw, promptw, cpromptw,
+        rows_input = sbuf_get_rc_at_pos(eb->input, eb->inputw, promptw, cpromptw,
                                         env->line_wrap_marker_width, eb->pos, &rc);
 
         if (extra != NULL) {
@@ -1944,6 +2011,18 @@ static void edit_refresh(ic_env_t* env, editor_t* eb) {
             eb->line_number_column_width = 0;
         }
 
+        const editline_viewport_t candidate = editline_viewport_for(
+            rows_input, rows_extra, rc.row, visible_termh, env->multiline_max_line_count,
+            scroll_margin, requested_first_row);
+        if (env->show_scrollbars && !eb->input_scrollbar_suppressed &&
+            rows_input > candidate.input_row_count && eb->inputw == eb->termw &&
+            scrollbar_column >= 4 && scrollbar_column > promptw + env->line_wrap_marker_width &&
+            scrollbar_column > cpromptw + env->line_wrap_marker_width) {
+            // Reserve a column only for clipped input; menus retain their full-width layout.
+            eb->inputw = scrollbar_column;
+            continue;
+        }
+
         break;
     }
 
@@ -1955,11 +2034,9 @@ static void edit_refresh(ic_env_t* env, editor_t* eb) {
 
     // Prefix rows are rendered separately above this viewport. Keep the complete physical editor
     // (prefix, input, and helper rows) within the terminal's row count.
-    const ssize_t visible_termh = edit_available_terminal_rows(env, eb);
-
-    const editline_viewport_t viewport = editline_viewport_for(
-        rows_input, rows_extra, rc.row, visible_termh, env->multiline_max_line_count,
-        env->multiline_bottom_line_count, eb->view_first_row);
+    const editline_viewport_t viewport =
+        editline_viewport_for(rows_input, rows_extra, rc.row, visible_termh,
+                              env->multiline_max_line_count, scroll_margin, requested_first_row);
     const ssize_t first_input_row = viewport.input_first_row;
     const ssize_t last_input_row = first_input_row + viewport.input_row_count - 1;
     const ssize_t view_rows = viewport.input_row_count + viewport.extra_row_count;
@@ -1968,12 +2045,29 @@ static void edit_refresh(ic_env_t* env, editor_t* eb) {
     assert(visible_cursor_row >= 0 && visible_cursor_row < viewport.input_row_count);
     assert(view_rows >= 1 && view_rows <= visible_termh);
 
+    edit_scrollbar_t* bar = &eb->input_scrollbar;
+    if (eb->inputw < eb->termw) {
+        if (bar->column != scrollbar_column || bar->rows != viewport.input_row_count) {
+            edit_scrollbar_release(env, eb, bar);
+        }
+        bar->in_input = true;
+        bar->column = scrollbar_column;
+        edit_scrollbar_layout(bar, viewport.input_row_count, viewport.input_row_count,
+                              rows_input - viewport.input_row_count, first_input_row);
+    } else {
+        edit_scrollbar_release(env, eb, bar);
+        bar->rows = 0;
+        bar->scroll_pending = false;
+        eb->input_scrollbar_cursor_query_attempted = false;
+    }
+
     // reduce flicker
     buffer_mode_t bmode = term_set_buffer_mode(env->term, BUFFERED);
 
     // Back up from the cursor's physical row in the previous viewport. Logical row counts can be
     // much larger than the number of rows currently present on screen.
     const ssize_t previous_visible_cursor_row = edit_view_cursor_row(eb);
+    ssize_t screen_first_row = eb->last_screen_cursor_row - previous_visible_cursor_row;
     term_start_of_line(env->term);
     term_up(env->term, previous_visible_cursor_row);
 
@@ -2048,6 +2142,15 @@ static void edit_refresh(ic_env_t* env, editor_t* eb) {
     sbuf_free(extra);
 
     // update previous
+    if (eb->last_screen_cursor_known) {
+        const ssize_t screen_last_row = screen_first_row + rrows - 1;
+        if (screen_last_row > eb->termh) {
+            screen_first_row -= screen_last_row - eb->termh;
+        }
+        eb->last_screen_cursor_row = screen_first_row + visible_cursor_row;
+        eb->last_screen_cursor_col = rc.col + actual_prompt_width + 1;
+        eb->last_screen_cursor_known = (screen_first_row >= 1);
+    }
     eb->cur_rows = rows;
     eb->input_rows = rows_input;
     eb->mouse_terminal_selection_extra = (!menu_active && rows_extra > 0);
@@ -2083,6 +2186,8 @@ static void edit_clear_with_prompt_prefix(ic_env_t* env, editor_t* eb,
         return;
     }
 
+    eb->last_screen_cursor_known = false;
+    eb->input_scrollbar_cursor_query_attempted = false;
     const ssize_t display_rows = (eb->view_rows > 0 ? eb->view_rows : 1);
     const ssize_t cursor_row = edit_view_cursor_row(eb);
     if (prompt_prefix_lines < 0) {
@@ -2161,6 +2266,9 @@ static bool edit_resize(ic_env_t* env, editor_t* eb) {
         return false;
     }
 
+    edit_scrollbar_release(env, eb, &eb->input_scrollbar);
+    eb->last_screen_cursor_known = false;
+    eb->input_scrollbar_cursor_query_attempted = false;
     eb->termh = newtermh;
     if (!width_changed) {
         if (eb->completion_auto_menu_visible) {
@@ -2214,7 +2322,7 @@ static bool edit_resize(ic_env_t* env, editor_t* eb) {
     }
     rowcol_t rc = {0};
     const ssize_t rows_input =
-        sbuf_get_wrapped_rc_at_pos(eb->input, eb->termw, newtermw, promptw, cpromptw,
+        sbuf_get_wrapped_rc_at_pos(eb->input, eb->inputw, newtermw, promptw, cpromptw,
                                    env->line_wrap_marker_width, eb->pos, &rc);
     rowcol_t rc_extra = {0};
     ssize_t rows_extra = 0;
@@ -2238,6 +2346,7 @@ static bool edit_resize(ic_env_t* env, editor_t* eb) {
         eb->cur_rows++;
     }
     eb->termw = newtermw;
+    eb->inputw = newtermw;
     // Layout included the displayed hint; refresh and completion generation need
     // the actual input so the hint is neither duplicated nor treated as typed text.
     sbuf_delete_at(eb->input, eb->pos, sbuf_len(eb->hint));
@@ -3294,6 +3403,7 @@ static void edit_force_mouse_tracking_disabled(ic_env_t* env, editor_t* eb) {
         return;
     }
 
+    edit_scrollbar_release(env, eb, &eb->input_scrollbar);
     eb->mouse_capture_depth = 0;
     eb->mouse_left_button_down = false;
 
@@ -3333,6 +3443,7 @@ static void edit_set_mouse_reporting_enabled(ic_env_t* env, editor_t* eb, bool e
         }
         if (edit_enable_mouse_tracking(env, eb)) {
             eb->mouse_reporting_enabled = true;
+            eb->input_scrollbar_cursor_query_attempted = false;
         }
         return;
     }
@@ -4008,6 +4119,7 @@ static char* edit_line(ic_env_t* env, const char* prompt_text, const char* inlin
     eb.hint_help = sbuf_new(env->mem);
     eb.history_prefix = sbuf_new(env->mem);
     eb.termw = term_get_width(env->term);
+    eb.inputw = eb.termw;
     eb.termh = term_get_height(env->term);
     eb.pos = 0;
     eb.cur_rows = 1;
@@ -4208,6 +4320,14 @@ edit_loop_entry:
             } else {
                 // read a character
                 term_flush(env->term);
+                // Wheel bursts prevent a synchronous position query once input is queued.
+                // Locate a scrollable editor while idle, then maintain the cache on redraw.
+                if (eb.input_scrollbar.rows > 0 && eb.mouse_reporting_enabled &&
+                    !eb.refresh_suppressed && !eb.last_screen_cursor_known &&
+                    !eb.input_scrollbar_cursor_query_attempted && !tty_input_pending(env->tty)) {
+                    eb.input_scrollbar_cursor_query_attempted = true;
+                    (void)edit_query_screen_cursor_pos(env, &eb);
+                }
                 if (env->idle_timeout > 0) {
                     while (true) {
                         long idle_remaining = edit_milliseconds_until(eb.idle_deadline_ms);
@@ -4298,6 +4418,22 @@ edit_loop_entry:
 
             if (c == KEY_EVENT_READLINE) {
                 env->readline_event_pending = true;
+                continue;
+            }
+
+            ssize_t scrollbar_row = eb.cur_row;
+            if (edit_scrollbar_event(env, &eb, &eb.input_scrollbar, c,
+                                     eb.mouse_reporting_enabled && env->show_scrollbars,
+                                     &eb.input_scrollbar.scroll_offset, &scrollbar_row)) {
+                eb.input_scrollbar.scroll_pending =
+                    (eb.input_scrollbar.scroll_offset != eb.view_first_row);
+                if (scrollbar_row != eb.cur_row) {
+                    rowcol_t scrollbar_rc = {0};
+                    (void)edit_get_rowcol(env, &eb, &scrollbar_rc);
+                    edit_set_pos_at_rowcol(env, &eb, scrollbar_row, scrollbar_rc.col);
+                } else if (eb.input_scrollbar.scroll_pending) {
+                    edit_refresh(env, &eb);
+                }
                 continue;
             }
 
@@ -4688,6 +4824,8 @@ edit_loop_entry:
 
     // goto end
 
+    edit_scrollbar_release(env, &eb, &eb.input_scrollbar);
+    eb.input_scrollbar_suppressed = true;
     edit_process_readline_event(env);
     edit_flush_notifications(env, &eb);
 

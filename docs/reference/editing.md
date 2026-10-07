@@ -94,6 +94,12 @@ laid out separately below the input viewport. The symmetric cursor margin keeps 
 while the cursor moves within it, uses only rows that exist in the command, and never pads the
 display with blank lines.
 
+A scrollbar appears beside the input whenever rows are hidden by `multiline-max-lines`, the
+terminal height, or space reserved for helper/menu rows. It follows the visible input rows,
+including wrapped lines, and disappears when the whole input fits. With prompt mouse capture
+enabled, click the track to page or drag the thumb to scroll while keeping the cursor visible.
+Submitting the command removes the input scrollbar.
+
 `cjshopt scrollbars off` hides both input and menu scrollbars while preserving keyboard scrolling.
 Add the command to `~/.cjshrc` to persist it. Embedding applications can use
 `ic_enable_scrollbars(bool)` and query `ic_scrollbars_are_enabled()`.

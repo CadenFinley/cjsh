@@ -28,25 +28,8 @@
 
 /* Shared helpers for editline menus. This file is included in editline.c. */
 
-typedef struct edit_menu_scrollbar_s {
-    ssize_t first_row;  // relative to the extra content, including wrapped headers
-    ssize_t column;
-    ssize_t rows;
-    ssize_t thumb_row;
-    ssize_t thumb_rows;
-    ssize_t display_count;
-    ssize_t max_scroll;
-    bool pressed;
-    bool dragging;
-    bool discard_release;
-    bool motion_reporting_added;
-    ssize_t drag_top;  // absolute terminal row, retained when the pointer leaves the menu
-    ssize_t drag_grab;
-    ssize_t drag_last_row;
-} edit_menu_scrollbar_t;
-
 typedef struct edit_menu_session_s {
-    edit_menu_scrollbar_t scrollbar;
+    edit_scrollbar_t scrollbar;
     bool maximized;  // temporary for this invocation, never changes configured limits
     const char* prompt_text;
     const char* inline_right_text;
@@ -76,7 +59,7 @@ static ssize_t edit_menu_content_width(ic_env_t* env) {
     return (width > 0 ? width : 1);
 }
 
-static void edit_menu_scrollbar_release(ic_env_t* env, editor_t* eb, edit_menu_scrollbar_t* bar) {
+static void edit_scrollbar_release(ic_env_t* env, editor_t* eb, edit_scrollbar_t* bar) {
     if (bar->motion_reporting_added) {
         term_write(env->term, "\x1b[?1002l");
         if (eb->mouse_capture_depth > 0) {
@@ -84,6 +67,10 @@ static void edit_menu_scrollbar_release(ic_env_t* env, editor_t* eb, edit_menu_s
         }
         term_flush(env->term);
         bar->motion_reporting_added = false;
+    }
+    if (bar->focus_reporting_added) {
+        edit_set_mouse_focus_reporting(env, eb, false);
+        bar->focus_reporting_added = false;
     }
     if (bar->pressed) {
         eb->mouse_left_button_down = false;
@@ -665,7 +652,7 @@ static void edit_menu_finish(ic_env_t* env, editor_t* eb, edit_menu_session_t* s
         return;
     }
 
-    edit_menu_scrollbar_release(env, eb, &session->scrollbar);
+    edit_scrollbar_release(env, eb, &session->scrollbar);
     sbuf_clear(eb->extra);
     eb->disable_undo = false;
     if (restore_undo) {
@@ -718,7 +705,7 @@ static ssize_t edit_menu_input_rows(ic_env_t* env, editor_t* eb) {
 
     rowcol_t rc_dummy;
     memset(&rc_dummy, 0, sizeof(rc_dummy));
-    ssize_t input_rows = sbuf_get_rc_at_pos(eb->input, eb->termw, promptw, cpromptw,
+    ssize_t input_rows = sbuf_get_rc_at_pos(eb->input, eb->inputw, promptw, cpromptw,
                                             env->line_wrap_marker_width, input_len, &rc_dummy);
     if (input_rows <= 0) {
         input_rows = 1;
@@ -794,17 +781,16 @@ static ssize_t edit_menu_page_selection(ic_env_t* env, ssize_t page, ssize_t scr
 
 // Scrollbar gestures own their entire press/release sequence. Handle them before smart
 // mouse selection can relinquish capture or an item click can accept a menu entry.
-static bool edit_menu_scrollbar_event(ic_env_t* env, editor_t* eb, edit_menu_scrollbar_t* bar,
-                                      code_t key, bool mouse_enabled, ssize_t* scroll_offset,
-                                      ssize_t* selected) {
+static bool edit_scrollbar_event(ic_env_t* env, editor_t* eb, edit_scrollbar_t* bar, code_t key,
+                                 bool mouse_enabled, ssize_t* scroll_offset, ssize_t* selected) {
     if (KEY_NO_MODS(key) != KEY_EVENT_MOUSE_OTHER) {
         if (key != KEY_NONE) {
-            edit_menu_scrollbar_release(env, eb, bar);
+            edit_scrollbar_release(env, eb, bar);
         }
         return false;
     }
     if (!mouse_enabled) {
-        edit_menu_scrollbar_release(env, eb, bar);
+        edit_scrollbar_release(env, eb, bar);
         return false;
     }
 
@@ -842,7 +828,7 @@ static bool edit_menu_scrollbar_event(ic_env_t* env, editor_t* eb, edit_menu_scr
             }
         }
         if (event.action == TTY_MOUSE_ACTION_LEFT_RELEASE) {
-            edit_menu_scrollbar_release(env, eb, bar);
+            edit_scrollbar_release(env, eb, bar);
             bar->discard_release = false;
         }
         return true;
@@ -856,12 +842,12 @@ static bool edit_menu_scrollbar_event(ic_env_t* env, editor_t* eb, edit_menu_scr
     if (!edit_mouse_event_to_target_rowcol(env, eb, &event, &row, &column, NULL)) {
         return false;
     }
-    row -= eb->input_rows + bar->first_row;
+    row -= (bar->in_input ? eb->view_first_row : eb->input_rows) + bar->first_row;
     if (column != bar->column || row < 0 || row >= bar->rows) {
         return false;
     }
 
-    edit_menu_scrollbar_release(env, eb, bar);
+    edit_scrollbar_release(env, eb, bar);
     bar->discard_release = false;
     bar->pressed = true;
     eb->mouse_left_button_down = false;
@@ -870,6 +856,10 @@ static bool edit_menu_scrollbar_event(ic_env_t* env, editor_t* eb, edit_menu_scr
         bar->drag_top = event.row - row;
         bar->drag_grab = row - bar->thumb_row;
         bar->drag_last_row = event.row;
+        if (!eb->mouse_focus_reporting_enabled) {
+            edit_set_mouse_focus_reporting(env, eb, true);
+            bar->focus_reporting_added = true;
+        }
         if (eb->mouse_reporting_mode != IC_MOUSE_CLICKING_SMART) {
             term_write(env->term, "\x1b[?1002h");
             term_flush(env->term);
@@ -895,7 +885,7 @@ typedef struct edit_menu_scrollbar_render_s {
     stringbuf_t* output;
     const attr_t* attrs;
     ssize_t length;
-    edit_menu_scrollbar_t* bar;
+    edit_scrollbar_t* bar;
 } edit_menu_scrollbar_render_t;
 
 static bool edit_menu_scrollbar_render_row(const char* text, ssize_t row, ssize_t start,
@@ -905,7 +895,7 @@ static bool edit_menu_scrollbar_render_row(const char* text, ssize_t row, ssize_
     ic_unused(wrapped);
     ic_unused(result);
     const edit_menu_scrollbar_render_t* render = (const edit_menu_scrollbar_render_t*)arg;
-    const edit_menu_scrollbar_t* bar = render->bar;
+    const edit_scrollbar_t* bar = render->bar;
     if (row >= bar->rows) {
         return true;
     }
@@ -924,13 +914,13 @@ static bool edit_menu_scrollbar_render_row(const char* text, ssize_t row, ssize_
 
 // Decorate only item rows, preserving their attributes and leaving headers/help full width.
 // The last terminal cell stays empty to avoid delayed-wrap behavior on terminal emulators.
-static void edit_menu_append_scrollbar(ic_env_t* env, editor_t* eb, edit_menu_scrollbar_t* bar,
+static void edit_menu_append_scrollbar(ic_env_t* env, editor_t* eb, edit_scrollbar_t* bar,
                                        ssize_t items_start, const edit_menu_window_t* window) {
     bar->rows = 0;
     const ssize_t content_width = edit_menu_content_width(env);
     if (!env->show_scrollbars || window->max_scroll <= 0 || window->display_count <= 0 ||
         content_width < 4) {
-        edit_menu_scrollbar_release(env, eb, bar);
+        edit_scrollbar_release(env, eb, bar);
         return;
     }
     stringbuf_t* plain = sbuf_new(env->mem);
@@ -948,16 +938,8 @@ static void edit_menu_append_scrollbar(ic_env_t* env, editor_t* eb, edit_menu_sc
     bar->column = content_width;
     bar->rows = sbuf_get_rc_at_pos(plain, content_width + 1, 0, 0, 1, length, &rc) -
                 (trailing_newline ? 1 : 0);
-    bar->display_count = window->display_count;
-    bar->max_scroll = window->max_scroll;
-    bar->thumb_rows = (ssize_t)((double)bar->rows * (double)window->display_count /
-                                (double)(window->max_scroll + window->display_count));
-    if (bar->thumb_rows < 1) {
-        bar->thumb_rows = 1;
-    }
-    bar->thumb_row = (ssize_t)((double)(bar->rows - bar->thumb_rows) *
-                                   (double)window->scroll_offset / (double)window->max_scroll +
-                               0.5);
+    edit_scrollbar_layout(bar, bar->rows, window->display_count, window->max_scroll,
+                          window->scroll_offset);
 
     sbuf_delete_at(eb->extra, items_start, sbuf_len(eb->extra) - items_start);
     bar->first_row = edit_menu_rendered_rows(env, eb, sbuf_string(eb->extra)) +
@@ -1511,12 +1493,12 @@ static bool edit_menu_read_event(ic_env_t* env, editor_t* eb, edit_menu_session_
     *key = KEY_ESC;
     (void)edit_menu_read_key(env, eb, key);
     if (*key == KEY_EVENT_RESIZE || tty_term_resize_event(env->tty)) {
-        edit_menu_scrollbar_release(env, eb, &session->scrollbar);
+        edit_scrollbar_release(env, eb, &session->scrollbar);
         (void)edit_resize(env, eb);
     }
     sbuf_clear(eb->extra);
-    if (edit_menu_scrollbar_event(env, eb, &session->scrollbar, *key, session->mouse_scroll_enabled,
-                                  scroll_offset, selected)) {
+    if (edit_scrollbar_event(env, eb, &session->scrollbar, *key, session->mouse_scroll_enabled,
+                             scroll_offset, selected)) {
         return false;
     }
     if (edit_menu_mouse_prepare_key(env, eb, *key, true, &session->mouse_scroll_enabled,
