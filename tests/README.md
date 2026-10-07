@@ -67,6 +67,9 @@ For a custom build directory, use `ctest --test-dir <build-dir> --output-on-fail
 CTest passes the binary from that build to each suite; do not rely on an installed
 `cjsh` being the version under test.
 
+Compiled test executables and helper libraries are in `<build-dir>/tests/`
+(for example, `build/release/tests/`). The shell executable is at `<build-dir>/cjsh`.
+
 ## Adding a regression
 
 1. Prefer the existing suite that owns the behavior; use a small, deterministic reproducer.

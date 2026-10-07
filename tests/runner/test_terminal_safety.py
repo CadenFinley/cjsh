@@ -130,6 +130,7 @@ def run_in_terminal(command: list[str], timeout: float = 10.0) -> tuple[int, str
 class TerminalSafetyTests(unittest.TestCase):
     runner: str
     function_tests: str
+    cjsh: str
 
     def test_runner_disconnects_stdin_and_preserves_arguments(self) -> None:
         code, output = run_in_terminal(
@@ -164,7 +165,6 @@ class TerminalSafetyTests(unittest.TestCase):
 
     def test_python_pty_child_has_its_own_session(self) -> None:
         session_module = Path(__file__).resolve().parents[1] / "core/test_agent_mode_interactive.py"
-        binary = Path(self.function_tests).with_name("cjsh")
         probe = """
 import importlib.util
 import os
@@ -181,7 +181,7 @@ with tempfile.TemporaryDirectory(prefix="cjsh-terminal-safety-") as home:
         session.close()
 """
         code, output = run_in_terminal(
-            [sys.executable, "-c", probe, str(session_module), str(binary)]
+            [sys.executable, "-c", probe, str(session_module), self.cjsh]
         )
         self.assertEqual(code, 0, output)
 
@@ -232,4 +232,5 @@ finally:
 if __name__ == "__main__":
     TerminalSafetyTests.runner = str(Path(sys.argv[1]).resolve())
     TerminalSafetyTests.function_tests = str(Path(sys.argv[2]).resolve())
+    TerminalSafetyTests.cjsh = str(Path(sys.argv[3]).resolve())
     unittest.main(argv=[sys.argv[0]], verbosity=2)

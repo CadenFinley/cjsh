@@ -28,6 +28,17 @@ if(NOT BUILD_TESTING)
     return()
 endif()
 
+# Keep test executables and helper libraries together in the build's tests directory.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+if(CMAKE_CONFIGURATION_TYPES)
+    foreach(_cfg ${CMAKE_CONFIGURATION_TYPES})
+        string(TOUPPER "${_cfg}" _cfg_upper)
+        set("CMAKE_RUNTIME_OUTPUT_DIRECTORY_${_cfg_upper}" "${CMAKE_BINARY_DIR}/tests")
+        set("CMAKE_LIBRARY_OUTPUT_DIRECTORY_${_cfg_upper}" "${CMAKE_BINARY_DIR}/tests")
+    endforeach()
+endif()
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # Print the individual counts after CTest's suite-level summary, including when
@@ -108,12 +119,7 @@ if(UNIX)
         SHARED
         "${CMAKE_CURRENT_SOURCE_DIR}/core/fg_terminal_race_injector.c"
     )
-    set_target_properties(
-        fg_terminal_race_injector
-        PROPERTIES
-            PREFIX ""
-            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    )
+    set_target_properties(fg_terminal_race_injector PROPERTIES PREFIX "")
 endif()
 
 add_executable(
@@ -362,7 +368,7 @@ if(Python3_Interpreter_FOUND)
     cjsh_add_test(
         NAME test_runner_terminal_safety
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/runner/test_terminal_safety.py"
-                $<TARGET_FILE:cjsh_test_runner> $<TARGET_FILE:function_syntax_tests>
+                $<TARGET_FILE:cjsh_test_runner> $<TARGET_FILE:function_syntax_tests> $<TARGET_FILE:cjsh>
     )
     cjsh_add_test(
         NAME ctest_summary_tests
