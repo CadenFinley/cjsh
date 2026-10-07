@@ -315,8 +315,10 @@ ic_status_hint_mode_t ic_get_status_hint_mode(void);
 /// Mouse capture behavior for readline sessions.
 /// - `IC_MOUSE_CLICKING_DISABLED`: never capture mouse events, including in menus.
 /// - `IC_MOUSE_CLICKING_SIMPLE`: start with mouse capture enabled; only manual toggle changes it.
-/// - `IC_MOUSE_CLICKING_SMART`: start enabled and auto-suspend on wheel input or selection starts
-///   above the editor, in prompt/gutter cells, in status/helper rows, or on left-button dragging;
+/// - `IC_MOUSE_CLICKING_SMART`: start enabled and auto-suspend on wheel input outside a scrollable
+///   input viewport, upward wheel input when the cursor is on the first input row, or selection
+///   starts above the editor, in prompt/gutter cells, in status/helper rows, or on left-button
+///   dragging;
 ///   then auto-resume on a reported left-button release or keyboard/focus-in input. Resuming on
 ///   release preserves the display until the next click/key. Disabling capture also stops release
 ///   reports, so resuming on release is best-effort; keyboard input remains the portable fallback.

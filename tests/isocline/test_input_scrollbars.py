@@ -87,6 +87,112 @@ def check_scrollbars(binary: str) -> None:
                        ("send", pty_tests.F3), ("idle", 0.15),
                        ("check", expect(12))])
 
+    def wheel(up, row=4, column=10):
+        return f"\x1b[<{64 if up else 65};{column};{row}M".encode("ascii")
+
+    def check_capture(output, enabled):
+        active = output.rfind("\x1b[?1000h") > output.rfind("\x1b[?1000l")
+        if active != enabled:
+            raise AssertionError(f"expected mouse capture {'on' if enabled else 'off'}")
+
+    for mode in ("mouse", "smart"):
+        for margin in ("", "_margin"):
+            output = observe("limit" + margin + "_" + mode, [
+                ("send", wheel(True)), ("idle", 0.15), ("check", expect(11)),
+                ("send", wheel(True) * 4), ("idle", 0.15), ("check", expect(7)),
+                ("send", wheel(False) * 3), ("idle", 0.15), ("check", expect(10)),
+                ("send", wheel(False) * 30), ("idle", 0.15), ("check", expect(12)),
+                ("send", wheel(True) * 19), ("idle", 0.15), ("check", expect(0)),
+            ])
+            if "\x1b[?1000l" in output:
+                raise AssertionError("scrolling an input viewport released mouse capture")
+
+        observe("limit_" + mode, [
+            ("send", pty_tests.F2), ("idle", 0.15),
+            ("send", wheel(True) * 4), ("idle", 0.15), ("check", expect(12)),
+            ("send", pty_tests.F2), ("idle", 0.15),
+            ("send", wheel(True)), ("idle", 0.15), ("check", expect(11)),
+        ])
+
+    for mode in ("menu_only", "all_off"):
+        output = observe("limit_" + mode, [
+            ("send", wheel(True) * 3), ("idle", 0.15), ("check", expect(12)),
+        ])
+        if "\x1b[?1000h" in output:
+            raise AssertionError(f"{mode}: wheel scrolling enabled prompt mouse capture")
+
+    observe("limit_off_mouse", [
+        ("send", wheel(True) * 3), ("idle", 0.15), ("check", expect(12, bar=False)),
+    ])
+    output = observe("limit_off_smart", [
+        ("send", wheel(True)), ("idle", 0.15), ("check", expect(12, bar=False)),
+    ])
+    if "\x1b[?1000l" not in output:
+        raise AssertionError("smart mode must hand wheel input to the terminal without a scrollbar")
+
+    output = observe("limit_smart", [
+        ("send", wheel(True, row=12)), ("idle", 0.15), ("check", expect(12)),
+    ])
+    if "\x1b[?1000l" not in output:
+        raise AssertionError("smart mode must hand wheel input outside the viewport to the terminal")
+
+    result = pty_tests.run_resize_case(
+        binary, "input_scrollbar_limit_margin_mouse", [
+            ("send", pty_tests.CTRL_HOME + pty_tests.DOWN * 4 + pty_tests.END), ("idle", 0.15),
+            ("send", wheel(False) * 2), ("idle", 0.15), ("check", expect(2)),
+            ("send", b"X\r")], initial_rows=rows, initial_cols=cols,
+        respond_to_cursor_queries=True,
+    )
+    if result != BUFFER.replace("input-line-06", "input-line-06X"):
+        raise AssertionError("wheel scrolling failed to move the cursor with the viewport")
+
+    result = pty_tests.run_resize_case(
+        binary, "input_scrollbar_limit_margin_mouse", [
+            ("send", wheel(True)), ("idle", 0.15), ("check", expect(11)),
+            ("send", b"X\r")], initial_rows=rows, initial_cols=cols,
+        respond_to_cursor_queries=True,
+    )
+    if result != BUFFER.replace("input-line-18", "input-line-18X"):
+        raise AssertionError("wheel scrolling failed to move the cursor up one row")
+
+    for mode in ("mouse", "smart"):
+        # At either scrollbar limit, wheel events must still move the editing cursor.
+        for start, direction, expected_row, first in (
+            (pty_tests.CTRL_HOME + pty_tests.DOWN * 4 + pty_tests.END, True, 2, 0),
+            (pty_tests.CTRL_END + pty_tests.LEFT + pty_tests.UP * 4 + pty_tests.END,
+             False, 17, 12),
+        ):
+            result = pty_tests.run_resize_case(
+                binary, "input_scrollbar_limit_" + mode, [
+                    ("send", start), ("idle", 0.15), ("check", expect(first)),
+                    ("send", wheel(direction) * 2), ("idle", 0.15),
+                    ("check", expect(first)), ("send", b"X\r")],
+                initial_rows=rows, initial_cols=cols, respond_to_cursor_queries=True,
+            )
+            line = f"input-line-{expected_row:02d}"
+            if result != BUFFER.replace(line, line + "X"):
+                raise AssertionError(f"{mode}: a clamped scrollbar prevented cursor movement")
+
+        observe("limit_" + mode, [
+            ("send", wheel(True) * 19), ("idle", 0.15), ("check", expect(0)),
+            ("check", lambda output: check_capture(output, True)),
+            ("send", wheel(True)), ("idle", 0.15), ("check", expect(0)),
+            ("check", lambda output: check_capture(output, mode != "smart")),
+            ("send", pty_tests.RIGHT), ("idle", 0.15),
+            ("check", lambda output: check_capture(output, True)),
+            ("send", wheel(False)), ("idle", 0.15), ("check", expect(1)),
+        ])
+
+    # Smart handoff leaves the cursor on the first line and never navigates history.
+    result = pty_tests.run_resize_case(
+        binary, "input_scrollbar_limit_smart", [
+            ("send", wheel(True) * 25), ("idle", 0.15), ("check", expect(0)),
+            ("send", b"X\r")], initial_rows=rows, initial_cols=cols,
+        respond_to_cursor_queries=True,
+    )
+    if result != BUFFER.replace("input-line-00", "input-line-00X"):
+        raise AssertionError("smart handoff moved the cursor or navigated history")
+
     def click_track(bottom):
         def keys(output):
             row = cells(output)[-1 if bottom else 0][0]
@@ -172,6 +278,16 @@ def check_scrollbars(binary: str) -> None:
                 raise AssertionError(f"scrollbar redraw shifted the bottom viewport: {lines!r}")
         return check
 
+    for mode in ("mouse", "smart"):
+        # The first mouse input may already contain several wheel events at the terminal bottom.
+        observe("limit_screen_bottom_margin_" + mode, [
+            ("check", remember_console), ("check", expect_at_bottom(12)),
+            ("send", wheel(True, row=24) * 4), ("idle", 0.15),
+            ("check", expect_at_bottom(8)),
+            ("send", wheel(False, row=24) * 4), ("idle", 0.15),
+            ("check", expect_at_bottom(12)),
+        ])
+
     observe("limit_screen_bottom_margin_mouse", [
         ("send", pty_tests.CTRL_HOME + pty_tests.DOWN * 4), ("idle", 0.15),
         ("check", remember_console), ("check", expect_at_bottom(0)),
@@ -179,6 +295,8 @@ def check_scrollbars(binary: str) -> None:
         ("send", finish_drag(True)), ("idle", 0.15), ("check", expect_at_bottom(12)),
         ("send", press_thumb), ("wait", b"\x1b[?1002h"),
         ("send", finish_drag(False)), ("idle", 0.15), ("check", expect_at_bottom(0)),
+        ("send", wheel(False, row=24) * 10), ("idle", 0.15), ("check", expect_at_bottom(10)),
+        ("send", wheel(True, row=24) * 10), ("idle", 0.15), ("check", expect_at_bottom(0)),
     ])
 
     def expect_no_old_tail(output):

@@ -3715,6 +3715,62 @@ static bool edit_mouse_event_starts_terminal_selection(ic_env_t* env, editor_t* 
     return (target_col < row_prompt_width);
 }
 
+static bool edit_handle_input_scroll_wheel(ic_env_t* env, editor_t* eb, code_t key) {
+    const code_t plain = KEY_NO_MODS(key);
+    if (plain != KEY_EVENT_MOUSE_WHEEL_UP && plain != KEY_EVENT_MOUSE_WHEEL_DOWN) {
+        return false;
+    }
+    edit_scrollbar_t* bar = &eb->input_scrollbar;
+    if (!env->show_scrollbars || bar->rows <= 0 || bar->max_scroll <= 0 ||
+        !eb->mouse_reporting_enabled || !edit_mouse_capture_should_be_enabled(eb)) {
+        return false;
+    }
+
+    tty_mouse_event_t event;
+    ssize_t row = 0;
+    ssize_t column = 0;
+    if (!tty_get_last_mouse_event(env->tty, &event) ||
+        !edit_mouse_event_to_target_rowcol(env, eb, &event, &row, &column, NULL) ||
+        row >= eb->input_rows) {
+        return false;
+    }
+
+    rowcol_t rc = {0};
+    const ssize_t input_rows = edit_get_rowcol(env, eb, &rc);
+    const ssize_t step = (plain == KEY_EVENT_MOUSE_WHEEL_UP ? -1 : 1);
+    if (step < 0 && rc.row == 0 && eb->mouse_reporting_mode == IC_MOUSE_CLICKING_SMART) {
+        edit_set_mouse_auto_suspended(env, eb, true, false);
+        return true;
+    }
+
+    ssize_t cursor_row = rc.row + step;
+    if (cursor_row < 0) {
+        cursor_row = 0;
+    } else if (cursor_row >= input_rows) {
+        cursor_row = input_rows - 1;
+    }
+
+    ssize_t offset = eb->view_first_row + step;
+    if (offset < 0) {
+        offset = 0;
+    } else if (offset > bar->max_scroll) {
+        offset = bar->max_scroll;
+    }
+    // A clamped scrollbar can still move the cursor through its visible rows.
+    if (offset == eb->view_first_row && cursor_row == rc.row) {
+        return true;
+    }
+
+    bar->scroll_offset = offset;
+    bar->scroll_pending = true;
+    if (cursor_row != rc.row) {
+        edit_set_pos_at_rowcol(env, eb, cursor_row, rc.col);
+    } else {
+        edit_refresh(env, eb);
+    }
+    return true;
+}
+
 static bool edit_should_auto_suspend_mouse_reporting(ic_env_t* env, editor_t* eb, code_t key,
                                                      bool* terminal_selection) {
     if (terminal_selection != NULL) {
@@ -4438,6 +4494,10 @@ edit_loop_entry:
             }
 
             if (edit_maybe_resume_smart_mouse_reporting(env, &eb, c)) {
+                continue;
+            }
+
+            if (edit_handle_input_scroll_wheel(env, &eb, c)) {
                 continue;
             }
 

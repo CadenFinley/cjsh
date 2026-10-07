@@ -98,6 +98,13 @@ A scrollbar appears beside the input whenever rows are hidden by `multiline-max-
 terminal height, or space reserved for helper/menu rows. It follows the visible input rows,
 including wrapped lines, and disappears when the whole input fits. With prompt mouse capture
 enabled, click the track to page or drag the thumb to scroll while keeping the cursor visible.
+In `simple` and `smart` mouse mode, each wheel event moves the cursor one rendered row and scrolls
+the input viewport when the pointer is over it and its scrollbar is visible. The cursor keeps
+moving through the visible rows when the scrollbar reaches its top or bottom limit, stopping at
+the first or last input row. In `smart` mode, another upward wheel event while the cursor is on
+the first input row releases capture for terminal scrolling. Wheel input outside the input
+viewport also releases smart capture. `F2` disables input wheel navigation along with prompt
+mouse capture; `off` and `all-off` leave input wheel scrolling to the terminal.
 Submitting the command removes the input scrollbar.
 
 `cjshopt scrollbars off` hides both input and menu scrollbars while preserving keyboard scrolling.

@@ -852,10 +852,15 @@ static int run_case(const char* scenario) {
                 "input-line-15\ninput-line-16\ninput-line-17\ninput-line-18\ninput-line-19";
         }
         (void)ic_enable_mouse_reporting_status_line(false);
-        if (strstr(scenario, "_off") != NULL && strstr(scenario, "_marker_off") == NULL) {
+        if (strstr(scenario, "_off") != NULL && strstr(scenario, "_marker_off") == NULL &&
+            strstr(scenario, "_all_off") == NULL) {
             (void)ic_enable_scrollbars(false);
         }
-        if (strstr(scenario, "_mouse") != NULL) {
+        if (strstr(scenario, "_menu_only") != NULL) {
+            (void)ic_set_mouse_clicking_mode(IC_MOUSE_CLICKING_MENU_ONLY);
+        } else if (strstr(scenario, "_all_off") != NULL) {
+            (void)ic_set_mouse_clicking_mode(IC_MOUSE_CLICKING_DISABLED);
+        } else if (strstr(scenario, "_mouse") != NULL) {
             (void)ic_enable_mouse_clicking(true);
         } else if (strstr(scenario, "_smart") != NULL) {
             (void)ic_set_mouse_clicking_mode(IC_MOUSE_CLICKING_SMART);
