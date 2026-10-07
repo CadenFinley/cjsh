@@ -1743,10 +1743,9 @@ available without shell initialization.</p>
 <h3 id="invocation-and-environment-policy">Invocation and environment policy</h3>
 <p><code>-n</code> and <code>--no-exec</code> check syntax without executing commands or loading startup files.
 They accept <code>-c</code> strings, script files, and standard input. Invalid syntax returns a
-nonzero status; valid syntax returns 0. <code>-m</code> remains minimal mode and <code>-s</code> remains secure
-mode; they are not monitor mode or stdin selectors. Use <code>set -m</code> for monitor mode and
-omit a script/<code>-c</code> to read stdin. Options precede the script or command operands; <code>--</code>
-ends option parsing. <code>--help</code> lists all invocation flags. Invocation errors return 1
+nonzero status; valid syntax returns 0. <code>-m</code> enables monitor mode and <code>-s</code> reads commands
+from standard input. Use <code>--minimal</code> for minimal mode and <code>--secure</code> for secure mode.
+Options precede the script or command operands; <code>--</code> ends option parsing. <code>--help</code> lists all invocation flags. Invocation errors return 1
 and send diagnostics and usage to stderr; explicit help and version return 0 on stdout.</p>
 <p>Native login shells initialize <code>PATH</code> automatically before startup files run. Non-login
 shells do this only when PATH is missing or empty; a nonempty inherited PATH is preserved

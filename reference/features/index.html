@@ -1214,7 +1214,8 @@ POSIX, Bash, or Zsh behavior is not identical.</p>
     mode is enabled for interactive shells and toggled with <code>set -m</code> / <code>set +m</code>. Append <code>&amp;^</code> to a command
     to auto-background it on <code>Ctrl+Z</code>, or <code>&amp;^!</code> to auto-background and discard stdout/stderr after
     the suspend. <code>shopt -s huponexit</code> controls whether exiting shells hang up or leave running jobs
-    alone (default: off, so long-lived helpers keep running until you explicitly stop them).</li>
+    alone. It defaults on in interactive shells and off in noninteractive shells. Use
+    <code>disown</code> to exempt jobs from hangup-on-exit handling.</li>
 </ul>
 <h2 id="interactive-layer">Interactive Layer</h2>
 <p>Powered by the embedded <a href="https://github.com/cadenfinley/isocline">isocline</a> editor:</p>
@@ -1406,7 +1407,7 @@ secure mode, completions, and disabling history expansion).</p>
 <h2 id="platform-build-support">Platform &amp; Build Support</h2>
 <ul>
 <li><strong>Targets</strong> – Linux, macOS, and WSL are primary; other POSIX-like systems generally work.</li>
-<li><strong>Toolchain</strong> – Requires CMake ≥3.25 and a C++17-capable compiler (clang, GCC, or MSVC via WSL).</li>
+<li><strong>Toolchain</strong> – Requires CMake ≥3.25 and a C++17-capable compiler (Clang or GCC; WSL uses Linux tooling).</li>
 <li><strong>Quick build</strong> – <code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --parallel</code>.</li>
 <li><strong>Package installs</strong> – Homebrew (<code>brew install cjsh</code>) and Arch AUR (<code>cjsh</code>) are maintained.</li>
 </ul>
