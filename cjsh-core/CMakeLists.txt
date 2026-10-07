@@ -78,4 +78,10 @@ if(CJSH_STRIP_BINARY)
     cjsh_enable_binary_stripping(cjsh)
 endif()
 
-install(TARGETS cjsh RUNTIME DESTINATION bin)
+include(GNUInstallDirs)
+install(TARGETS cjsh RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(
+    FILES "${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/cjsh"
+    COMPONENT licenses
+)

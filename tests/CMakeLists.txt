@@ -185,6 +185,16 @@ cjsh_add_test(NAME parser_dispatch_tests COMMAND parser_dispatch_tests)
 cjsh_add_test(NAME pattern_endpoint_tests COMMAND pattern_endpoint_tests)
 
 if(Python3_Interpreter_FOUND)
+    cjsh_add_test(
+        NAME lint_tooling_tests
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tooling/test_lint.py"
+    )
+    cjsh_add_test(
+        NAME release_notice_tests
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tooling/test_release_notices.py"
+    )
+    set_tests_properties(lint_tooling_tests release_notice_tests PROPERTIES LABELS "tooling")
+
     cjsh_add_test(NAME shell_dialect_tests
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/core/test_shell_dialect.py"
                 $<TARGET_FILE:cjsh>)

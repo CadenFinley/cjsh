@@ -41,6 +41,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: C/C++ Lint (LLVM 23)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install and verify lint toolchain
+        run: |
+          set -euo pipefail
+          brew install llvm
+          llvm_prefix=$(brew --prefix llvm)
+          # Fail explicitly on a major-version change until its diagnostics and
+          # formatting have been reviewed; do not silently change the baseline.
+          for tool in clang-format clang-tidy; do
+            "$llvm_prefix/bin/$tool" --version
+            "$llvm_prefix/bin/$tool" --version | grep -Eq 'version 23\.'
+          done
+          echo "LLVM_PREFIX=$llvm_prefix" >> "$GITHUB_ENV"
+
+      - name: Test lint tooling and release notices
+        run: python3 -m unittest discover -s tests/tooling -p 'test_*.py' -v
+
+      - name: Configure compilation database
+        run: cmake --preset release
+
+      - name: Check formatting and static analysis
+        run: |
+          python3 tools/lint.py --jobs 4 \
+            --clang-format "$LLVM_PREFIX/bin/clang-format" \
+            --clang-tidy "$LLVM_PREFIX/bin/clang-tidy"
+
   build-macos:
     name: Test ${{ matrix.target }}
     strategy:

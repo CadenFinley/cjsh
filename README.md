@@ -119,6 +119,14 @@ Project documentation is published at [cadenfinley.github.io/cjsh](https://caden
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, formatting, testing, and pull request expectations.
 
+## Security
+
+See [SECURITY.md](SECURITY.md) for private vulnerability reporting, supported security-fix
+versions, and the security boundaries of the shell. `--secure` is not a sandbox.
+
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE).
+Vendored-code attributions and license terms are collected in
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES), which ships with release archives and is
+installed alongside the project license under `share/licenses/cjsh` by default.

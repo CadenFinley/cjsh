@@ -45,9 +45,8 @@ You will need:
 - C++ compiler
 - CMake 3.25 or newer
 - Ninja
-- Python 3 for parts of the test suite
-- `clang-format` 15 or newer for formatting C and C++ sources
-- `clang-tidy` for the checks configured in `.clang-tidy` (validated with LLVM 23)
+- Python 3.10 or newer for lint tooling and parts of the test suite
+- LLVM 23's `clang-format` and `clang-tidy` for the CI formatting and analysis baseline
 
 ## Build
 
@@ -108,6 +107,10 @@ instead of a preset, replacing `build` with that directory. CTest selects its bu
 
 ## Code Style
 
+See [cjsh-core/README.md](cjsh-core/README.md) for a source map, execution entry points,
+and runtime constraints, and [cjsh-isocline/README.md](cjsh-isocline/README.md) for the
+vendored editor's maintenance notes.
+
 Check all C/C++ sources and headers, including tests, from the repository root:
 
 ```bash
@@ -116,11 +119,36 @@ python3 tools/lint.py
 ```
 
 The script checks formatting and analyzes every compilation unit, its project
-headers, and standalone headers, treating lint warnings as failures. It supplies
-the macOS SDK paths when using Homebrew LLVM. Use `--build-dir build/debug` to analyze
-the debug configuration, and `--jobs 4` to limit parallel workers. `--clang-format`
-and `--clang-tidy` select specific tool executables. Other file types currently have
-no configured lint rules.
+headers, and standalone headers, treating lint warnings as failures. Included isocline
+C implementation fragments are analyzed through their owning compilation units.
+Sources missing from the compilation database are errors, not silent skips; configure
+with `CJSH_BUILD_TESTS=ON` and `CJSH_GENERATE_COMPILE_COMMANDS=ON` (the `release` defaults).
+The script does not modify sources or the build's compilation database.
+
+It supplies the macOS SDK paths when using Homebrew LLVM. Use `--build-dir build/debug`
+to analyze the debug configuration, and `--jobs 4` to limit parallel workers.
+`--clang-format` and `--clang-tidy` select specific tool executables. For example:
+
+```bash
+brew install llvm
+python3 tools/lint.py \
+  --clang-format "$(brew --prefix llvm)/bin/clang-format" \
+  --clang-tidy "$(brew --prefix llvm)/bin/clang-tidy"
+```
+
+Use LLVM 23 to match CI; a major toolchain upgrade requires reviewing formatting and
+new diagnostics before updating the CI version guard. `--format-only` works without
+a configured build; `--tidy-only` runs just static analysis. `--timeout 300` sets the
+per-file timeout in seconds. Exit codes are 0 for success, 1 for failed checks, and 2
+for setup errors. Other file types currently have no configured lint rules.
+
+Tooling and release-notice regressions can also be run without building the shell:
+
+```bash
+python3 -m unittest discover -s tests/tooling -p 'test_*.py' -v
+```
+
+They are registered with CTest under the `tooling` label.
 
 Keep exceptions specific and documented. C API tests deliberately exercise invalid
 enum values. The Annex K replacement recommendation is disabled because the
@@ -138,7 +166,8 @@ C/POSIX counterparts; it still checks project and standard C++ includes.
 
 ## Tests
 
-Add or update tests when you change behavior.
+Add or update tests when you change behavior. See [tests/README.md](tests/README.md)
+for suite ownership, test registration, isolation requirements, and failure diagnosis.
 
 - Use `tests/shell/` for end-to-end shell behavior and scripting regressions.
 - Use the focused C, C++, and Python tests under `tests/` for subsystem-specific coverage.
@@ -167,6 +196,17 @@ When opening a pull request:
 ## Continuous Integration
 
 Pull requests and pushes to `master` run the GitHub Actions workflows in `.github/workflows/`. Keep local verification aligned with the parts of CI your change is expected to affect.
+
+The **C/C++ Lint (LLVM 23)** job checks formatting and static analysis on macOS, using
+the same `tools/lint.py` command as local development. Any reported project warning,
+formatting violation, tool failure, or timeout fails the job. Linux portability is
+still exercised by the existing build/test jobs; this is not a Linux static-analysis run.
+Repository administrators should make the lint job and build/test jobs required checks
+in the branch ruleset; workflow files alone cannot enforce merge protection.
+
+Administrators must also enable **Private vulnerability reporting** in GitHub's
+repository security settings so the reporting link in [SECURITY.md](SECURITY.md) works.
+Do not use public issues for sensitive vulnerability details.
 
 The CI workflow also builds and runs the full CTest suite on a Windows 2025 runner
 using Ubuntu 24.04 under WSL 2. It uses the `release-artifact` preset and four test
@@ -207,11 +247,22 @@ glibc x86-64 and ARM64 Linux builds; and static musl x86-64 and ARM64 Linux buil
 release is published only after all seven archives, their checksums, and their provenance
 attestations have been created successfully.
 
+Every archive includes `LICENSE` and `THIRD_PARTY_NOTICES`. CMake installs both to
+`${CMAKE_INSTALL_DATADIR}/licenses/cjsh` (normally `share/licenses/cjsh` under the install
+prefix), including for staged `DESTDIR` packaging. Preserve these notices in downstream
+packages. When adding or updating vendored code, review its notices and update
+`THIRD_PARTY_NOTICES`; see [the isocline fork notes](cjsh-isocline/README.md).
+
 The **Release Binaries** workflow can also be dispatched manually. Leaving **Publish** disabled
 runs a safe release dry run from the selected branch: all seven archives are built, tested,
 attested, and retained as workflow artifacts, but no GitHub Release is created. Enabling
 **Publish** checks out and strictly validates the requested tag before publishing it. A published
 release is never overwritten by the workflow.
+
+## Security
+
+Report suspected vulnerabilities privately using [SECURITY.md](SECURITY.md), rather than
+opening a public bug report with reproduction or exploit details.
 
 ## License
 

@@ -13,6 +13,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ### Added
 
+- Restore `tools/lint.py` and enforce LLVM 23 formatting and static analysis in CI, including project headers, standalone headers, and tests. Add regressions for lint failures and release/install notice packaging.
+- Add a security reporting and support policy, core and test contributor guides, isocline fork maintenance notes, and third-party notices for isocline and the adapted combining-character table. Include project and third-party license notices in release archives and CMake installations.
 - Add a repeatable hotspot benchmark with alternating before/after runs for loops, direct function calls, redirections, and glob expansion.
 - Agent mode can answer general questions with `{"text":"..."}` responses printed to stdout. Executors can return `{"error":"..."}` to report a problem through `error_out`; executor failures and malformed responses also use standard stderr diagnostics instead of an error menu.
 

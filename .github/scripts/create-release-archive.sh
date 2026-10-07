@@ -68,7 +68,7 @@ package_directory="$stage_root/$package_name"
 mkdir -p "$package_directory"
 cp "$binary" "$package_directory/cjsh"
 chmod 0755 "$package_directory/cjsh"
-cp LICENSE README.md "$package_directory/"
+cp LICENSE THIRD_PARTY_NOTICES README.md "$package_directory/"
 
 tar -czf "$archive_path" -C "$stage_root" "$package_name"
 printf '%s\n' "$archive_path"
