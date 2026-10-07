@@ -1357,7 +1357,9 @@ secure mode, completions, and disabling history expansion).</p>
 <li><code>-l, --login</code> – treat the shell as a login shell (source <code>~/.cjprofile</code>)</li>
 <li><code>-i, --interactive</code> – force interactive behavior even if stdin is not a tty</li>
 <li><code>-c, --command &lt;string&gt;</code> – execute a single command and exit (disables history expansion)</li>
-<li><code>--no-exec</code> – read commands but do not execute them</li>
+<li><code>-n, --no-exec</code> – check syntax without executing commands or loading startup files in
+  non-interactive shells, in either dialect. Interactive shells warn and ignore this
+  option (including <code>set -n</code> and <code>set -o noexec</code>); commands and startup files run normally.</li>
 <li><code>--no-system-paths</code> – skip automatic PATH setup from <code>/etc/paths</code> and <code>/etc/paths.d</code></li>
 <li><code>--posix</code> – select <a href="../posix-mode/">POSIX.1-2024 mode</a>, with strict extension restrictions. All dialects use standard short-option
   meanings (<code>-v</code> verbose, <code>-C</code> noclobber, <code>-m</code> monitor, <code>-s</code> stdin, <code>-h</code> hashall)</li>
