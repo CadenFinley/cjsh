@@ -1284,6 +1284,54 @@ ic_public void ic_set_command_palette_entry_handler(ic_command_palette_entry_han
     env->command_palette_handler_arg = arg;
 }
 
+ic_public void ic_set_default_formatter(ic_formatter_fun_t* formatter, void* arg) {
+    ic_env_t* env = ic_get_env();
+    if (env == NULL) {
+        return;
+    }
+    env->formatter = formatter;
+    env->formatter_arg = arg;
+}
+
+ic_public ic_format_mode_t ic_set_format_mode(ic_format_mode_t mode) {
+    ic_env_t* env = ic_get_env();
+    if (env == NULL) {
+        return IC_FORMAT_MODE_REGULAR;
+    }
+    const ic_format_mode_t previous = env->format_mode;
+    switch (mode) {
+        case IC_FORMAT_MODE_REGULAR:
+        case IC_FORMAT_MODE_SMART:
+        case IC_FORMAT_MODE_EVERY_KEYSTROKE:
+        case IC_FORMAT_MODE_OFF:
+            env->format_mode = mode;
+            break;
+        default:
+            break;
+    }
+    return previous;
+}
+
+ic_public ic_format_mode_t ic_get_format_mode(void) {
+    ic_env_t* env = ic_get_env();
+    return (env == NULL ? IC_FORMAT_MODE_REGULAR : env->format_mode);
+}
+
+ic_public long ic_set_format_delay(long delay_ms) {
+    ic_env_t* env = ic_get_env();
+    if (env == NULL) {
+        return 0;
+    }
+    const long previous = env->format_delay;
+    env->format_delay = (delay_ms < 0 ? 0 : delay_ms);
+    return previous;
+}
+
+ic_public long ic_get_format_delay(void) {
+    ic_env_t* env = ic_get_env();
+    return (env == NULL ? 0 : env->format_delay);
+}
+
 ic_public void ic_set_default_highlighter(ic_highlight_fun_t* highlighter, void* arg) {
     ic_env_t* env = ic_get_env();
     if (env == NULL) {

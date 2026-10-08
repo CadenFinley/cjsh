@@ -194,7 +194,8 @@ static ic_env_t* ic_env_create(ic_malloc_fun_t* _malloc, ic_realloc_fun_t* _real
     env->typeahead_pending_raw_bytes = sbuf_new(env->mem);
 
     // Set default enabled features
-    env->hint_delay = 0;                        // hint delay (0)
+    env->hint_delay = 0;  // hint delay (0)
+    env->format_mode = IC_FORMAT_MODE_REGULAR;
     env->idle_timeout = 0;                      // idle timeout disabled
     env->spell_correct = true;                  // completion spell fixing
     env->spell_correct_on_enter = false;        // enter-submit spell correction

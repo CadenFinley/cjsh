@@ -553,9 +553,214 @@ static int run_paste_wakeup_case(void) {
 }
 #endif
 
+typedef struct format_test_state_s {
+    const char* scenario;
+    size_t calls;
+    bool valid;
+} format_test_state_t;
+
+static int format_allocations_until_failure = -1;
+
+static bool format_fail_allocation(void) {
+    if (format_allocations_until_failure < 0) {
+        return false;
+    }
+    return format_allocations_until_failure-- == 0;
+}
+
+static void* format_test_malloc(size_t size) {
+    return (format_fail_allocation() ? NULL : malloc(size));
+}
+
+static void* format_test_realloc(void* pointer, size_t size) {
+    return (format_fail_allocation() ? NULL : realloc(pointer, size));
+}
+
+static void format_test_completer(ic_completion_env_t* cenv, const char* prefix) {
+    const char* word = (prefix[0] == 'W' ? "WORD" : "word");
+    (void)ic_add_completion_prim(cenv, word, NULL, NULL, (long)strlen(prefix), 0);
+}
+
+static void test_formatter(ic_format_env_t* fenv, const char* input, size_t cursor_pos, void* arg) {
+    format_test_state_t* state = (format_test_state_t*)arg;
+    state->calls++;
+    if (input == NULL || cursor_pos > strlen(input)) {
+        state->valid = false;
+        return;
+    }
+    const char* scenario = state->scenario;
+    if (strcmp(scenario, "format_oom_result") == 0 || strcmp(scenario, "format_oom_copy") == 0) {
+        format_allocations_until_failure = (strcmp(scenario, "format_oom_copy") == 0 ? 1 : 0);
+        state->valid = state->valid && !ic_set_formatted_input(fenv, "replacement", 0);
+        return;
+    }
+    if (strcmp(scenario, "format_oom_undo") == 0) {
+        state->valid = state->valid && ic_set_formatted_input(fenv, "replacement", 0);
+        format_allocations_until_failure = 0;
+        return;
+    }
+    if (strcmp(scenario, "format_no_result") == 0) {
+        return;
+    }
+    if (strcmp(scenario, "format_identical") == 0) {
+        state->valid = state->valid && ic_set_formatted_input(fenv, input, cursor_pos);
+        return;
+    }
+    if (strcmp(scenario, "format_null") == 0) {
+        state->valid = state->valid && ic_set_formatted_input(fenv, "discard", 0);
+        state->valid = state->valid && !ic_set_formatted_input(fenv, NULL, 0);
+        return;
+    }
+    if (strcmp(scenario, "format_clear") == 0) {
+        state->valid = state->valid && ic_set_formatted_input(fenv, "", SIZE_MAX);
+        return;
+    }
+    if (strcmp(scenario, "format_utf8") == 0 || strcmp(scenario, "format_clamp") == 0) {
+        const size_t pos = (strcmp(scenario, "format_utf8") == 0 ? 1 : SIZE_MAX);
+        state->valid = state->valid && ic_set_formatted_input(fenv, "\xC3\xA9!", pos);
+        return;
+    }
+    if (strcmp(scenario, "format_multiline") == 0) {
+        state->valid = state->valid && strcmp(input, "ab  cd\n ef") == 0 && cursor_pos == 3;
+        state->valid = state->valid && ic_set_formatted_input(fenv, "ab cd\nef", 3);
+        return;
+    }
+    if (strcmp(scenario, "format_copy") == 0) {
+        char local[] = "copied";
+        state->valid = state->valid && ic_set_formatted_input(fenv, "discard", 0);
+        state->valid = state->valid && ic_set_formatted_input(fenv, local, 3);
+        local[0] = 'X';
+        return;
+    }
+    if (strcmp(scenario, "format_recursive") == 0) {
+        state->valid = state->valid && !ic_format_buffer();
+    }
+    char* result = (char*)ic_malloc(strlen(input) + 1);
+    if (result == NULL) {
+        state->valid = false;
+        return;
+    }
+    const size_t len = strlen(input);
+    for (size_t i = 0; i <= len; ++i) {
+        result[i] = (input[i] >= 'a' && input[i] <= 'z' ? (char)(input[i] - 'a' + 'A') : input[i]);
+    }
+    state->valid = state->valid && ic_set_formatted_input(fenv, result, cursor_pos);
+    ic_free(result);
+}
+
+static bool format_runoff_handler(ic_keycode_t key, void* arg) {
+    (void)arg;
+    if (key == IC_KEY_F2) {
+        ic_set_default_formatter(NULL, NULL);
+        return true;
+    }
+    if (key == IC_KEY_F4) {
+        (void)ic_set_format_mode(IC_FORMAT_MODE_OFF);
+        return true;
+    }
+    if (key == IC_KEY_F5) {
+        (void)ic_set_format_mode(IC_FORMAT_MODE_REGULAR);
+        return true;
+    }
+    return key == IC_KEY_F3 && ic_format_buffer();
+}
+
+static int run_format_case(const char* scenario) {
+    format_test_state_t state = {scenario, 0, true};
+    const bool automatic = (strncmp(scenario, "format_auto_", 12) == 0);
+    const bool mode_case = (strncmp(scenario, "format_mode_", 12) == 0);
+    if (strncmp(scenario, "format_oom_", 11) == 0) {
+        ic_env_t* env = ic_get_env();
+        if (env == NULL) {
+            return 9;
+        }
+        env->mem->malloc = format_test_malloc;
+        env->mem->realloc = format_test_realloc;
+    }
+    (void)ic_enable_multiline(true);
+    (void)ic_enable_hint(false);
+    (void)ic_enable_inline_help(false);
+    (void)ic_enable_brace_insertion(false);
+    (void)ic_enable_mouse_clicking(false);
+    ic_set_default_completer(NULL, NULL);
+    ic_set_default_formatter(test_formatter, &state);
+    if (automatic) {
+        (void)ic_set_format_mode(IC_FORMAT_MODE_EVERY_KEYSTROKE);
+    } else if (strncmp(scenario, "format_mode_smart", 17) == 0) {
+        (void)ic_set_format_mode(IC_FORMAT_MODE_SMART);
+    } else if (strcmp(scenario, "format_mode_off") == 0) {
+        (void)ic_set_format_mode(IC_FORMAT_MODE_OFF);
+    }
+    if (mode_case) {
+        (void)ic_set_idle_timeout(500);
+        (void)ic_enable_line_numbers(false);
+        (void)ic_enable_scrollbars(false);
+        ic_set_prompt_marker("", "");
+        ic_set_line_wrap_marker("");
+    }
+    if (strcmp(scenario, "format_mode_smart_marker") == 0) {
+        ic_set_line_wrap_marker(">");
+    }
+    if (strcmp(scenario, "format_mode_regular_continuation") == 0 ||
+        strcmp(scenario, "format_mode_smart_continuation") == 0) {
+        ic_set_check_for_continuation_or_return_callback(auto_indent_continuation_handler, NULL);
+    }
+    if (strcmp(scenario, "format_mode_smart_no_newline") == 0) {
+        (void)ic_enable_multiline(false);
+    }
+    if (strstr(scenario, "delay") != NULL) {
+        (void)ic_set_format_delay(150);
+    }
+    if (strcmp(scenario, "format_auto_delay_idle") == 0 ||
+        strcmp(scenario, "format_auto_delay_hint") == 0) {
+        (void)ic_set_idle_timeout(1500);
+    }
+    if (strcmp(scenario, "format_auto_completion") == 0 ||
+        strcmp(scenario, "format_auto_delay_hint") == 0) {
+        ic_set_default_completer(format_test_completer, NULL);
+        (void)ic_enable_hint(true);
+        (void)ic_set_hint_delay(75);
+    }
+    if (!ic_bind_key_named("f1", "format-buffer") || !ic_bind_key_named("f2", "runoff") ||
+        !ic_bind_key_named("f3", "runoff") || !ic_bind_key_named("f4", "runoff") ||
+        !ic_bind_key_named("f5", "runoff") || !ic_bind_key_named("f6", "insert-newline")) {
+        return 9;
+    }
+    if (strcmp(scenario, "format_mode_smart_space_bound") == 0) {
+        (void)ic_bind_key_named("space", "none");
+    }
+    ic_set_unhandled_key_handler(format_runoff_handler, NULL);
+    const char* initial = (automatic || mode_case ? "" : "ab");
+    size_t initial_pos = strlen(initial);
+    if (strcmp(scenario, "format_multiline") == 0) {
+        initial = "ab  cd\n ef";
+        initial_pos = 3;
+    }
+    ic_readline_result_t result =
+        ic_readline_with_status_at_cursor("pty> ", NULL, initial, initial_pos);
+    ic_set_default_formatter(NULL, NULL);
+    if (!state.valid || result.input == NULL) {
+        ic_free(result.input);
+        return 9;
+    }
+    if (automatic || mode_case) {
+        char counted[256];
+        (void)snprintf(counted, sizeof(counted), "%zu|%s", state.calls, result.input);
+        emit_result(counted);
+    } else {
+        emit_result(result.input);
+    }
+    ic_free(result.input);
+    return 0;
+}
+
 static int run_case(const char* scenario) {
     if (scenario == NULL) {
         return 2;
+    }
+
+    if (strncmp(scenario, "format_", 7) == 0) {
+        return run_format_case(scenario);
     }
 
     if (strcmp(scenario, "paste_status_callback") == 0) {

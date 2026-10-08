@@ -56,6 +56,8 @@ typedef struct command_palette_match_s {
 static const command_palette_action_entry_t command_palette_actions[] = {
     {IC_KEY_ACTION_COMPLETE, "Complete Input", "show completion suggestions at the cursor",
      "autocomplete complete suggestion finish word"},
+    {IC_KEY_ACTION_FORMAT_BUFFER, "Format Buffer", "format the input buffer",
+     "format text whitespace indent"},
     {IC_KEY_ACTION_HISTORY_SEARCH, "Search History", "open fuzzy history search",
      "history reverse search find previous command"},
     {IC_KEY_ACTION_HISTORY_PREV, "Previous History Entry", "load the previous command from history",
@@ -291,6 +293,10 @@ static ssize_t command_palette_search_actions(ic_env_t* env, const char* query, 
     ssize_t total_actions = command_palette_action_count();
     for (ssize_t i = 0; i < total_actions && count < max_matches; ++i) {
         const command_palette_action_entry_t* entry = &command_palette_actions[i];
+        if (entry->action == IC_KEY_ACTION_FORMAT_BUFFER &&
+            (env->formatter == NULL || env->format_mode == IC_FORMAT_MODE_OFF)) {
+            continue;
+        }
         int score = 0;
         ssize_t match_pos = -1;
         ssize_t match_len = 0;

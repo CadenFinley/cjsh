@@ -4777,6 +4777,54 @@ static bool test_custom_menu_rejects_calls_without_active_editor(void) {
     return true;
 }
 
+static void stub_formatter(ic_format_env_t* fenv, const char* input, size_t cursor_pos, void* arg) {
+    (void)arg;
+    (void)ic_set_formatted_input(fenv, input, cursor_pos);
+}
+
+static bool test_formatter_options(void) {
+    EXPECT_FALSE(ic_format_buffer(), "Formatting requires an active editor");
+    EXPECT_FALSE(ic_set_formatted_input(NULL, "text", 0),
+                 "A result requires a formatting environment");
+    EXPECT_TRUE(ic_get_format_mode() == IC_FORMAT_MODE_REGULAR, "Regular mode must be the default");
+    EXPECT_TRUE(ic_set_format_mode(IC_FORMAT_MODE_SMART) == IC_FORMAT_MODE_REGULAR,
+                "The setter must return the previous mode");
+    EXPECT_TRUE(ic_get_format_mode() == IC_FORMAT_MODE_SMART, "The getter must return Smart mode");
+    EXPECT_TRUE(ic_set_format_mode(IC_FORMAT_MODE_EVERY_KEYSTROKE) == IC_FORMAT_MODE_SMART,
+                "The setter must return the previous mode");
+    EXPECT_TRUE(ic_get_format_mode() == IC_FORMAT_MODE_EVERY_KEYSTROKE,
+                "The getter must return Every Keystroke mode");
+    EXPECT_TRUE(ic_set_format_mode(IC_FORMAT_MODE_OFF) == IC_FORMAT_MODE_EVERY_KEYSTROKE,
+                "The setter must return the previous mode");
+    EXPECT_TRUE(ic_get_format_mode() == IC_FORMAT_MODE_OFF, "The getter must return Off mode");
+    // Check how the API handles a value outside the mode enumeration.
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    EXPECT_TRUE(ic_set_format_mode((ic_format_mode_t)-1) == IC_FORMAT_MODE_OFF,
+                "An invalid mode must return the current mode");
+    EXPECT_TRUE(ic_get_format_mode() == IC_FORMAT_MODE_OFF,
+                "An invalid mode must preserve the current mode");
+    (void)ic_set_format_mode(IC_FORMAT_MODE_REGULAR);
+    EXPECT_TRUE(ic_get_format_delay() == 0, "The default delay must be zero");
+    EXPECT_TRUE(ic_set_format_delay(250) == 0, "The setter must return the previous delay");
+    EXPECT_TRUE(ic_get_format_delay() == 250, "The getter must return the configured delay");
+    EXPECT_TRUE(ic_set_format_delay(-1) == 250, "The setter must return the previous delay");
+    EXPECT_TRUE(ic_get_format_delay() == 0, "Negative delays must select zero");
+    ic_env_t* env = ensure_env();
+    EXPECT_TRUE(env != NULL, "The environment must exist");
+    int arg = 42;
+    ic_set_default_formatter(stub_formatter, &arg);
+    EXPECT_TRUE(env->formatter == stub_formatter && env->formatter_arg == &arg,
+                "Registration must preserve the callback and its argument");
+    ic_set_default_formatter(NULL, NULL);
+    EXPECT_TRUE(env->formatter == NULL && env->formatter_arg == NULL,
+                "NULL must remove the formatter and its argument");
+    EXPECT_TRUE(ic_key_action_from_name("format-buffer") == IC_KEY_ACTION_FORMAT_BUFFER,
+                "The action name must select buffer formatting");
+    EXPECT_STREQ(ic_key_action_name(IC_KEY_ACTION_FORMAT_BUFFER), "format-buffer",
+                 "The action must retain its public name");
+    return true;
+}
+
 static bool test_status_message_callback_registration(void) {
     ic_env_t* env = ensure_env();
     if (env == NULL) {
@@ -5036,6 +5084,7 @@ static const test_case_t kTests[] = {
     {"command_palette_handler_registration", test_command_palette_handler_registration},
     {"custom_menu_rejects_calls_without_active_editor",
      test_custom_menu_rejects_calls_without_active_editor},
+    {"formatter_options", test_formatter_options},
     {"status_message_callback_registration", test_status_message_callback_registration},
     {"term_color_bits_and_toggle_roundtrip", test_term_color_bits_and_toggle_roundtrip},
 };

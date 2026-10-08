@@ -62,6 +62,8 @@ static const key_action_name_entry_t key_action_names[] = {
     {"complete", IC_KEY_ACTION_COMPLETE},
     {"completion", IC_KEY_ACTION_COMPLETE},
 
+    {"format-buffer", IC_KEY_ACTION_FORMAT_BUFFER},
+
     {"history-search", IC_KEY_ACTION_HISTORY_SEARCH},
     {"search-history", IC_KEY_ACTION_HISTORY_SEARCH},
 
