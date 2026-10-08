@@ -148,6 +148,25 @@ continue' 1 '' 'continue outside loop'
     check 'signal trap return can unwind its function' \
         'f() { trap '\''return 7'\'' USR1; kill -USR1 $$; echo bad; }; f; printf "%s" "$?"; trap - USR1' 0 7
 
+    check 'arithmetic followed by AND' 'echo $((1)) && echo ok' 0 '1
+ok'
+    check 'arithmetic followed by OR short-circuits' 'echo $((1)) || echo bad' 0 1
+    check 'failed command with arithmetic reaches OR' 'false $((1)) || echo ok' 0 ok
+    check 'nested arithmetic retains the following AND' 'echo $((1 + $((2)))) && echo ok' 0 '3
+ok'
+    check 'parenthesized arithmetic retains the following AND' 'echo $(((1 + 2) * 3)) && echo ok' 0 '9
+ok'
+    check 'logical operators inside arithmetic stay inside' 'echo $((1 && (2 || 0))) && echo ok' 0 '1
+ok'
+    check 'arithmetic stays inside its surrounding subshell' '(echo $((1)) && echo inner) && echo outer' 0 '1
+inner
+outer'
+    check 'skipped AND branch does not expand substitutions' \
+        'false $((1)) && echo "$(echo bad >&2)"; echo after' 0 after
+    check 'skipped OR branch does not expand substitutions' \
+        'true $((1)) || echo "$(echo bad >&2)"; echo after' 0 after
+    check 'arithmetic expansion executes once' 'x=0; echo $((x+=1)) && echo "$x"' 0 '1
+1'
 done
 
 printf 'Passed: %s\nFailed: %s\n' "$PASSED" "$FAILED"

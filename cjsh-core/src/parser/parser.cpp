@@ -2223,7 +2223,6 @@ std::vector<LogicalCommand> Parser::parse_logical_commands(const std::string& co
 
     std::string current;
     DelimiterState delimiters;
-    int arith_depth = 0;
     int single_bracket_depth = 0;
     int parameter_brace_depth = 0;
     int control_depth = 0;
@@ -2236,9 +2235,9 @@ std::vector<LogicalCommand> Parser::parse_logical_commands(const std::string& co
         }
 
         if (!delimiters.in_quotes && command[i] == '(') {
-            if (i >= 2 && command[i - 2] == '$' && command[i - 1] == '(' && command[i] == '(') {
-                arith_depth++;
-            }
+            // Count every delimiter, including both parentheses in $((...)).
+            // A separate arithmetic counter must not consume a closing pair on
+            // behalf of this shared nesting state.
             delimiters.paren_depth++;
             current += command[i];
             continue;
@@ -2246,18 +2245,8 @@ std::vector<LogicalCommand> Parser::parse_logical_commands(const std::string& co
 
         if (!delimiters.in_quotes && command[i] == ')') {
             delimiters.paren_depth--;
-
-            if (delimiters.paren_depth >= 0 && i + 1 < command.length() && command[i + 1] == ')' &&
-                arith_depth > 0) {
-                arith_depth--;
-                current += command[i];
-                current += command[i + 1];
-                i++;
-                continue;
-            } else {
-                current += command[i];
-                continue;
-            }
+            current += command[i];
+            continue;
         }
 
         if (!delimiters.in_quotes && command[i] == '[') {
@@ -2322,9 +2311,9 @@ std::vector<LogicalCommand> Parser::parse_logical_commands(const std::string& co
                                           delimiters.brace_depth, delimiters.in_quotes,
                                           control_depth);
 
-        if (!delimiters.in_quotes && delimiters.paren_depth == 0 && arith_depth == 0 &&
-            delimiters.bracket_depth == 0 && delimiters.brace_depth == 0 &&
-            single_bracket_depth == 0 && parameter_brace_depth == 0 && control_depth == 0) {
+        if (!delimiters.in_quotes && delimiters.paren_depth == 0 && delimiters.bracket_depth == 0 &&
+            delimiters.brace_depth == 0 && single_bracket_depth == 0 &&
+            parameter_brace_depth == 0 && control_depth == 0) {
             if (command[i] == ';' && !is_char_escaped(command, i)) {
                 if (!current.empty()) {
                     logical_commands.push_back({current, ""});

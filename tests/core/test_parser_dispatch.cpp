@@ -84,6 +84,23 @@ void test_logical_commands(Parser& parser) {
     expect(nested.size() == 2 && nested[0].command == "{ : one && : two; } " &&
                nested[0].op == "||" && nested[1].command == " : three",
            "logical operators inside command groups do not split the outer command");
+
+    for (const std::string expression :
+         {"$((1))", "$(((1 + 2) * 3))", "$((1 + $((2))))", "$((1 && (2 || 0)))", "\"$((1))\"",
+          "$(printf '%s' \"$((1))\")"}) {
+        const std::string first = "echo " + expression + " ";
+        const auto arithmetic = parser.parse_logical_commands(first + "&& : yes || : no");
+        expect(arithmetic.size() == 3 && arithmetic[0].command == first &&
+                   arithmetic[0].op == "&&" && arithmetic[1].command == " : yes " &&
+                   arithmetic[1].op == "||" && arithmetic[2].command == " : no",
+               "arithmetic and nested substitutions preserve subsequent logical operators");
+    }
+    const auto grouped_arithmetic =
+        parser.parse_logical_commands("(echo $((1)) && : inside) || : outside");
+    expect(grouped_arithmetic.size() == 2 &&
+               grouped_arithmetic[0].command == "(echo $((1)) && : inside) " &&
+               grouped_arithmetic[0].op == "||",
+           "arithmetic expansion does not close the surrounding subshell early");
 }
 
 void test_semicolon_commands(Parser& parser) {
