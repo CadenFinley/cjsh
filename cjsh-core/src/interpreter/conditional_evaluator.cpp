@@ -47,7 +47,7 @@
 #include "shell.h"
 #include "shell_env.h"
 
-using shell_script_interpreter::detail::is_control_flow_exit_code;
+using shell_script_interpreter::detail::control_flow_pending;
 using shell_script_interpreter::detail::process_line_for_validation;
 using shell_script_interpreter::detail::strip_inline_comment;
 using shell_script_interpreter::detail::trim;
@@ -342,7 +342,7 @@ std::optional<int> execute_semicolon_control_flow_commands(
     const std::function<int(const std::string&)>& execute_simple_or_pipeline) {
     for (const auto& command : parser->parse_semicolon_commands(commands)) {
         int result = execute_simple_or_pipeline(command);
-        if (is_control_flow_exit_code(result)) {
+        if (control_flow_pending() || cjsh_env::exit_requested()) {
             return result;
         }
     }
@@ -430,14 +430,15 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
                     return rc;
                 }
 
-                if (!trailing_split.second.empty() && !is_control_flow_exit_code(rc) &&
+                if (!trailing_split.second.empty() && !control_flow_pending() &&
                     !cjsh_env::exit_requested()) {
                     // execute any commands that came after fi in the original one-line text
                     auto trailing_cmds = parser->parse_semicolon_commands(trailing_split.second);
                     for (const auto& cmd : trailing_cmds) {
                         int follow_rc = execute_simple_or_pipeline(cmd);
                         rc = follow_rc;
-                        if (follow_rc != 0 || cjsh_env::exit_requested()) {
+                        if (follow_rc != 0 || control_flow_pending() ||
+                            cjsh_env::exit_requested()) {
                             break;
                         }
                     }
@@ -498,6 +499,9 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
     int cond_rc = 1;
     if (!cond_accum.empty()) {
         cond_rc = evaluate_logical_condition(cond_accum);
+    }
+    if (control_flow_pending() || cjsh_env::exit_requested()) {
+        return cond_rc;
     }
 
     if (pos != std::string::npos) {
@@ -623,7 +627,7 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
                     for (const auto& c : cmds) {
                         int rc2 = execute_simple_or_pipeline(c);
                         body_rc = rc2;
-                        if (rc2 != 0) {
+                        if (rc2 != 0 || control_flow_pending() || cjsh_env::exit_requested()) {
                             break;
                         }
                     }
@@ -633,13 +637,13 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
                     for (const auto& c : cmds) {
                         int rc2 = execute_simple_or_pipeline(c);
                         body_rc = rc2;
-                        if (rc2 != 0) {
+                        if (rc2 != 0 || control_flow_pending() || cjsh_env::exit_requested()) {
                             break;
                         }
                     }
                 }
 
-                if (!is_control_flow_exit_code(body_rc) && !cjsh_env::exit_requested()) {
+                if (!control_flow_pending() && !cjsh_env::exit_requested()) {
                     size_t after_fi_pos = fi_pos + 2;
                     while (after_fi_pos < rem.length() &&
                            std::isspace(static_cast<unsigned char>(rem[after_fi_pos])) != 0) {
@@ -659,7 +663,8 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
                             for (const auto& c : after_cmds) {
                                 int rc3 = execute_simple_or_pipeline(c);
                                 body_rc = rc3;
-                                if (rc3 != 0 || cjsh_env::exit_requested()) {
+                                if (rc3 != 0 || control_flow_pending() ||
+                                    cjsh_env::exit_requested()) {
                                     break;
                                 }
                             }
@@ -729,6 +734,9 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
             std::string condition = trim(full_line.substr(if_pos + 3, then_pos - (if_pos + 3)));
 
             int cond_result = execute_simple_or_pipeline(condition);
+            if (control_flow_pending() || cjsh_env::exit_requested()) {
+                return cond_result;
+            }
 
             std::string remaining = trim(full_line.substr(then_pos + 6));
 
@@ -800,6 +808,9 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
                             return 2;
                         }
                         int elif_result = evaluate_logical_condition(elif_cond);
+                        if (control_flow_pending() || cjsh_env::exit_requested()) {
+                            return elif_result;
+                        }
 
                         if (elif_result == 0 && !condition_met) {
                             size_t elif_body_start = elif_then + 6;
@@ -998,6 +1009,9 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
             }
 
             int elif_rc = evaluate_logical_condition(elif_cond_str);
+            if (control_flow_pending() || cjsh_env::exit_requested()) {
+                return elif_rc;
+            }
             if (elif_rc == 0) {
                 body_rc = execute_block(elif_branch.second);
                 condition_met = true;
@@ -1262,6 +1276,9 @@ int evaluate_logical_condition(const std::string& condition,
 
     // apply shell short-circuit semantics between condition segments
     for (size_t i = 1; i < parts.size(); ++i) {
+        if (control_flow_pending() || cjsh_env::exit_requested()) {
+            break;
+        }
         const std::string& op = parts[i - 1].second;
         const std::string& cond_part = parts[i].first;
 

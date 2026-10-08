@@ -56,9 +56,7 @@ struct LoopCommandOutcome {
     int code;
 };
 
-LoopCommandOutcome handle_loop_command_result(int rc, int break_consumed_rc, int break_propagate_rc,
-                                              int continue_consumed_rc, int continue_propagate_rc,
-                                              bool allow_error_continue);
+LoopCommandOutcome handle_loop_command_result(int rc, bool allow_error_continue);
 
 int handle_for_block(
     const std::vector<std::string>& src_lines, size_t& idx,

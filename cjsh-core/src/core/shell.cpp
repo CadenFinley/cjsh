@@ -492,12 +492,9 @@ int Shell::execute_script_content(const std::string& content, const std::string&
     interpreter->pop_source_scope();
     interpreter->set_error_source(previous_error_source);
 
-    // return is interpreter control flow inside a sourced file. consume that
-    // sentinel here and expose its numeric status to the caller as an ordinary result.
-    if (exit_code == ShellScriptInterpreter::exit_return) {
-        exit_code = numeric_utils::parse_exit_status_or(
-            cjsh_env::get_shell_variable_value("CJSH_RETURN_CODE"), 0, false);
-        (void)cjsh_env::unset_shell_variable_value("CJSH_RETURN_CODE");
+    // A source boundary consumes only an explicit return request.
+    if (auto returned = interpreter->control_flow_state().consume_return()) {
+        exit_code = *returned;
         pipeline_status_utils::set_last_status_env(exit_code);
     }
     return exit_code;

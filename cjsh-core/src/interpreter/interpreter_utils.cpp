@@ -40,7 +40,9 @@
 #include <utility>
 #include <vector>
 
+#include "interpreter.h"
 #include "parser_utils.h"
+#include "shell.h"
 #include "signal_handler.h"
 #include "string_utils.h"
 
@@ -228,8 +230,9 @@ bool is_readable_file(const std::string& path) {
     return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode) && access(path.c_str(), R_OK) == 0;
 }
 
-bool is_control_flow_exit_code(int code) {
-    return code == 253 || code == 254 || code == 255;
+bool control_flow_pending() {
+    return shell && shell->get_interpreter() &&
+           shell->get_interpreter()->control_flow_state().pending();
 }
 
 int pending_signal_exit_code(const SignalProcessingResult& result) {

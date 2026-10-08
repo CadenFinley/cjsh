@@ -40,7 +40,9 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include "control_flow.h"
 #include "error_out.h"
+#include "interpreter.h"
 #include "shell.h"
 #include "shell_dialect.h"
 #include "shell_env.h"
@@ -60,6 +62,26 @@ struct TrapManagerState {
 TrapManagerState& trap_manager_state() {
     static TrapManagerState* state = new TrapManagerState();
     return *state;
+}
+
+void execute_trap_body(Shell& owner, const std::string& command) {
+    auto* interpreter = owner.get_interpreter();
+    if (!interpreter) {
+        return;
+    }
+    auto& control = interpreter->control_flow_state();
+    struct RestoreControlFlow {
+        ControlFlowState& current;
+        ControlFlowState saved;
+        ~RestoreControlFlow() {
+            if (saved.pending()) {
+                current = saved;
+            }
+        }
+    } restore{control, std::exchange(control, {})};
+    // A trap may run between a return/break and its enclosing boundary. Give
+    // the trap a fresh context, then preserve that interrupted unwind request.
+    (void)owner.execute(command);
 }
 
 }  // namespace
@@ -119,7 +141,7 @@ void trap_manager_execute_trap(int signal) {
     auto& state = trap_manager_state();
     auto it = state.traps.find(signal);
     if (it != state.traps.end() && (state.shell != nullptr)) {
-        (void)state.shell->execute(it->second);
+        execute_trap_body(*state.shell, it->second);
     }
 }
 
@@ -150,7 +172,7 @@ void trap_manager_execute_exit_trap() {
     state.exit_trap_executed = true;
 
     if (state.has_exit_trap && (state.shell != nullptr)) {
-        (void)state.shell->execute(state.exit_trap_command);
+        execute_trap_body(*state.shell, state.exit_trap_command);
     }
 }
 
@@ -158,7 +180,7 @@ void trap_manager_execute_debug_trap() {
     auto& state = trap_manager_state();
     auto it = state.traps.find(-3);
     if (it != state.traps.end() && (state.shell != nullptr)) {
-        (void)state.shell->execute(it->second);
+        execute_trap_body(*state.shell, it->second);
     }
 }
 

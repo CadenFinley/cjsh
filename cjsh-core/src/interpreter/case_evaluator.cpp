@@ -39,6 +39,7 @@
 #include "interpreter_utils.h"
 #include "parser.h"
 #include "parser_utils.h"
+#include "shell_env.h"
 
 using shell_script_interpreter::detail::strip_inline_comment;
 using shell_script_interpreter::detail::trim;
@@ -252,13 +253,20 @@ bool execute_case_sections(
                 auto semicolon_commands = parser->parse_semicolon_commands(data.command, true);
                 for (const auto& subcmd : semicolon_commands) {
                     matched_exit_code = executor(subcmd);
-                    if (matched_exit_code != 0) {
+                    if (matched_exit_code != 0 ||
+                        shell_script_interpreter::detail::control_flow_pending() ||
+                        cjsh_env::exit_requested()) {
                         break;
                     }
                 }
             } else {
                 matched_exit_code = executor(data.command);
             }
+        }
+
+        if (shell_script_interpreter::detail::control_flow_pending() ||
+            cjsh_env::exit_requested()) {
+            return true;
         }
 
         switch (data.terminator) {

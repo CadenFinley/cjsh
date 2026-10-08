@@ -68,7 +68,7 @@ ls -z --invalid-flag
 echo "another valid line" | invalid_command --with --flags
 for i in 1 2 3; do
     echo $((i + undefined_var))
-    break 5  # invalid break level
+    break invalid  # nonnumeric break level
 done
 EOF
 
@@ -102,8 +102,7 @@ fi
 
 "$CJSH_PATH" "$TEST_TMP_DIR/gibberish2.sh" 2>/dev/null
 EXIT_CODE=$?
-# The out-of-range break can return 255; signal exits must still fail.
-if { [ "$EXIT_CODE" -gt 0 ] && [ "$EXIT_CODE" -lt 128 ]; } || [ "$EXIT_CODE" -eq 255 ]; then
+if [ "$EXIT_CODE" -gt 0 ] && [ "$EXIT_CODE" -lt 128 ]; then
     pass_test "gibberish script 2 properly failed with exit code $EXIT_CODE"
 else
     fail_test "gibberish script 2 expected an error without crashing, got $EXIT_CODE"

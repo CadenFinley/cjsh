@@ -35,6 +35,7 @@
 #include <string>
 #include <vector>
 
+#include "control_flow.h"
 #include "error_out.h"
 #include "function_evaluator.h"
 #include "function_ref.h"
@@ -44,9 +45,6 @@
 
 class ShellScriptInterpreter {
    public:
-    static constexpr int exit_return = 253;
-    static constexpr int exit_continue = 254;
-    static constexpr int exit_break = 255;
     static constexpr int exit_command_not_found = 127;
 
     ShellScriptInterpreter();
@@ -157,6 +155,32 @@ class ShellScriptInterpreter {
     void pop_source_scope();
     bool in_source_scope() const;
 
+    ControlFlowState& control_flow_state() {
+        return control_flow;
+    }
+    int enclosing_loop_count() const {
+        return loop_depth;
+    }
+
+    class LoopScope {
+       public:
+        explicit LoopScope(ShellScriptInterpreter* owner) : owner_(owner) {
+            if (owner_) {
+                ++owner_->loop_depth;
+            }
+        }
+        ~LoopScope() {
+            if (owner_) {
+                --owner_->loop_depth;
+            }
+        }
+        LoopScope(const LoopScope&) = delete;
+        LoopScope& operator=(const LoopScope&) = delete;
+
+       private:
+        ShellScriptInterpreter* owner_;
+    };
+
     VariableManager& get_variable_manager();
 
    private:
@@ -183,7 +207,7 @@ class ShellScriptInterpreter {
     int execute_subshell(const std::string& subshell_content, bool preexpanded = false);
     int execute_function_call(const std::vector<std::string>& expanded_args);
     int handle_env_assignment(const std::vector<std::string>& expanded_args);
-    std::optional<int> try_execute_quick_command(const std::string& command, bool* function_call);
+    std::optional<int> try_execute_quick_command(const std::string& command);
     std::optional<int> try_execute_simple_block(const std::vector<std::string>& lines);
 
     size_t current_line_number = 1;
@@ -194,6 +218,7 @@ class ShellScriptInterpreter {
     bool aliases_preexpanded = false;
     std::string error_source;
     size_t source_depth = 0;
+    ControlFlowState control_flow;
 
     bool should_interpret_as_cjsh_script(const std::string& path) const;
 
@@ -217,10 +242,6 @@ class ShellScriptInterpreter {
         cjsh::FunctionRef<int(const std::vector<std::string>&, size_t&)> handle_while_block,
         cjsh::FunctionRef<int(const std::vector<std::string>&, size_t&)> handle_until_block,
         cjsh::FunctionRef<int(const std::vector<std::string>&, size_t&)> handle_case_block);
-
-    void push_loop_scope();
-    void pop_loop_scope();
-    bool in_loop_scope() const;
 
     int loop_depth = 0;
 };

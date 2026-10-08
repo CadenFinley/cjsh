@@ -45,7 +45,7 @@ std::string process_line_for_validation(const std::string& line);
 std::vector<std::string> split_ampersand(const std::string& s);
 bool is_readable_file(const std::string& path);
 
-bool is_control_flow_exit_code(int code);
+bool control_flow_pending();
 int pending_signal_exit_code(const SignalProcessingResult& result);
 bool should_skip_line(const std::string& line);
 bool contains_token(const std::string& text, const std::string& token);

@@ -89,7 +89,7 @@
 #include "wait_status_utils.h"
 
 using shell_script_interpreter::detail::contains_token;
-using shell_script_interpreter::detail::is_control_flow_exit_code;
+using shell_script_interpreter::detail::control_flow_pending;
 using shell_script_interpreter::detail::is_readable_file;
 using shell_script_interpreter::detail::process_line_for_validation;
 using shell_script_interpreter::detail::should_skip_line;
@@ -590,7 +590,7 @@ int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content
 
 // invoke already expanded arguments with temporary positional parameters and a
 // function-local variable scope. return is consumed here rather than escaping as
-// a block-control sentinel to the function's caller.
+// an unwind request to the function's caller.
 int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>& expanded_args) {
     if (expanded_args.empty()) {
         return set_last_status(0);
@@ -630,14 +630,8 @@ int ShellScriptInterpreter::execute_function_call(const std::vector<std::string>
                                   &function_definition->syntax_cache);
     }
 
-    if ((exit_code == exit_return) && cjsh_env::shell_variable_is_set("CJSH_RETURN_CODE")) {
-        std::string return_code_env = cjsh_env::get_shell_variable_value("CJSH_RETURN_CODE");
-        try {
-            exit_code = std::stoi(return_code_env);
-            (void)cjsh_env::unset_shell_variable_value("CJSH_RETURN_CODE");
-        } catch (const std::exception&) {
-            exit_code = 0;
-        }
+    if (auto returned = control_flow.consume_return()) {
+        exit_code = *returned;
     }
 
     flags::set_positional_parameters(saved_params);
@@ -744,7 +738,7 @@ int ShellScriptInterpreter::handle_env_assignment(const std::vector<std::string>
 // parse_command still performs expansion, so a successful quick path must not be
 // followed by another parse that repeats assignment or substitution side effects.
 std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
-    const std::string& command_text, bool* function_call) {
+    const std::string& command_text) {
     if (!parser || command_text.find_first_of("|&;<>!(){}`") != std::string::npos) {
         return std::nullopt;
     }
@@ -778,9 +772,6 @@ std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
     }
 
     if (functions.count(program) != 0U) {
-        if (function_call) {
-            *function_call = true;
-        }
         return execute_function_call(quick_args);
     }
 
@@ -789,9 +780,6 @@ std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
         functions.count(prepared.args.front()) != 0U) {
         Command function_command;
         function_command.args = std::move(prepared.original_args);
-        if (function_call) {
-            *function_call = true;
-        }
         return run_pipeline({function_command});
     }
 
@@ -847,6 +835,9 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
     if (auto signal = collect_pending_signal_exit_code()) {
         return set_last_status(*signal);
     }
+    if (control_flow.pending()) {
+        return set_last_status(control_flow.status());
+    }
     // signal traps can change aliases while pending signals are dispatched.
     if ((!config::is_posix_mode() || !aliases_preexpanded) &&
         (shell->get_aliases().count(program) != 0 ||
@@ -864,11 +855,10 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
     if (shell->get_shell_option(ShellOption::Verbose)) {
         std::cerr << text << '\n';
     }
-    bool function_call = false;
     int code = 0;
     try {
         Shell::ErrexitScope scope(shell.get(), false);
-        const auto result = try_execute_quick_command(text, &function_call);
+        const auto result = try_execute_quick_command(text);
         if (!result) {
             return std::nullopt;
         }
@@ -883,27 +873,11 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
     if (auto signal = collect_pending_signal_exit_code()) {
         return set_last_status(*signal);
     }
-    if (code != 0 && !is_control_flow_exit_code(code) &&
-        shell->should_abort_on_nonzero_exit(code)) {
-        return cjsh_env::posix_error_exit(code);
+    if (control_flow.pending()) {
+        return set_last_status(control_flow.status());
     }
-    if (!function_call && is_control_flow_exit_code(code)) {
-        const char* invalid_control = nullptr;
-        if (code == exit_return && !in_function_scope() && !in_source_scope()) {
-            invalid_control = "return";
-        } else if (code == exit_continue && !in_loop_scope()) {
-            invalid_control = "continue";
-        } else if (code == exit_break && !in_loop_scope()) {
-            invalid_control = "break";
-        }
-        if (invalid_control) {
-            print_error({ErrorType::INVALID_ARGUMENT,
-                         invalid_control,
-                         std::string(invalid_control) + " outside " +
-                             (code == exit_return ? "function" : "loop"),
-                         {}});
-            return set_last_status(1);
-        }
+    if (code != 0 && shell->should_abort_on_nonzero_exit(code)) {
+        return cjsh_env::posix_error_exit(code);
     }
     return code;
 }
@@ -914,6 +888,9 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
 int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                                           bool skip_validation, std::optional<bool> preexpanded,
                                           function_evaluator::SyntaxValidationCache* syntax_cache) {
+    if (control_flow.pending()) {
+        return control_flow.status();
+    }
     struct AliasScope {
         bool& value;
         bool previous;
@@ -987,7 +964,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     if (auto simple_result = try_execute_simple_block(lines)) {
         return *simple_result;
     }
-    std::function<int(const std::string&, bool, bool*)> execute_simple_or_pipeline_impl;
+    std::function<int(const std::string&, bool)> execute_simple_or_pipeline_impl;
     std::function<int(const std::string&)> execute_simple_or_pipeline;
     bool last_result_errexit_exempt = false;
 
@@ -995,7 +972,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     std::function<std::optional<int>(const std::string&, bool)> try_handle_inline_case;
 
     execute_simple_or_pipeline = [&](const std::string& cmd_text) -> int {
-        return execute_simple_or_pipeline_impl(cmd_text, true, nullptr);
+        return execute_simple_or_pipeline_impl(cmd_text, true);
     };
 
     // failure in a tested condition controls branch selection rather than errexit.
@@ -1006,21 +983,15 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         return evaluate_logical_condition_internal(condition, execute_simple_or_pipeline);
     };
 
-    execute_simple_or_pipeline_impl = [&](const std::string& cmd_text, bool allow_semicolon_split,
-                                          bool* function_call) -> int {
+    execute_simple_or_pipeline_impl = [&](const std::string& cmd_text,
+                                          bool allow_semicolon_split) -> int {
+        if (control_flow.pending()) {
+            return control_flow.status();
+        }
         if (cjsh_env::exit_requested()) {
             return numeric_utils::parse_exit_status_or(
                 cjsh_env::get_shell_variable_value("EXIT_CODE"), 1, false);
         }
-        if (function_call) {
-            *function_call = false;
-        }
-        auto call_function = [&](const std::vector<std::string>& args) {
-            if (function_call) {
-                *function_call = true;
-            }
-            return execute_function_call(args);
-        };
         last_result_errexit_exempt = false;
         if (SignalHandler::startup_interrupted() && !SignalHandler::executing_trap()) {
             return set_last_status(128 + SIGINT);
@@ -1030,10 +1001,6 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         if (text.empty()) {
             return 0;
         }
-
-        auto try_execute_quick_command = [&](const std::string& command) {
-            return this->try_execute_quick_command(command, function_call);
-        };
 
         if (auto quick_result = try_execute_quick_command(text)) {
             return *quick_result;
@@ -1066,7 +1033,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 for (size_t idx = 0; idx < logical_cmds.size(); ++idx) {
                     if (idx > 0) {
                         const std::string& prev_op = logical_cmds[idx - 1].op;
-                        bool is_control_flow = is_control_flow_exit_code(logical_status);
+                        bool is_control_flow = control_flow_pending();
                         auto op = parse_logical_operator(prev_op);
                         if (op.has_value()) {
                             if (*op == LogicalOperator::And && logical_status != 0 &&
@@ -1086,9 +1053,10 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     executed_command = true;
                     Shell::ErrexitScope scope(shell.get(), idx + 1 < logical_cmds.size());
                     logical_status =
-                        execute_simple_or_pipeline_impl(logical_cmds[idx].command, true, nullptr);
+                        execute_simple_or_pipeline_impl(logical_cmds[idx].command, true);
 
-                    if (is_terminating_signal_exit_code(logical_status)) {
+                    if (control_flow_pending() || cjsh_env::exit_requested() ||
+                        is_terminating_signal_exit_code(logical_status)) {
                         return logical_status;
                     }
                 }
@@ -1104,10 +1072,10 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             if (semicolon_commands.size() > 1) {
                 int last_code = 0;
                 for (const auto& part : semicolon_commands) {
-                    last_code = execute_simple_or_pipeline_impl(part, false, nullptr);
+                    last_code = execute_simple_or_pipeline_impl(part, false);
                     const bool errexit_exempt = last_result_errexit_exempt;
 
-                    if (cjsh_env::exit_requested()) {
+                    if (control_flow_pending() || cjsh_env::exit_requested()) {
                         return last_code;
                     }
 
@@ -1120,7 +1088,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     }
 
                     if (shell && shell->should_abort_on_nonzero_exit(last_code) && last_code != 0 &&
-                        !is_control_flow_exit_code(last_code) && !errexit_exempt) {
+                        !control_flow_pending() && !errexit_exempt) {
                         return cjsh_env::posix_error_exit(last_code);
                     }
                 }
@@ -1399,7 +1367,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     }
 
                     if (!expanded_args.empty() && functions.count(expanded_args[0])) {
-                        return call_function(expanded_args);
+                        return execute_function_call(expanded_args);
                     }
 
                     std::vector<std::pair<std::string, std::string>> function_assignments;
@@ -1468,7 +1436,13 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     };
 
     auto check_pending_signals = [&]() -> std::optional<int> {
-        return collect_pending_signal_exit_code();
+        if (auto signal = collect_pending_signal_exit_code()) {
+            return signal;
+        }
+        if (control_flow.pending()) {
+            return control_flow.status();
+        }
+        return std::nullopt;
     };
 
     auto should_abort_for_parameter_expansion = [] { return g_parameter_expansion_fatal_error; };
@@ -1480,13 +1454,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     };
 
     auto execute_block_skip_validation = [&](const std::vector<std::string>& block_lines) -> int {
-        // loop bodies re-enter execute_block through this wrapper so continue and break validity
-        // checks can use loop scope while skipping redundant parent-level syntax validation
-        push_loop_scope();
-        auto loop_scope_cleanup = [this](void*) { pop_loop_scope(); };
-        auto loop_scope =
-            std::unique_ptr<void, decltype(loop_scope_cleanup)>(nullptr, loop_scope_cleanup);
-
+        // A stack guard always unwinds; a unique_ptr holding nullptr never calls
+        // its deleter. Commands after done must execute outside this loop scope.
+        LoopScope loop_scope(this);
         return execute_block(block_lines, true);
     };
 
@@ -1645,6 +1615,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     // walk the validated block in execution order. structural handlers advance the
     // line index past their bodies; only selected bodies are evaluated recursively.
     for (size_t line_index = 0; line_index < lines.size(); ++line_index) {
+        if (control_flow.pending()) {
+            return control_flow.status();
+        }
         current_line_number = line_index + 1;
 
         if (auto pending_code = check_pending_signals()) {
@@ -1684,7 +1657,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             if (g_parameter_expansion_fatal_error) {
                 return set_last_status(last_code);
             }
-            if (is_control_flow_exit_code(last_code) || cjsh_env::exit_requested()) {
+            if (control_flow_pending() || cjsh_env::exit_requested()) {
                 return last_code;
             }
             (void)set_last_status(last_code);
@@ -1782,12 +1755,15 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
         last_code = 0;
         for (size_t i = 0; i < lcmds.size(); ++i) {
+            if (control_flow.pending()) {
+                return control_flow.status();
+            }
             const auto& lc = lcmds[i];
 
             if (i > 0) {
                 const std::string& prev_op = lcmds[i - 1].op;
 
-                bool is_control_flow = is_control_flow_exit_code(last_code);
+                bool is_control_flow = control_flow_pending();
                 auto op = parse_logical_operator(prev_op);
                 if (op.has_value()) {
                     if (*op == LogicalOperator::And && last_code != 0 && !is_control_flow) {
@@ -1853,6 +1829,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     segs.push_back(semi);
                 }
                 for (const auto& cmd_text : segs) {
+                    if (control_flow.pending()) {
+                        return control_flow.status();
+                    }
                     if (shell != nullptr && shell->get_shell_option(ShellOption::Verbose)) {
                         std::string verbose_text = trim(strip_inline_comment(cmd_text));
                         if (!verbose_text.empty()) {
@@ -2006,7 +1985,6 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     }
 
                     int code = 0;
-                    bool is_function_call = false;
                     try {
                         Shell::ErrexitScope scope(
                             shell.get(),
@@ -2014,7 +1992,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                                 (!cmd_text.empty() && cmd_text[0] == '!' &&
                                  (cmd_text.size() == 1 ||
                                   std::isspace(static_cast<unsigned char>(cmd_text[1])))));
-                        code = execute_simple_or_pipeline_impl(cmd_text, true, &is_function_call);
+                        code = execute_simple_or_pipeline_impl(cmd_text, true);
                     } catch (const std::runtime_error&) {
                         code = 1;
                     }
@@ -2035,53 +2013,23 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         return set_last_status(last_code);
                     }
 
-                    // errexit applies to ordinary failures, not loop/function
-                    // control sentinels or failures used to decide a logical list.
+                    // An explicit control request unwinds before errexit examines
+                    // the numeric status. An external status cannot request an unwind.
+                    if (control_flow_pending()) {
+                        return code;
+                    }
                     const bool is_nonfinal_logical_command = !lc.op.empty();
                     if (shell && shell->should_abort_on_nonzero_exit(code) && code != 0 &&
                         !is_nonfinal_logical_command && !last_result_errexit_exempt) {
-                        if (code != 253 && code != 254 && code != 255) {
-                            return cjsh_env::posix_error_exit(code);
-                        }
-                    }
-
-                    // an enclosing function/source/loop consumes its control result.
-                    // reject misplaced control builtins instead of letting their
-                    // sentinel masquerade as a user command's ordinary status.
-                    if (!is_function_call && is_control_flow_exit_code(code)) {
-                        bool control_flow_error = false;
-                        if (code == exit_return && !in_function_scope() && !in_source_scope()) {
-                            print_error({ErrorType::INVALID_ARGUMENT,
-                                         "return",
-                                         "return outside function",
-                                         {}});
-                            control_flow_error = true;
-                        } else if (code == 254 && !in_loop_scope()) {
-                            print_error({ErrorType::INVALID_ARGUMENT,
-                                         "continue",
-                                         "continue outside loop",
-                                         {}});
-                            control_flow_error = true;
-                        } else if (code == 255 && !in_loop_scope()) {
-                            print_error(
-                                {ErrorType::INVALID_ARGUMENT, "break", "break outside loop", {}});
-                            control_flow_error = true;
-                        }
-
-                        if (control_flow_error) {
-                            code = 1;
-                            last_code = code;
-                            (void)set_last_status(last_code);
-                        } else {
-                            goto control_flow_exit;
-                        }
+                        return cjsh_env::posix_error_exit(code);
                     }
                 }
             }
         }
 
-    control_flow_exit:
-
+        if (control_flow.pending()) {
+            return control_flow.status();
+        }
         if (is_terminating_signal_exit_code(last_code)) {
             return set_last_status(last_code);
         }
@@ -2090,8 +2038,6 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             if (shell && shell->should_abort_on_nonzero_exit(last_code)) {
                 return cjsh_env::posix_error_exit(last_code);
             }
-        } else if (is_control_flow_exit_code(last_code)) {
-            return last_code;
         } else if (last_code != 0) {
             continue;
         }
@@ -2236,7 +2182,7 @@ long long ShellScriptInterpreter::evaluate_arithmetic_expression(const std::stri
 }
 
 // publish scalar status together with the executor's most recent pipeline vector.
-// callers returning internal control sentinels can bypass publication until consumed.
+// Control requests are carried separately from the published numeric status.
 int ShellScriptInterpreter::set_last_status(int code) {
     Exec* executor = (shell && shell->executor) ? shell->executor.get() : nullptr;
     pipeline_status_utils::apply_execution_status_env(code, executor);
@@ -2489,20 +2435,6 @@ void ShellScriptInterpreter::pop_source_scope() {
 
 bool ShellScriptInterpreter::in_source_scope() const {
     return source_depth > 0;
-}
-
-void ShellScriptInterpreter::push_loop_scope() {
-    ++loop_depth;
-}
-
-void ShellScriptInterpreter::pop_loop_scope() {
-    if (loop_depth > 0) {
-        --loop_depth;
-    }
-}
-
-bool ShellScriptInterpreter::in_loop_scope() const {
-    return loop_depth > 0;
 }
 
 // route structured headers before generic list splitting can separate their

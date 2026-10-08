@@ -45,9 +45,11 @@
 #include <vector>
 
 #include "command_substitution_evaluator.h"
+#include "control_flow.h"
 #include "error_out.h"
 #include "exec.h"
 #include "flags.h"
+#include "interpreter.h"
 #include "interpreter_utils.h"
 #include "parser.h"
 #include "parser_utils.h"
@@ -58,6 +60,7 @@
 #include "shell_env.h"
 #include "signal_handler.h"
 
+using shell_script_interpreter::detail::control_flow_pending;
 using shell_script_interpreter::detail::strip_inline_comment;
 using shell_script_interpreter::detail::trim;
 
@@ -155,25 +158,6 @@ bool check_loop_interrupt(int& rc) {
         return true;
     }
     return false;
-}
-
-int adjust_loop_signal(const char* env_name, int consumed_rc, int propagate_rc) {
-    int level = 1;
-    if (cjsh_env::shell_variable_is_set(env_name)) {
-        std::string level_str = cjsh_env::get_shell_variable_value(env_name);
-        try {
-            level = std::stoi(level_str);
-        } catch (...) {
-            level = 1;
-        }
-        (void)cjsh_env::unset_shell_variable_value(env_name);
-    }
-    if (level > 1) {
-        std::string next_level = std::to_string(level - 1);
-        (void)cjsh_env::set_shell_variable_value(env_name, next_level);
-        return propagate_rc;
-    }
-    return consumed_rc;
 }
 
 bool matches_keyword_only(const std::string& text, std::string_view keyword) {
@@ -514,8 +498,8 @@ int execute_loop_trailing_commands(
         return loop_rc;
     }
 
-    if ((should_abort_execution && should_abort_execution()) || loop_rc == 253 || loop_rc == 254 ||
-        loop_rc == 255 || cjsh_env::exit_requested()) {
+    if ((should_abort_execution && should_abort_execution()) || control_flow_pending() ||
+        cjsh_env::exit_requested()) {
         return loop_rc;
     }
 
@@ -566,11 +550,22 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
             int c = 0;
             if (!cond.empty()) {
                 {
+                    ShellScriptInterpreter::LoopScope loop_scope(shell ? shell->get_interpreter()
+                                                                       : nullptr);
                     Shell::ErrexitScope scope(shell.get());
                     c = execute_simple_or_pipeline(cond);
                 }
                 if (abort_pending()) {
                     rc = c;
+                    break;
+                }
+
+                if (control_flow_pending()) {
+                    auto outcome = handle_loop_command_result(c, true);
+                    rc = outcome.code;
+                    if (outcome.flow == LoopFlow::CONTINUE) {
+                        continue;
+                    }
                     break;
                 }
 
@@ -588,7 +583,7 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
 
             // execute the collected loop body in interpreter context
             rc = execute_block(body_lines);
-            auto outcome = handle_loop_command_result(rc, 0, 255, 0, 254, true);
+            auto outcome = handle_loop_command_result(rc, true);
             rc = outcome.code;
             if (abort_pending()) {
                 break;
@@ -632,22 +627,19 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
 
 }  // namespace
 
-LoopCommandOutcome handle_loop_command_result(int rc, int break_consumed_rc, int break_propagate_rc,
-                                              int continue_consumed_rc, int continue_propagate_rc,
-                                              bool allow_error_continue) {
-    // normalize break continue and terminating signals into a loop flow decision
-    if (rc == 255) {
-        int adjusted =
-            adjust_loop_signal("CJSH_BREAK_LEVEL", break_consumed_rc, break_propagate_rc);
-        return {LoopFlow::BREAK, adjusted};
-    }
-    if (rc == 254) {
-        int adjusted =
-            adjust_loop_signal("CJSH_CONTINUE_LEVEL", continue_consumed_rc, continue_propagate_rc);
-        if (adjusted == continue_consumed_rc) {
-            return {LoopFlow::CONTINUE, adjusted};
+LoopCommandOutcome handle_loop_command_result(int rc, bool allow_error_continue) {
+    if (shell && shell->get_interpreter()) {
+        auto& control = shell->get_interpreter()->control_flow_state();
+        switch (control.consume_loop()) {
+            case ControlFlowKind::Return:
+                return {LoopFlow::BREAK, control.status()};
+            case ControlFlowKind::Break:
+                return {LoopFlow::BREAK, 0};
+            case ControlFlowKind::Continue:
+                return {LoopFlow::CONTINUE, 0};
+            case ControlFlowKind::None:
+                break;
         }
-        return {LoopFlow::BREAK, adjusted};
     }
 #ifdef SIGINT
     if (rc == 128 + SIGINT) {
@@ -871,7 +863,7 @@ int handle_for_block(
             if (abort_pending()) {
                 return {LoopFlow::BREAK, body_rc};
             }
-            return handle_loop_command_result(body_rc, 0, 255, 0, 254, true);
+            return handle_loop_command_result(body_rc, true);
         };
 
         if (!parsed_loop.done_redirections.empty() && shell && shell->executor) {
@@ -913,7 +905,7 @@ int handle_for_block(
         if (abort_pending()) {
             return {LoopFlow::BREAK, body_rc};
         }
-        return handle_loop_command_result(body_rc, 0, 255, 0, 254, true);
+        return handle_loop_command_result(body_rc, true);
     };
 
     int rc = execute_for_iterations(run_body_and_handle_result, parsed_loop.trailing_commands,
@@ -1031,7 +1023,7 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
                 break;
             }
 
-            auto outcome = handle_loop_command_result(body_rc, 0, 255, 0, 254, true);
+            auto outcome = handle_loop_command_result(body_rc, true);
             rc = outcome.code;
             if (outcome.flow == LoopFlow::BREAK) {
                 break;

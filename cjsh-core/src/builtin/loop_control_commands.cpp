@@ -31,25 +31,35 @@
 #include "builtin.h"
 #include "builtin_help.h"
 
+#include <algorithm>
 #include <climits>
 #include <string>
 #include <vector>
+#include "control_flow.h"
 #include "error_out.h"
+#include "interpreter.h"
 #include "numeric_utils.h"
+#include "shell.h"
 #include "shell_env.h"
 
 namespace {
 
 int set_loop_control_level(const std::vector<std::string>& args, const std::string& command,
-                           const std::string& variable, int return_code) {
+                           ControlFlowKind kind) {
     int level = 1;
     if (args.size() > 1 && !numeric_utils::parse_int_in_range(args[1], 1, INT_MAX, level)) {
         print_error({ErrorType::INVALID_ARGUMENT, command, "invalid level: " + args[1], {}});
         return posix_special_builtin_error(1);
     }
 
-    (void)cjsh_env::set_shell_variable_value(variable, std::to_string(level));
-    return return_code;
+    auto* interpreter = shell ? shell->get_interpreter() : nullptr;
+    if (!interpreter || interpreter->enclosing_loop_count() == 0) {
+        print_error({ErrorType::INVALID_ARGUMENT, command, command + " outside loop", {}});
+        return 1;
+    }
+    interpreter->control_flow_state().request_loop(
+        kind, std::min(level, interpreter->enclosing_loop_count()));
+    return 0;
 }
 
 }  // namespace
@@ -59,7 +69,7 @@ int break_command(const std::vector<std::string>& args) {
             args, {"Usage: break [N]", "Exit N levels of enclosing loops (default 1)."})) {
         return 0;
     }
-    return set_loop_control_level(args, "break", "CJSH_BREAK_LEVEL", 255);
+    return set_loop_control_level(args, "break", ControlFlowKind::Break);
 }
 
 int continue_command(const std::vector<std::string>& args) {
@@ -68,7 +78,7 @@ int continue_command(const std::vector<std::string>& args) {
                    "Skip to the next iteration of the current loop or Nth enclosing loop."})) {
         return 0;
     }
-    return set_loop_control_level(args, "continue", "CJSH_CONTINUE_LEVEL", 254);
+    return set_loop_control_level(args, "continue", ControlFlowKind::Continue);
 }
 
 int return_command(const std::vector<std::string>& args) {
@@ -87,7 +97,11 @@ int return_command(const std::vector<std::string>& args) {
         }
     }
 
-    (void)cjsh_env::set_shell_variable_value("CJSH_RETURN_CODE", std::to_string(exit_code));
-
-    return 253;
+    auto* interpreter = shell ? shell->get_interpreter() : nullptr;
+    if (!interpreter || (!interpreter->in_function_scope() && !interpreter->in_source_scope())) {
+        print_error({ErrorType::INVALID_ARGUMENT, "return", "return outside function", {}});
+        return 1;
+    }
+    interpreter->control_flow_state().request_return(exit_code);
+    return exit_code;
 }
