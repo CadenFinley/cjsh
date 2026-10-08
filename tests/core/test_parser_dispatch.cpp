@@ -267,24 +267,31 @@ void test_redirection_argument_boundaries(Parser& parser) {
         const auto pipeline = parser.parse_pipeline("echo " + argument + ">output");
         expect(pipeline.size() == 1 &&
                    pipeline[0].args == std::vector<std::string>({"echo", "5"}) &&
-                   pipeline[0].output_file == "output" && pipeline[0].fd_redirections.empty(),
+                   pipeline[0].redirection_order.size() == 1 &&
+                   pipeline[0].redirection_order[0].type == CommandRedirectionType::Output &&
+                   pipeline[0].redirection_order[0].value == "output",
                "spaced, quoted, and escaped numbers remain arguments before output redirection");
     }
     const auto attached = parser.parse_pipeline("echo 5>output");
     expect(attached.size() == 1 && attached[0].args == std::vector<std::string>({"echo"}) &&
-               attached[0].output_file.empty() &&
-               attached[0].fd_redirections ==
-                   std::vector<std::pair<int, std::string>>({{5, "output:output"}}),
+               attached[0].redirection_order.size() == 1 &&
+               attached[0].redirection_order[0].type == CommandRedirectionType::FdOutput &&
+               attached[0].redirection_order[0].fd == 5 &&
+               attached[0].redirection_order[0].value == "output",
            "an adjacent unquoted number still selects the output descriptor");
 
     for (const std::string number : {"0", "2", "5", "10"}) {
         const auto input = parser.parse_pipeline("echo " + number + " <input");
         expect(input.size() == 1 && input[0].args == std::vector<std::string>({"echo", number}) &&
-                   input[0].input_file == "input" && input[0].fd_redirections.empty(),
+                   input[0].redirection_order.size() == 1 &&
+                   input[0].redirection_order[0].type == CommandRedirectionType::Input &&
+                   input[0].redirection_order[0].value == "input",
                "numeric arguments survive input redirection");
         const auto append = parser.parse_pipeline("echo " + number + " >>output");
         expect(append.size() == 1 && append[0].args == std::vector<std::string>({"echo", number}) &&
-                   append[0].append_file == "output" && append[0].stderr_file.empty(),
+                   append[0].redirection_order.size() == 1 &&
+                   append[0].redirection_order[0].type == CommandRedirectionType::Append &&
+                   append[0].redirection_order[0].value == "output",
                "numeric arguments survive append redirection");
         expect(Tokenizer::tokenize_command("echo " + number + " >&1") ==
                    std::vector<std::string>({"echo", number, ">&1"}),
@@ -307,7 +314,6 @@ void test_repeated_expansion(Parser& parser) {
         const auto pipeline = parser.parse_pipeline_with_preprocessing(
             ": \"$profile_value\" >\"out-$profile_value\"");
         expect(pipeline.size() == 1 && pipeline[0].args == std::vector<std::string>({":", value}) &&
-                   pipeline[0].output_file == std::string("out-") + value &&
                    pipeline[0].redirection_order.size() == 1 &&
                    pipeline[0].redirection_order[0].value == std::string("out-") + value,
                "repeated pipeline tokens expand current arguments and ordered redirection targets");
@@ -449,32 +455,33 @@ void test_redirection_path_expansion() {
     const fs::path& user_home = cjsh_filesystem::g_user_home_path();
     VariableExpander expander(shell.get(), cjsh_env::env_vars());
     Command plain;
-    plain.output_file = "relative-output";
-    plain.stderr_file = "/dev/null";
+    plain.add_redirection(CommandRedirectionType::Output, "relative-output");
+    plain.add_redirection(CommandRedirectionType::StderrOutput, "/dev/null");
     expander.expand_command_paths_with_home(plain, "");
-    expect(plain.output_file == "relative-output" && plain.stderr_file == "/dev/null",
+    expect(plain.redirection_order[0].value == "relative-output" &&
+               plain.redirection_order[1].value == "/dev/null",
            "ordinary redirection paths remain unchanged");
 
     for (const auto& directory : {original_cwd, original_cwd.parent_path()}) {
         fs::current_path(directory);
         Command command;
-        command.input_file = "~/input";
-        command.output_file = "~+/output";
-        command.append_file = "~/append";
-        command.stderr_file = "~-/error";
-        command.both_output_file = "~/both";
-        command.fd_redirections.emplace_back(3, "~+/extra");
+        command.add_redirection(CommandRedirectionType::Input, "~/input");
+        command.add_redirection(CommandRedirectionType::Output, "~+/output");
+        command.add_redirection(CommandRedirectionType::Append, "~/append");
+        command.add_redirection(CommandRedirectionType::StderrOutput, "~-/error");
+        command.add_redirection(CommandRedirectionType::BothOutput, "~/both");
+        command.add_redirection(CommandRedirectionType::FdOutput, "~+/extra", 3);
         command.add_redirection(CommandRedirectionType::Output, "~+/ordered");
         expander.expand_command_paths_with_home(command, "");
         // The path helper expands ~/ and resolves other tilde forms relative
         // to cwd. Preserve that behavior while making directory reads lazy.
-        expect(command.input_file == (user_home / "input").string() &&
-                   command.output_file == (directory / "~+/output").string() &&
-                   command.append_file == (user_home / "append").string() &&
-                   command.stderr_file == (directory / "~-/error").string() &&
-                   command.both_output_file == (user_home / "both").string() &&
-                   command.fd_redirections[0].second == (directory / "~+/extra").string() &&
-                   command.redirection_order[0].value == (directory / "~+/ordered").string(),
+        expect(command.redirection_order[0].value == (user_home / "input").string() &&
+                   command.redirection_order[1].value == (directory / "~+/output").string() &&
+                   command.redirection_order[2].value == (user_home / "append").string() &&
+                   command.redirection_order[3].value == (directory / "~-/error").string() &&
+                   command.redirection_order[4].value == (user_home / "both").string() &&
+                   command.redirection_order[5].value == (directory / "~+/extra").string() &&
+                   command.redirection_order[6].value == (directory / "~+/ordered").string(),
                "tilde redirections use the current directory on each invocation");
     }
     fs::current_path(original_cwd);

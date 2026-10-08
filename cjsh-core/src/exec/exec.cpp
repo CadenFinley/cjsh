@@ -57,7 +57,6 @@
 #include <mutex>
 #include <optional>
 #include <set>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -290,14 +289,11 @@ void attach_output_relay_to_job(Job& job, const std::optional<PtyPair>& output_p
 }
 
 bool command_has_stdout_redirection(const Command& cmd) {
-    return !cmd.output_file.empty() || !cmd.append_file.empty() || cmd.both_output ||
-           cmd.stdout_to_stderr || cmd.has_fd_redirection(STDOUT_FILENO) ||
-           cmd.has_fd_duplication(STDOUT_FILENO);
+    return cmd.redirects_fd(STDOUT_FILENO);
 }
 
 bool command_has_stderr_redirection(const Command& cmd) {
-    return !cmd.stderr_file.empty() || cmd.stderr_to_stdout || cmd.both_output ||
-           cmd.has_fd_redirection(STDERR_FILENO) || cmd.has_fd_duplication(STDERR_FILENO);
+    return cmd.redirects_fd(STDERR_FILENO);
 }
 
 void apply_assignments_to_shell_env(
@@ -664,24 +660,6 @@ ProcessSubstitutionResources setup_process_substitutions(Command& cmd) {
                 }
             }
 
-            if (!cmd.input_file.empty()) {
-                (void)replace_first_instance(cmd.input_file, proc_sub, fifo_path);
-            }
-            if (!cmd.output_file.empty()) {
-                (void)replace_first_instance(cmd.output_file, proc_sub, fifo_path);
-            }
-            if (!cmd.append_file.empty()) {
-                (void)replace_first_instance(cmd.append_file, proc_sub, fifo_path);
-            }
-            if (!cmd.stderr_file.empty()) {
-                (void)replace_first_instance(cmd.stderr_file, proc_sub, fifo_path);
-            }
-            if (!cmd.both_output_file.empty()) {
-                (void)replace_first_instance(cmd.both_output_file, proc_sub, fifo_path);
-            }
-            for (auto& [fd, path] : cmd.fd_redirections) {
-                (void)replace_first_instance(path, proc_sub, fifo_path);
-            }
             for (auto& redirection : cmd.redirection_order) {
                 (void)replace_first_instance(redirection.value, proc_sub, fifo_path);
             }
@@ -735,83 +713,6 @@ void cleanup_process_substitutions(ProcessSubstitutionResources& resources,
     resources.directory_path.clear();
 }
 
-enum class FdOperationErrorType : std::uint8_t {
-    Redirect,
-    Duplication
-};
-
-struct FdOperationError {
-    FdOperationErrorType type;
-    int fd_num;
-    int src_fd;
-    std::string spec;
-    std::string error;
-};
-
-struct RedirectSpecInfo {
-    std::string file;
-    int flags{0};
-};
-
-RedirectSpecInfo parse_fd_redirect_spec(int fd_num, const std::string& spec) {
-    RedirectSpecInfo info;
-
-    if (spec.rfind("input:", 0) == 0) {
-        info.file = spec.substr(6);
-        info.flags = O_RDONLY;
-    } else if (spec.rfind("output:", 0) == 0) {
-        info.file = spec.substr(7);
-        info.flags = O_WRONLY | O_CREAT | O_TRUNC;
-    } else {
-        info.file = spec;
-        info.flags = (fd_num == 0) ? O_RDONLY : (O_WRONLY | O_CREAT | O_TRUNC);
-    }
-
-    return info;
-}
-
-template <typename FailureHandler>
-bool apply_fd_operations(const Command& cmd, FailureHandler&& on_failure) {
-    for (const auto& fd_redir : cmd.fd_redirections) {
-        int fd_num = fd_redir.first;
-        const std::string& spec = fd_redir.second;
-        RedirectSpecInfo info = parse_fd_redirect_spec(fd_num, spec);
-
-        if (((info.flags & O_WRONLY) != 0 && (info.flags & O_TRUNC) != 0) &&
-            cjsh_filesystem::should_noclobber_prevent_overwrite(info.file)) {
-            on_failure(FdOperationError{FdOperationErrorType::Redirect, fd_num, -1, spec,
-                                        "cannot overwrite existing file (noclobber is set)"});
-            return false;
-        }
-
-        auto redirect_result = cjsh_filesystem::redirect_fd(info.file, fd_num, info.flags);
-        if (redirect_result.is_error()) {
-            on_failure(FdOperationError{FdOperationErrorType::Redirect, fd_num, -1, spec,
-                                        redirect_result.error()});
-            return false;
-        }
-    }
-
-    for (const auto& fd_dup : cmd.fd_duplications) {
-        int dst_fd = fd_dup.first;
-        int src_fd = fd_dup.second;
-
-        if (src_fd == -1) {
-            cjsh_filesystem::safe_close(dst_fd);
-            continue;
-        }
-
-        auto dup_result = cjsh_filesystem::safe_dup2(src_fd, dst_fd);
-        if (dup_result.is_error()) {
-            on_failure(FdOperationError{FdOperationErrorType::Duplication, dst_fd, src_fd, "",
-                                        dup_result.error()});
-            return false;
-        }
-    }
-
-    return true;
-}
-
 enum class HereDocErrorKind : std::uint8_t {
     Pipe,
     ContentWrite,
@@ -819,31 +720,16 @@ enum class HereDocErrorKind : std::uint8_t {
     Duplication
 };
 
-enum class HereDocErrorStyle : std::uint8_t {
-    Standard,
-    ChildProcess
-};
-
-std::string format_here_document_error(HereDocErrorKind kind, const std::string& detail,
-                                       HereDocErrorStyle style = HereDocErrorStyle::Standard) {
-    const bool child_process = style == HereDocErrorStyle::ChildProcess;
+std::string format_here_document_error(HereDocErrorKind kind, const std::string& detail) {
     switch (kind) {
         case HereDocErrorKind::Pipe:
-            return (child_process ? "pipe: failed to secure here document pipe: "
-                                  : "failed to create pipe for here document: ") +
-                   detail;
+            return "failed to create pipe for here document: " + detail;
         case HereDocErrorKind::ContentWrite:
-            return (child_process ? "write: failed to write here document content: "
-                                  : "failed to write here document content: ") +
-                   detail;
+            return "failed to write here document content: " + detail;
         case HereDocErrorKind::NewlineWrite:
-            return (child_process ? "write: failed to write here document newline: "
-                                  : "failed to write here document newline: ") +
-                   detail;
+            return "failed to write here document newline: " + detail;
         case HereDocErrorKind::Duplication:
-            return (child_process ? "dup2: failed to duplicate here document descriptor: "
-                                  : "failed to duplicate here document descriptor: ") +
-                   detail;
+            return "failed to duplicate here document descriptor: " + detail;
     }
     return detail;
 }
@@ -1033,110 +919,6 @@ bool setup_here_document_stdin(const std::string& here_doc, ErrorHandler&& on_er
     return true;
 }
 
-enum class StreamRedirectErrorKind : std::uint8_t {
-    Noclobber,
-    Redirect,
-    Duplication
-};
-
-struct StreamRedirectError {
-    StreamRedirectErrorKind kind;
-    std::string target;
-    std::string detail;
-    int src_fd;
-    int dst_fd;
-};
-
-[[noreturn]] void handle_stream_redirect_error_and_exit(const StreamRedirectError& error) {
-    ErrorInfo info;
-    info.severity = ErrorSeverity::ERROR;
-
-    switch (error.kind) {
-        case StreamRedirectErrorKind::Noclobber:
-            info.type = ErrorType::PERMISSION_DENIED;
-            info.command_used = error.target.empty() ? "redirect" : error.target;
-            info.message = error.detail;
-            break;
-        case StreamRedirectErrorKind::Redirect:
-            info.type = ErrorType::RUNTIME_ERROR;
-            info.command_used = error.target.empty() ? "redirect" : error.target;
-            info.message = error.detail;
-            break;
-        case StreamRedirectErrorKind::Duplication: {
-            info.type = ErrorType::RUNTIME_ERROR;
-            info.command_used = "dup2";
-            std::ostringstream oss;
-            if (error.src_fd == STDOUT_FILENO && error.dst_fd == STDERR_FILENO) {
-                oss << "2>&1 failed: " << error.detail;
-            } else {
-                oss << error.dst_fd << ">&" << error.src_fd << " failed: " << error.detail;
-            }
-            info.message = oss.str();
-            break;
-        }
-    }
-
-    print_error(info);
-    _exit(EXIT_FAILURE);
-}
-
-[[noreturn]] void handle_fd_operation_error_and_exit(const FdOperationError& error) {
-    ErrorInfo info;
-    info.severity = ErrorSeverity::ERROR;
-    info.command_used = error.type == FdOperationErrorType::Redirect ? error.spec : "dup2";
-
-    if (error.type == FdOperationErrorType::Redirect) {
-        info.type = ErrorType::FILE_NOT_FOUND;
-        info.message = error.error;
-    } else {
-        info.type = ErrorType::RUNTIME_ERROR;
-        info.message = "failed for " + std::to_string(error.fd_num) + ">&" +
-                       std::to_string(error.src_fd) + ": " + error.error;
-    }
-
-    print_error(info);
-    _exit(EXIT_FAILURE);
-}
-
-template <typename ErrorHandler>
-bool configure_stderr_redirects(const Command& cmd, ErrorHandler&& on_error) {
-    if (!cmd.stderr_file.empty()) {
-        if (!cmd.stderr_append &&
-            cjsh_filesystem::should_noclobber_prevent_overwrite(cmd.stderr_file)) {
-            on_error(StreamRedirectError{StreamRedirectErrorKind::Noclobber, cmd.stderr_file,
-                                         "cannot overwrite existing file (noclobber is set)", -1,
-                                         -1});
-            return false;
-        }
-
-        int flags = O_WRONLY | O_CREAT | (cmd.stderr_append ? O_APPEND : O_TRUNC);
-        auto redirect_result = cjsh_filesystem::redirect_fd(cmd.stderr_file, STDERR_FILENO, flags);
-        if (redirect_result.is_error()) {
-            on_error(StreamRedirectError{StreamRedirectErrorKind::Redirect, cmd.stderr_file,
-                                         redirect_result.error(), -1, STDERR_FILENO});
-            return false;
-        }
-    } else if (cmd.stderr_to_stdout) {
-        auto dup_result = cjsh_filesystem::safe_dup2(STDOUT_FILENO, STDERR_FILENO);
-        if (dup_result.is_error()) {
-            on_error(StreamRedirectError{StreamRedirectErrorKind::Duplication, "",
-                                         dup_result.error(), STDOUT_FILENO, STDERR_FILENO});
-            return false;
-        }
-    }
-
-    if (cmd.stdout_to_stderr) {
-        auto dup_result = cjsh_filesystem::safe_dup2(STDERR_FILENO, STDOUT_FILENO);
-        if (dup_result.is_error()) {
-            on_error(StreamRedirectError{StreamRedirectErrorKind::Duplication, "",
-                                         dup_result.error(), STDERR_FILENO, STDOUT_FILENO});
-            return false;
-        }
-    }
-
-    return true;
-}
-
 // native extension dispatch can select an interpreter before ordinary exec. use
 // the cached executable path when supplied, otherwise defer search to execvp;
 // any failed attempt reports and exits rather than returning to the shell caller.
@@ -1279,11 +1061,7 @@ std::optional<int> Exec::run_command_not_found_handler(
 // selects scoped-redirection paths for functions/builtins; true does not by itself
 // guarantee that the caller will fork and discard parent-shell state.
 bool Exec::requires_fork(const Command& cmd) const {
-    return !cmd.input_file.empty() || !cmd.output_file.empty() || !cmd.append_file.empty() ||
-           cmd.background || !cmd.stderr_file.empty() || cmd.stderr_to_stdout ||
-           cmd.stdout_to_stderr || !cmd.here_doc.empty() || !cmd.here_string.empty() ||
-           cmd.both_output || !cmd.process_substitutions.empty() || !cmd.fd_redirections.empty() ||
-           !cmd.fd_duplications.empty() || !cmd.redirection_order.empty();
+    return cmd.background || !cmd.process_substitutions.empty() || !cmd.redirection_order.empty();
 }
 
 bool Exec::can_execute_in_process(const Command& cmd) const {
@@ -1842,46 +1620,6 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
 
             reset_child_signals();
 
-            if (cmd.redirection_order.empty() && !cmd.here_doc.empty()) {
-                auto here_doc_error = [&](HereDocErrorKind kind, const std::string& detail) {
-                    child_exit_with_error(
-                        ErrorType::RUNTIME_ERROR, command_name,
-                        format_here_document_error(kind, detail, HereDocErrorStyle::ChildProcess));
-                };
-
-                if (!setup_here_document_stdin(cmd.here_doc, here_doc_error)) {
-                    child_exit_with_error(ErrorType::RUNTIME_ERROR, command_name,
-                                          "failed to configure here document for stdin");
-                }
-            } else if (cmd.redirection_order.empty() && !cmd.here_string.empty()) {
-                auto here_error = cjsh_filesystem::setup_here_string_stdin(cmd.here_string);
-                if (here_error.has_value()) {
-                    std::string message;
-                    switch (here_error->type) {
-                        case cjsh_filesystem::HereStringErrorType::Pipe:
-                            message = "pipe: failed to create pipe for here string: " +
-                                      here_error->detail;
-                            break;
-                        case cjsh_filesystem::HereStringErrorType::Write:
-                            message =
-                                "write: failed to write here string content: " + here_error->detail;
-                            break;
-                        case cjsh_filesystem::HereStringErrorType::Dup:
-                            message = "dup2: failed to duplicate here string descriptor: " +
-                                      here_error->detail;
-                            break;
-                    }
-                    child_exit_with_error(ErrorType::RUNTIME_ERROR, command_name, message);
-                }
-            } else if (cmd.redirection_order.empty() && !cmd.input_file.empty()) {
-                auto redirect_result =
-                    cjsh_filesystem::redirect_fd(cmd.input_file, STDIN_FILENO, O_RDONLY);
-                if (redirect_result.is_error()) {
-                    child_exit_with_error(ErrorType::FILE_NOT_FOUND, command_name,
-                                          cmd.input_file + ": " + redirect_result.error());
-                }
-            }
-
             if (output_pty.has_value()) {
                 if (dup2(output_pty->slave_fd, STDOUT_FILENO) == -1) {
                     child_exit_with_error(
@@ -1899,76 +1637,10 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
                 cjsh_filesystem::safe_close(output_pty->slave_fd);
             }
 
-            if (!cmd.redirection_order.empty()) {
-                auto ordered_error = [&](ErrorType type, const std::string& message) {
-                    child_exit_with_error(type, command_name, message);
-                };
-                if (!apply_ordered_redirections(cmd, ordered_error)) {
-                    _exit(EXIT_FAILURE);
-                }
-            } else if (!cmd.output_file.empty()) {
-                if (cjsh_filesystem::should_noclobber_prevent_overwrite(cmd.output_file,
-                                                                        cmd.force_overwrite)) {
-                    child_exit_with_error(
-                        ErrorType::PERMISSION_DENIED, command_name,
-                        cmd.output_file + ": cannot overwrite existing file (noclobber is set)");
-                }
-
-                auto redirect_result =
-                    cjsh_filesystem::redirect_fd(cmd.output_file, STDOUT_FILENO,
-                                                 O_WRONLY | O_CREAT | O_TRUNC, cmd.force_overwrite);
-                if (redirect_result.is_error()) {
-                    child_exit_with_error(ErrorType::FILE_NOT_FOUND, command_name,
-                                          cmd.output_file + ": " + redirect_result.error());
-                }
-            }
-
-            if (cmd.redirection_order.empty() && cmd.both_output && !cmd.both_output_file.empty()) {
-                if (cjsh_filesystem::should_noclobber_prevent_overwrite(cmd.both_output_file)) {
-                    child_exit_with_error(
-                        ErrorType::PERMISSION_DENIED, command_name,
-                        cmd.both_output_file +
-                            ": cannot overwrite existing file (noclobber is set)");
-                }
-
-                auto stdout_result = cjsh_filesystem::redirect_fd(
-                    cmd.both_output_file, STDOUT_FILENO, O_WRONLY | O_CREAT | O_TRUNC);
-                if (stdout_result.is_error()) {
-                    child_exit_with_error(ErrorType::FILE_NOT_FOUND, command_name,
-                                          cmd.both_output_file + ": " + stdout_result.error());
-                }
-
-                auto stderr_result = cjsh_filesystem::safe_dup2(STDOUT_FILENO, STDERR_FILENO);
-                if (stderr_result.is_error()) {
-                    child_exit_with_error(
-                        ErrorType::RUNTIME_ERROR, command_name,
-                        "dup2: failed for stderr in &> redirection: " + stderr_result.error());
-                }
-            }
-
-            if (cmd.redirection_order.empty() && !cmd.append_file.empty()) {
-                int fd = open(cmd.append_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
-                if (fd == -1) {
-                    child_exit_with_error(classify_filesystem_error(errno), command_name,
-                                          cmd.append_file + ": " + std::string(strerror(errno)));
-                }
-                if (dup2(fd, STDOUT_FILENO) == -1) {
-                    int saved_errno = errno;
-                    (void)close(fd);
-                    child_exit_with_error(ErrorType::RUNTIME_ERROR, command_name,
-                                          "dup2: failed for append redirection: " +
-                                              std::string(strerror(saved_errno)));
-                }
-                (void)close(fd);
-            }
-
-            if (cmd.redirection_order.empty() &&
-                !configure_stderr_redirects(cmd, handle_stream_redirect_error_and_exit)) {
-                _exit(EXIT_FAILURE);
-            }
-
-            if (cmd.redirection_order.empty() &&
-                !apply_fd_operations(cmd, handle_fd_operation_error_and_exit)) {
+            auto ordered_error = [&](ErrorType type, const std::string& message) {
+                child_exit_with_error(type, command_name, message);
+            };
+            if (!apply_ordered_redirections(cmd, ordered_error)) {
                 _exit(EXIT_FAILURE);
             }
 
@@ -2075,8 +1747,16 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
         }
         put_job_in_foreground(job_id, false);
 
-        if ((!cmd.output_file.empty() || !cmd.append_file.empty() || !cmd.stderr_file.empty()) &&
-            cjsh_env::shell_variable_is_set("CJSH_FORCE_SYNC")) {
+        const bool has_file_output =
+            std::any_of(cmd.redirection_order.begin(), cmd.redirection_order.end(),
+                        [](const CommandRedirection& redirection) {
+                            return redirection.type == CommandRedirectionType::Output ||
+                                   redirection.type == CommandRedirectionType::ForceOutput ||
+                                   redirection.type == CommandRedirectionType::Append ||
+                                   redirection.type == CommandRedirectionType::StderrOutput ||
+                                   redirection.type == CommandRedirectionType::StderrAppend;
+                        });
+        if (has_file_output && cjsh_env::shell_variable_is_set("CJSH_FORCE_SYNC")) {
             sync();
         }
 
@@ -2235,40 +1915,10 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
                         (void)close(null_fd);
                     }
                 }
-                if (i == 0) {
-                    if (cmd.redirection_order.empty() && !cmd.here_doc.empty()) {
-                        auto here_doc_error = [&](HereDocErrorKind kind,
-                                                  const std::string& detail) {
-                            child_error(ErrorType::RUNTIME_ERROR,
-                                        format_here_document_error(kind, detail));
-                        };
-
-                        if (!setup_here_document_stdin(cmd.here_doc, here_doc_error)) {
-                            child_error(ErrorType::RUNTIME_ERROR,
-                                        "failed to set up here document for pipeline input");
-                        }
-                    } else if (cmd.redirection_order.empty() && !cmd.input_file.empty()) {
-                        int fd = open(cmd.input_file.c_str(), O_RDONLY);
-                        if (fd == -1) {
-                            const int saved_errno = errno;
-                            child_error(classify_filesystem_error(saved_errno),
-                                        cmd.input_file + ": " + std::string(strerror(saved_errno)));
-                        }
-                        if (dup2(fd, STDIN_FILENO) == -1) {
-                            const int saved_errno = errno;
-                            (void)close(fd);
-                            child_error(ErrorType::RUNTIME_ERROR,
-                                        std::string("dup2 input failed: ") + strerror(saved_errno));
-                        }
-                        (void)close(fd);
-                    }
-                } else {
-                    if (dup2(pipes[i - 1][0], STDIN_FILENO) == -1) {
-                        const int saved_errno = errno;
-                        child_error(
-                            ErrorType::RUNTIME_ERROR,
-                            std::string("dup2 pipe input failed: ") + strerror(saved_errno));
-                    }
+                if (i > 0 && dup2(pipes[i - 1][0], STDIN_FILENO) == -1) {
+                    const int saved_errno = errno;
+                    child_error(ErrorType::RUNTIME_ERROR,
+                                std::string("dup2 pipe input failed: ") + strerror(saved_errno));
                 }
 
                 if ((output_pty.has_value() && i == commands.size() - 1 &&
@@ -2280,47 +1930,10 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
                         std::string("dup2 output relay stdout failed: ") + strerror(saved_errno));
                 }
 
-                if (i == commands.size() - 1) {
-                    if (cmd.redirection_order.empty() && !cmd.output_file.empty()) {
-                        int fd = open(cmd.output_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                        if (fd == -1) {
-                            const int saved_errno = errno;
-                            child_error(
-                                classify_filesystem_error(saved_errno),
-                                cmd.output_file + ": " + std::string(strerror(saved_errno)));
-                        }
-                        if (dup2(fd, STDOUT_FILENO) == -1) {
-                            const int saved_errno = errno;
-                            (void)close(fd);
-                            child_error(
-                                ErrorType::RUNTIME_ERROR,
-                                std::string("dup2 output failed: ") + strerror(saved_errno));
-                        }
-                        (void)close(fd);
-                    } else if (cmd.redirection_order.empty() && !cmd.append_file.empty()) {
-                        int fd = open(cmd.append_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
-                        if (fd == -1) {
-                            const int saved_errno = errno;
-                            child_error(
-                                classify_filesystem_error(saved_errno),
-                                cmd.append_file + ": " + std::string(strerror(saved_errno)));
-                        }
-                        if (dup2(fd, STDOUT_FILENO) == -1) {
-                            const int saved_errno = errno;
-                            (void)close(fd);
-                            child_error(
-                                ErrorType::RUNTIME_ERROR,
-                                std::string("dup2 append failed: ") + strerror(saved_errno));
-                        }
-                        (void)close(fd);
-                    }
-                } else {
-                    if (dup2(pipes[i][1], STDOUT_FILENO) == -1) {
-                        const int saved_errno = errno;
-                        child_error(
-                            ErrorType::RUNTIME_ERROR,
-                            std::string("dup2 pipe output failed: ") + strerror(saved_errno));
-                    }
+                if (i + 1 < commands.size() && dup2(pipes[i][1], STDOUT_FILENO) == -1) {
+                    const int saved_errno = errno;
+                    child_error(ErrorType::RUNTIME_ERROR,
+                                std::string("dup2 pipe output failed: ") + strerror(saved_errno));
                 }
 
                 if ((output_pty.has_value() && !command_has_stderr_redirection(cmd)) &&
@@ -2333,24 +1946,9 @@ int Exec::execute_pipeline(const std::vector<Command>& input_commands) {
 
                 // explicit redirections override pipeline wiring in source order.
                 // a stage can intentionally read from a file instead of its upstream pipe.
-                if (!cmd.redirection_order.empty()) {
-                    auto ordered_error = [&](ErrorType type, const std::string& message) {
-                        child_error(type, message);
-                    };
-                    if (!apply_ordered_redirections(cmd, ordered_error)) {
-                        child_error(ErrorType::RUNTIME_ERROR,
-                                    "failed to apply ordered redirections for pipeline child");
-                    }
-                } else if (!configure_stderr_redirects(cmd,
-                                                       handle_stream_redirect_error_and_exit)) {
+                if (!apply_ordered_redirections(cmd, child_error)) {
                     child_error(ErrorType::RUNTIME_ERROR,
-                                "failed to configure stderr redirections for pipeline child");
-                }
-
-                if (cmd.redirection_order.empty() &&
-                    !apply_fd_operations(cmd, handle_fd_operation_error_and_exit)) {
-                    child_error(ErrorType::RUNTIME_ERROR,
-                                "failed to apply file descriptor operations for pipeline child");
+                                "failed to apply ordered redirections for pipeline child");
                 }
 
                 if (output_pty.has_value()) {
@@ -2538,49 +2136,11 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
         }
     };
     for (const auto& redirection : cmd.redirection_order) {
-        record_fd(redirection.fd, true);
+        record_fd(redirection.destination_fd(), true);
         record_fd(redirection.target_fd, false);
-        switch (redirection.type) {
-            case CommandRedirectionType::Input:
-            case CommandRedirectionType::HereDoc:
-            case CommandRedirectionType::HereString:
-                record_fd(STDIN_FILENO, true);
-                break;
-            case CommandRedirectionType::Output:
-            case CommandRedirectionType::Append:
-            case CommandRedirectionType::ForceOutput:
-                record_fd(STDOUT_FILENO, true);
-                break;
-            case CommandRedirectionType::StderrOutput:
-            case CommandRedirectionType::StderrAppend:
-                record_fd(STDERR_FILENO, true);
-                break;
-            case CommandRedirectionType::BothOutput:
-                record_fd(STDOUT_FILENO, true);
-                record_fd(STDERR_FILENO, true);
-                break;
-            default:
-                break;
-        }
-    }
-    if (cmd.redirection_order.empty()) {
-        if (!cmd.input_file.empty() || !cmd.here_doc.empty() || !cmd.here_string.empty()) {
-            record_fd(STDIN_FILENO, true);
-        }
-        if (!cmd.output_file.empty() || !cmd.append_file.empty() || cmd.stdout_to_stderr ||
-            cmd.both_output) {
-            record_fd(STDOUT_FILENO, true);
-        }
-        if (!cmd.stderr_file.empty() || cmd.stderr_to_stdout || cmd.both_output) {
+        if (redirection.type == CommandRedirectionType::BothOutput) {
             record_fd(STDERR_FILENO, true);
         }
-    }
-    for (const auto& [fd, spec] : cmd.fd_redirections) {
-        record_fd(fd, true);
-    }
-    for (const auto& [fd, source_fd] : cmd.fd_duplications) {
-        record_fd(fd, true);
-        record_fd(source_fd, false);
     }
     if (highest_fd == std::numeric_limits<int>::max()) {
         set_error(ErrorType::RUNTIME_ERROR, command_name, "file descriptor is too large", {});
@@ -2670,167 +2230,10 @@ int Exec::run_with_command_redirections(Command cmd, const std::function<int()>&
     try {
         proc_resources = setup_process_substitutions(cmd);
 
-        if (!cmd.redirection_order.empty()) {
-            auto ordered_error = [&](ErrorType, const std::string& message) {
-                throw std::runtime_error(message);
-            };
-            (void)apply_ordered_redirections(cmd, ordered_error);
-        } else if (!cmd.here_doc.empty()) {
-            int here_pipe[2] = {-1, -1};
-            auto pipe_result = cjsh_filesystem::create_pipe_cloexec(here_pipe);
-            if (pipe_result.is_error()) {
-                throw std::runtime_error("cjsh: failed to create pipe for here document: " +
-                                         pipe_result.error());
-            }
-
-            std::string error;
-            auto write_result =
-                cjsh_filesystem::write_all(here_pipe[1], std::string_view{cmd.here_doc});
-            if (write_result.is_error()) {
-                if (write_result.error().find("Broken pipe") == std::string::npos &&
-                    write_result.error().find("EPIPE") == std::string::npos) {
-                    error = write_result.error();
-                }
-
-            } else {
-                auto newline_result =
-                    cjsh_filesystem::write_all(here_pipe[1], std::string_view("\n", 1));
-                if (newline_result.is_error() &&
-                    (newline_result.error().find("Broken pipe") == std::string::npos &&
-                     newline_result.error().find("EPIPE") == std::string::npos)) {
-                    error = newline_result.error();
-                }
-            }
-
-            cjsh_filesystem::safe_close(here_pipe[1]);
-
-            if (!error.empty()) {
-                cjsh_filesystem::safe_close(here_pipe[0]);
-                throw std::runtime_error("cjsh: failed to write here document content: " + error);
-            }
-
-            auto dup_result = cjsh_filesystem::safe_dup2(here_pipe[0], STDIN_FILENO);
-            cjsh_filesystem::safe_close(here_pipe[0]);
-            if (dup_result.is_error()) {
-                throw std::runtime_error("cjsh: failed to redirect stdin for here document: " +
-                                         dup_result.error());
-            }
-        }
-
-        if (cmd.redirection_order.empty() && !cmd.input_file.empty()) {
-            auto redirect_result =
-                cjsh_filesystem::redirect_fd(cmd.input_file, STDIN_FILENO, O_RDONLY);
-            if (redirect_result.is_error()) {
-                throw std::runtime_error("cjsh: failed to redirect stdin from " + cmd.input_file +
-                                         ": " + redirect_result.error());
-            }
-        }
-
-        if (cmd.redirection_order.empty() && !cmd.here_string.empty()) {
-            auto here_error = cjsh_filesystem::setup_here_string_stdin(cmd.here_string);
-            if (here_error.has_value()) {
-                switch (here_error->type) {
-                    case cjsh_filesystem::HereStringErrorType::Pipe:
-                        throw std::runtime_error("failed to create pipe for here string");
-                    case cjsh_filesystem::HereStringErrorType::Write:
-                        throw std::runtime_error("failed to write here string content");
-                    case cjsh_filesystem::HereStringErrorType::Dup:
-                        throw std::runtime_error("failed to redirect stdin for here string: " +
-                                                 here_error->detail);
-                }
-            }
-        }
-
-        if (cmd.redirection_order.empty() && !cmd.output_file.empty()) {
-            if (cjsh_filesystem::should_noclobber_prevent_overwrite(cmd.output_file,
-                                                                    cmd.force_overwrite)) {
-                throw std::runtime_error("cannot overwrite existing file '" + cmd.output_file +
-                                         "' (noclobber is set)");
-            }
-
-            auto redirect_result = cjsh_filesystem::redirect_fd(
-                cmd.output_file, STDOUT_FILENO, O_WRONLY | O_CREAT | O_TRUNC, cmd.force_overwrite);
-            if (redirect_result.is_error()) {
-                throw std::runtime_error("failed to redirect stdout to file '" + cmd.output_file +
-                                         "': " + redirect_result.error());
-            }
-        }
-
-        if (cmd.redirection_order.empty() && cmd.both_output && !cmd.both_output_file.empty()) {
-            if (cjsh_filesystem::should_noclobber_prevent_overwrite(cmd.both_output_file)) {
-                throw std::runtime_error("cannot overwrite existing file '" + cmd.both_output_file +
-                                         "' (noclobber is set)");
-            }
-
-            auto stdout_result = cjsh_filesystem::redirect_fd(cmd.both_output_file, STDOUT_FILENO,
-                                                              O_WRONLY | O_CREAT | O_TRUNC);
-            if (stdout_result.is_error()) {
-                throw std::runtime_error("failed to redirect stdout for &>: " +
-                                         cmd.both_output_file + ": " + stdout_result.error());
-            }
-
-            auto stderr_result = cjsh_filesystem::safe_dup2(STDOUT_FILENO, STDERR_FILENO);
-            if (stderr_result.is_error()) {
-                throw std::runtime_error("failed to redirect stderr for &>: " +
-                                         stderr_result.error());
-            }
-        }
-
-        if (cmd.redirection_order.empty() && !cmd.append_file.empty()) {
-            auto redirect_result = cjsh_filesystem::redirect_fd(cmd.append_file, STDOUT_FILENO,
-                                                                O_WRONLY | O_CREAT | O_APPEND);
-            if (redirect_result.is_error()) {
-                throw std::runtime_error("failed to redirect stdout for append: " +
-                                         cmd.append_file + ": " + redirect_result.error());
-            }
-        }
-
-        if (cmd.redirection_order.empty() && !cmd.stderr_file.empty()) {
-            if (!cmd.stderr_append &&
-                cjsh_filesystem::should_noclobber_prevent_overwrite(cmd.stderr_file)) {
-                throw std::runtime_error("cannot overwrite existing file '" + cmd.stderr_file +
-                                         "' (noclobber is set)");
-            }
-
-            int flags = O_WRONLY | O_CREAT | (cmd.stderr_append ? O_APPEND : O_TRUNC);
-            auto redirect_result =
-                cjsh_filesystem::redirect_fd(cmd.stderr_file, STDERR_FILENO, flags);
-            if (redirect_result.is_error()) {
-                throw std::runtime_error("failed to redirect stderr to file '" + cmd.stderr_file +
-                                         "': " + redirect_result.error());
-            }
-        }
-
-        if (cmd.redirection_order.empty() && cmd.stderr_to_stdout) {
-            auto dup_result = cjsh_filesystem::safe_dup2(STDOUT_FILENO, STDERR_FILENO);
-            if (dup_result.is_error()) {
-                throw std::runtime_error("failed to redirect stderr to stdout: " +
-                                         dup_result.error());
-            }
-        }
-
-        if (cmd.redirection_order.empty() && cmd.stdout_to_stderr) {
-            auto dup_result = cjsh_filesystem::safe_dup2(STDERR_FILENO, STDOUT_FILENO);
-            if (dup_result.is_error()) {
-                throw std::runtime_error("failed to redirect stdout to stderr: " +
-                                         dup_result.error());
-            }
-        }
-
-        if (cmd.redirection_order.empty() &&
-            (!cmd.fd_redirections.empty() || !cmd.fd_duplications.empty())) {
-            auto fd_error_handler = [&](const FdOperationError& error) -> void {
-                switch (error.type) {
-                    case FdOperationErrorType::Redirect:
-                        throw std::runtime_error(error.spec + ": " + error.error);
-                    case FdOperationErrorType::Duplication:
-                        throw std::runtime_error("dup2 failed for " + std::to_string(error.fd_num) +
-                                                 ">&" + std::to_string(error.src_fd) + ": " +
-                                                 error.error);
-                }
-            };
-            (void)apply_fd_operations(cmd, fd_error_handler);
-        }
+        auto ordered_error = [&](ErrorType, const std::string& message) {
+            throw std::runtime_error(message);
+        };
+        (void)apply_ordered_redirections(cmd, ordered_error);
 
         (void)std::cout.flush();
         (void)std::cerr.flush();

@@ -597,16 +597,6 @@ void VariableExpander::expand_command_paths_with_home(Command& cmd, const std::s
         }
     };
 
-    expand_path(cmd.input_file);
-    expand_path(cmd.output_file);
-    expand_path(cmd.append_file);
-    expand_path(cmd.stderr_file);
-    expand_path(cmd.both_output_file);
-
-    for (auto& fd_redir : cmd.fd_redirections) {
-        expand_path(fd_redir.second);
-    }
-
     for (auto& redirection : cmd.redirection_order) {
         expand_path(redirection.value);
     }
@@ -618,27 +608,6 @@ void VariableExpander::expand_command_redirection_paths(Command& cmd) {
             expand_env_vars(path);
         }
     };
-
-    expand_vars_in_path(cmd.input_file);
-    expand_vars_in_path(cmd.output_file);
-    expand_vars_in_path(cmd.append_file);
-    expand_vars_in_path(cmd.stderr_file);
-    expand_vars_in_path(cmd.both_output_file);
-
-    for (auto& fd_redir : cmd.fd_redirections) {
-        std::string& spec = fd_redir.second;
-        if (spec.rfind("input:", 0) == 0) {
-            std::string path = spec.substr(6);
-            expand_vars_in_path(path);
-            spec = "input:" + path;
-        } else if (spec.rfind("output:", 0) == 0) {
-            std::string path = spec.substr(7);
-            expand_vars_in_path(path);
-            spec = "output:" + path;
-        } else {
-            expand_vars_in_path(spec);
-        }
-    }
 
     for (auto& redirection : cmd.redirection_order) {
         expand_vars_in_path(redirection.value);

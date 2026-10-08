@@ -36,7 +36,6 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 class Shell;
@@ -66,45 +65,27 @@ struct CommandRedirection {
     int fd{-1};
     int target_fd{-1};
     std::string value;
+
+    int destination_fd() const;
 };
 
 struct Command {
     std::vector<std::string> args;
-    std::string input_file;
-    std::string output_file;
-    std::string append_file;
     std::string original_text;
     bool background = false;
     bool auto_background_on_stop = false;
     bool auto_background_on_stop_silent = false;
     bool negate_pipeline = false;
-    bool stderr_to_stdout = false;
-    bool stdout_to_stderr = false;
-    std::string stderr_file;
-    bool stderr_append = false;
-    std::string here_doc;
-    std::string here_string;
-    bool both_output = false;
-    std::string both_output_file;
-    bool force_overwrite = false;
 
-    std::vector<std::pair<int, std::string>> fd_redirections;
-    std::vector<std::pair<int, int>> fd_duplications;
     std::vector<CommandRedirection> redirection_order;
     std::vector<std::string> process_substitutions;
 
     Command();
 
-    void set_fd_redirection(int fd, std::string value);
-
-    void set_fd_duplication(int fd, int target);
-
     void add_redirection(CommandRedirectionType type, std::string value = "", int fd = -1,
                          int target_fd = -1);
 
-    bool has_fd_redirection(int fd) const;
-
-    bool has_fd_duplication(int fd) const;
+    bool redirects_fd(int fd) const;
 };
 
 struct LogicalCommand {

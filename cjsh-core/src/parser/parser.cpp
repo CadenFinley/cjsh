@@ -76,46 +76,41 @@
 Command::Command() {
     args.reserve(8);
     process_substitutions.reserve(2);
-    fd_redirections.reserve(2);
-    fd_duplications.reserve(2);
     redirection_order.reserve(4);
 }
 
-void Command::set_fd_redirection(int fd, std::string value) {
-    auto it = std::find_if(fd_redirections.begin(), fd_redirections.end(),
-                           [fd](const auto& entry) { return entry.first == fd; });
-    if (it != fd_redirections.end()) {
-        it->second = std::move(value);
-    } else {
-        (void)fd_redirections.emplace_back(fd, std::move(value));
-    }
-}
-
-void Command::set_fd_duplication(int fd, int target) {
-    auto it = std::find_if(fd_duplications.begin(), fd_duplications.end(),
-                           [fd](const auto& entry) { return entry.first == fd; });
-    if (it != fd_duplications.end()) {
-        it->second = target;
-    } else {
-        (void)fd_duplications.emplace_back(fd, target);
-    }
-}
-
-// preserve every operation in source order in addition to the convenient summary
-// fields. 2>&1 >file and >file 2>&1 must remain distinguishable to the executor.
+// Preserve every redirection in source order.
 void Command::add_redirection(CommandRedirectionType type, std::string value, int fd,
                               int target_fd) {
     redirection_order.push_back(CommandRedirection{type, fd, target_fd, std::move(value)});
 }
 
-bool Command::has_fd_redirection(int fd) const {
-    return std::any_of(fd_redirections.begin(), fd_redirections.end(),
-                       [fd](const auto& entry) { return entry.first == fd; });
+int CommandRedirection::destination_fd() const {
+    switch (type) {
+        case CommandRedirectionType::Input:
+        case CommandRedirectionType::HereDoc:
+        case CommandRedirectionType::HereString:
+            return STDIN_FILENO;
+        case CommandRedirectionType::Output:
+        case CommandRedirectionType::Append:
+        case CommandRedirectionType::ForceOutput:
+        case CommandRedirectionType::BothOutput:
+            return STDOUT_FILENO;
+        case CommandRedirectionType::StderrOutput:
+        case CommandRedirectionType::StderrAppend:
+            return STDERR_FILENO;
+        default:
+            return fd;
+    }
 }
 
-bool Command::has_fd_duplication(int fd) const {
-    return std::any_of(fd_duplications.begin(), fd_duplications.end(),
-                       [fd](const auto& entry) { return entry.first == fd; });
+bool Command::redirects_fd(int fd) const {
+    return std::any_of(
+        redirection_order.begin(), redirection_order.end(),
+        [fd](const CommandRedirection& redirection) {
+            return redirection.destination_fd() == fd ||
+                   (redirection.type == CommandRedirectionType::BothOutput && fd == STDERR_FILENO);
+        });
 }
 
 namespace {
@@ -531,8 +526,6 @@ bool Parser::handle_fd_redirection(const std::string& value, size_t& i,
     try {
         int fd = std::stoi(value.substr(0, value.length() - 1));
         std::string file = QuoteInfo(tokens[++i]).unescaped_value();
-        std::string direction = (op == '<') ? "input:" : "output:";
-        cmd.set_fd_redirection(fd, direction + file);
         cmd.add_redirection(
             (op == '<') ? CommandRedirectionType::FdInput : CommandRedirectionType::FdOutput, file,
             fd);
@@ -1786,18 +1779,21 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                             if (redir.has_value()) {
                                 switch (*redir) {
                                     case RedirectionToken::StderrToStdout:
-                                        cmd.stderr_to_stdout = true;
+                                        cmd.add_redirection(CommandRedirectionType::Duplicate, "",
+                                                            STDERR_FILENO, STDOUT_FILENO);
                                         break;
                                     case RedirectionToken::StdoutToStderr:
-                                        cmd.stdout_to_stderr = true;
+                                        cmd.add_redirection(CommandRedirectionType::Duplicate, "",
+                                                            STDOUT_FILENO, STDERR_FILENO);
                                         break;
                                     case RedirectionToken::StderrOutput:
                                     case RedirectionToken::StderrAppend:
                                         if (i + 1 < merged_redir.size()) {
-                                            cmd.stderr_file =
-                                                QuoteInfo(merged_redir[++i]).unescaped_value();
-                                            cmd.stderr_append =
-                                                (*redir == RedirectionToken::StderrAppend);
+                                            cmd.add_redirection(
+                                                *redir == RedirectionToken::StderrAppend
+                                                    ? CommandRedirectionType::StderrAppend
+                                                    : CommandRedirectionType::StderrOutput,
+                                                QuoteInfo(merged_redir[++i]).unescaped_value());
                                         }
                                         break;
                                     default:
@@ -1859,7 +1855,6 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             // closing a descriptor is an ordered operation too; represent it
             // explicitly instead of confusing it with a negative duplication source.
             if (right == "-") {
-                cmd.set_fd_duplication(dst_fd, -1);
                 cmd.add_redirection(CommandRedirectionType::Close, "", dst_fd, -1);
                 return true;
             }
@@ -1869,7 +1864,6 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             }
 
             int src_fd = std::stoi(right);
-            cmd.set_fd_duplication(dst_fd, src_fd);
             cmd.add_redirection(CommandRedirectionType::Duplicate, "", dst_fd, src_fd);
             return true;
         };
@@ -1898,37 +1892,32 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             if (redir.has_value()) {
                 switch (*redir) {
                     case RedirectionToken::Input:
-                        cmd.input_file = get_next_token_value(i);
-                        cmd.add_redirection(CommandRedirectionType::Input, cmd.input_file);
+                        cmd.add_redirection(CommandRedirectionType::Input, get_next_token_value(i));
                         break;
                     case RedirectionToken::Output:
-                        cmd.output_file = get_next_token_value(i);
-                        cmd.force_overwrite = false;
-                        cmd.add_redirection(CommandRedirectionType::Output, cmd.output_file);
+                        cmd.add_redirection(CommandRedirectionType::Output,
+                                            get_next_token_value(i));
                         break;
                     case RedirectionToken::Append:
-                        cmd.append_file = get_next_token_value(i);
-                        cmd.add_redirection(CommandRedirectionType::Append, cmd.append_file);
+                        cmd.add_redirection(CommandRedirectionType::Append,
+                                            get_next_token_value(i));
                         break;
                     case RedirectionToken::ForceOutput:
-                        cmd.output_file = get_next_token_value(i);
-                        cmd.force_overwrite = true;
-                        cmd.add_redirection(CommandRedirectionType::ForceOutput, cmd.output_file);
+                        cmd.add_redirection(CommandRedirectionType::ForceOutput,
+                                            get_next_token_value(i));
                         break;
                     case RedirectionToken::BothOutput:
-                        cmd.both_output_file = get_next_token_value(i);
-                        cmd.both_output = true;
                         cmd.add_redirection(CommandRedirectionType::BothOutput,
-                                            cmd.both_output_file);
+                                            get_next_token_value(i));
                         break;
                     case RedirectionToken::HereDoc:
                     case RedirectionToken::HereDocStrip:
-                        cmd.here_doc = get_next_token_value(i);
-                        cmd.add_redirection(CommandRedirectionType::HereDoc, cmd.here_doc);
+                        cmd.add_redirection(CommandRedirectionType::HereDoc,
+                                            get_next_token_value(i));
                         break;
                     case RedirectionToken::HereString:
-                        cmd.here_string = get_next_token_value(i);
-                        cmd.add_redirection(CommandRedirectionType::HereString, cmd.here_string);
+                        cmd.add_redirection(CommandRedirectionType::HereString,
+                                            get_next_token_value(i));
                         break;
                     case RedirectionToken::ReadWrite:
                         cmd.add_redirection(CommandRedirectionType::ReadWrite,
@@ -1939,20 +1928,16 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                         break;
                     case RedirectionToken::StderrOutput:
                     case RedirectionToken::StderrAppend:
-                        cmd.stderr_file = get_next_token_value(i);
-                        cmd.stderr_append = (*redir == RedirectionToken::StderrAppend);
-                        cmd.add_redirection(cmd.stderr_append
+                        cmd.add_redirection(*redir == RedirectionToken::StderrAppend
                                                 ? CommandRedirectionType::StderrAppend
                                                 : CommandRedirectionType::StderrOutput,
-                                            cmd.stderr_file);
+                                            get_next_token_value(i));
                         break;
                     case RedirectionToken::StderrToStdout:
-                        cmd.stderr_to_stdout = true;
                         cmd.add_redirection(CommandRedirectionType::Duplicate, "", STDERR_FILENO,
                                             STDOUT_FILENO);
                         break;
                     case RedirectionToken::StdoutToStderr:
-                        cmd.stdout_to_stderr = true;
                         cmd.add_redirection(CommandRedirectionType::Duplicate, "", STDOUT_FILENO,
                                             STDERR_FILENO);
                         break;
@@ -2182,12 +2167,8 @@ std::vector<Command> Parser::parse_pipeline_with_preprocessing(const std::string
             }
             std::string content = it->second;
             process_heredoc_content(content);
-            if (cmd.input_file == redirection.value) {
-                cmd.input_file.clear();
-            }
             redirection.type = CommandRedirectionType::HereDoc;
             redirection.value = std::move(content);
-            cmd.here_doc = redirection.value;
         }
     }
 

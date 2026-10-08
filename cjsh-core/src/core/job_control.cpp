@@ -462,15 +462,7 @@ ExitErrorResult make_exit_error_result(const std::string& command, int exit_code
 // classify whether a command can still inherit terminal input. this is redirection
 // metadata, not evidence that the process is currently blocked in a read.
 bool command_consumes_terminal_stdin(const Command& cmd) {
-    if (!cmd.input_file.empty() || !cmd.here_doc.empty() || !cmd.here_string.empty()) {
-        return false;
-    }
-
-    if (cmd.has_fd_redirection(0) || cmd.has_fd_duplication(0)) {
-        return false;
-    }
-
-    return true;
+    return !cmd.redirects_fd(STDIN_FILENO);
 }
 
 // only a foreground pipeline's first stage inherits the shell's stdin; later
