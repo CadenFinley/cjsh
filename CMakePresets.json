@@ -134,7 +134,10 @@
     {
       "name": "ci-linux-clang-debug",
       "inherits": "debug",
-      "description": "CI debug build on Linux using Clang",
+      "description": "CI debug build on Linux using Clang, ASan, and UBSan",
+      "cacheVariables": {
+        "CJSH_ENABLE_UBSAN": "ON"
+      },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",

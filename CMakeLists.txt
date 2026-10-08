@@ -66,9 +66,23 @@ endif()
 
 option(CJSH_GENERATE_COMPILE_COMMANDS "Generate compile_commands.json" ON)
 option(CJSH_BUILD_TESTS "Build cjsh test binaries" ON)
+option(CJSH_BUILD_FUZZERS "Build the Clang libFuzzer parser target" OFF)
+option(CJSH_ENABLE_UBSAN "Enable undefined-behavior sanitizer instrumentation" OFF)
 option(CJSH_MINIMAL_BUILD "Enable the minimal size-oriented build profile" OFF)
 option(CJSH_STRIP_BINARY "Strip non-Debug binaries" ${_cjsh_strip_binary_default})
 option(CJSH_STATIC_LINK "Link the cjsh executable statically (Linux only)" OFF)
+
+if(CJSH_BUILD_FUZZERS)
+    if(NOT CJSH_BUILD_TESTS)
+        message(FATAL_ERROR "CJSH_BUILD_FUZZERS requires CJSH_BUILD_TESTS")
+    endif()
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "CJSH_BUILD_FUZZERS requires Clang with libFuzzer")
+    endif()
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        message(FATAL_ERROR "CJSH_BUILD_FUZZERS requires a Debug build for AddressSanitizer")
+    endif()
+endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ${CJSH_GENERATE_COMPILE_COMMANDS})
 

@@ -44,6 +44,7 @@ repository root after configuring and building a preset. See
 | `highlighter/` | Syntax-highlighting tests |
 | `build_system/` | CMake configuration, build metadata, and preset behavior |
 | `runner/` | Test process isolation and combined-result reporting |
+| `fuzz/` | Lexical parser libFuzzer driver and seed corpus; no command execution |
 | `tooling/` | Lint-driver behavior and release/archive/install license-notice checks |
 | `test_history_expansion.cpp` | Focused history-expansion tests |
 
@@ -108,3 +109,33 @@ For failures:
 CTest reports registered suites, and the custom summary additionally combines individual
 case counts where suites provide them. Check both failures and skipped counts; neither a
 large total nor a passing summary is a substitute for relevant regression coverage.
+
+## Sanitizers and fuzzing
+
+CI runs the full suite with the `ci-linux-clang-debug` preset, which enables
+AddressSanitizer and UndefinedBehaviorSanitizer. Reports fail the job and failure
+logs are uploaded as artifacts. The ordinary `debug` preset retains ASan; add
+`-DCJSH_ENABLE_UBSAN=ON` when configuring it to include UBSan.
+
+The separate parser fuzzing job uses [LLVM libFuzzer](https://llvm.org/docs/LibFuzzer.html)
+with both sanitizers and a bounded 120-second run. It exercises lexical splitting,
+line preprocessing, and tokenization with arbitrary bytes, plus generated nested
+arithmetic that must preserve subsequent logical operators. It never executes
+commands or expands fuzzed words. Crashing inputs are retained as CI artifacts.
+
+To build and run it locally with Clang on Linux:
+
+```sh
+cmake --preset ci-linux-clang-debug -DCJSH_BUILD_FUZZERS=ON
+cmake --build --preset ci-linux-clang-debug --target parser_fuzzer --parallel 4
+mkdir -p build/fuzz-corpus build/fuzz-artifacts
+cp tests/fuzz/corpus/* build/fuzz-corpus/
+build/ci-linux-clang-debug/tests/parser_fuzzer build/fuzz-corpus \
+  -max_total_time=120 -timeout=5 -max_len=4096 \
+  -rss_limit_mb=2048 -artifact_prefix=build/fuzz-artifacts/
+```
+
+The driver is compiled as an object in ordinary test builds so it remains covered
+by static analysis. The libFuzzer executable requires `CJSH_BUILD_FUZZERS=ON` and
+a Debug build. Keep generated corpus entries under the build directory; reduce
+failures and add useful reproductions to `fuzz/corpus/` and the regression suites.

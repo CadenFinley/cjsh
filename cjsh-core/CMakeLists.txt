@@ -46,6 +46,11 @@ add_library(cjsh_core STATIC)
 target_sources(cjsh_core PRIVATE ${CJSH_CORE_SOURCES} ${CJSH_ALL_HEADERS})
 target_include_directories(cjsh_core PUBLIC ${CJSH_INCLUDE_DIRS})
 target_link_libraries(cjsh_core PUBLIC cjsh_build_settings cjsh_isocline)
+if(CJSH_BUILD_FUZZERS)
+    # Instrument the implementation, not only the driver. The fuzzer executable
+    # supplies libFuzzer's main; regular executables retain their own entry point.
+    target_compile_options(cjsh_core PRIVATE -fsanitize=fuzzer-no-link)
+endif()
 cjsh_link_libatomic_if_needed(cjsh_core)
 set_target_properties(
     cjsh_core

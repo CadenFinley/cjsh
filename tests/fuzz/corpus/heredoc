@@ -1,0 +1,3 @@
+cat <<'END' && : after
+$((1)) || literal
+END

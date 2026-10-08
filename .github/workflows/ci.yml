@@ -81,6 +81,81 @@ jobs:
             --clang-format "$LLVM_PREFIX/bin/clang-format" \
             --clang-tidy "$LLVM_PREFIX/bin/clang-tidy"
 
+  build-sanitizers:
+    name: Linux Clang ASan and UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install sanitizer toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-rt-dev ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Configure
+        run: cmake --preset ci-linux-clang-debug
+
+      - name: Build
+        run: cmake --build --preset ci-linux-clang-debug --parallel 4
+
+      - name: Run tests with sanitizers
+        run: ctest --preset ci-linux-clang-debug --parallel 4
+
+      - name: Preserve sanitizer test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-test-logs
+          path: build/ci-linux-clang-debug/Testing/Temporary/
+
+  fuzz-parser:
+    name: Parser fuzzing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install fuzzing toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-rt-dev ninja-build
+
+      - name: Configure fuzzing
+        run: cmake --preset ci-linux-clang-debug -DCJSH_BUILD_FUZZERS=ON
+
+      - name: Build parser fuzzer
+        run: cmake --build --preset ci-linux-clang-debug --target parser_fuzzer --parallel 4
+
+      - name: Fuzz parser with seeded inputs
+        run: |
+          mkdir -p build/fuzz-corpus build/fuzz-artifacts
+          cp tests/fuzz/corpus/* build/fuzz-corpus/
+          build/ci-linux-clang-debug/tests/parser_fuzzer \
+            build/fuzz-corpus -max_total_time=120 -timeout=5 -max_len=4096 \
+            -rss_limit_mb=2048 -artifact_prefix=build/fuzz-artifacts/
+
+      - name: Preserve fuzzing failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parser-fuzz-artifacts
+          path: build/fuzz-artifacts/
+          if-no-files-found: ignore
+
   build-macos:
     name: Test ${{ matrix.target }}
     strategy:

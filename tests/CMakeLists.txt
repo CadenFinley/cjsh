@@ -65,6 +65,17 @@ function(cjsh_add_test)
     )
 endfunction()
 
+# Compile the driver in normal builds too so formatting/static-analysis coverage
+# includes it. Only explicit fuzz builds link the libFuzzer runtime and main.
+add_library(parser_fuzz_driver OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/fuzz/parser_fuzzer.cpp")
+target_link_libraries(parser_fuzz_driver PRIVATE cjsh_core)
+if(CJSH_BUILD_FUZZERS)
+    target_compile_options(parser_fuzz_driver PRIVATE -fsanitize=fuzzer-no-link)
+    add_executable(parser_fuzzer $<TARGET_OBJECTS:parser_fuzz_driver>)
+    target_link_libraries(parser_fuzzer PRIVATE cjsh_core)
+    target_link_options(parser_fuzzer PRIVATE -fsanitize=fuzzer)
+endif()
+
 # Register shell files individually so CTest can schedule them with --parallel.
 file(GLOB CJSH_SHELL_TEST_SCRIPTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shell/test_*.sh")
 foreach(test_script IN LISTS CJSH_SHELL_TEST_SCRIPTS)

@@ -110,6 +110,16 @@ function(cjsh_apply_build_profile)
         message(FATAL_ERROR "cjsh_apply_build_profile expected an existing TARGET")
     endif()
 
+    if(CJSH_ENABLE_UBSAN)
+        if(MSVC OR NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+            message(FATAL_ERROR "CJSH_ENABLE_UBSAN requires a Clang or GNU toolchain")
+        endif()
+        target_compile_options(${CJSH_PROFILE_TARGET} INTERFACE
+            -fsanitize=undefined -fno-sanitize-recover=undefined)
+        target_link_options(${CJSH_PROFILE_TARGET} INTERFACE
+            -fsanitize=undefined -fno-sanitize-recover=undefined)
+    endif()
+
     target_compile_definitions(
         ${CJSH_PROFILE_TARGET}
         INTERFACE
