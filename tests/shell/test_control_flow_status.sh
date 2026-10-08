@@ -130,8 +130,12 @@ SOURCE
         0 1a2aafter
     check 'break past the outermost loop is consumed' \
         'for i in 1 2; do break 100; done; printf after' 0 after
-    check 'builtin wrapper preserves break' \
-        'for i in 1 2; do builtin break; echo bad; done; printf after' 0 after
+    check 'command wrapper preserves break' \
+        'for i in 1 2; do command break; echo bad; done; printf after' 0 after
+    if [ "$dialect" = native ]; then
+        check 'builtin wrapper preserves break' \
+            'for i in 1 2; do builtin break; echo bad; done; printf after' 0 after
+    fi
     check 'loop scope ends before trailing commands' \
         'for i in 1; do :; done; break' 1 '' 'break outside loop'
     check 'loop scope ends between script lines' \

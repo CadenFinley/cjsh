@@ -1456,7 +1456,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     auto execute_block_skip_validation = [&](const std::vector<std::string>& block_lines) -> int {
         // A stack guard always unwinds; a unique_ptr holding nullptr never calls
         // its deleter. Commands after done must execute outside this loop scope.
-        LoopScope loop_scope(this);
+        LoopScope loop_scope(*this);
         return execute_block(block_lines, true);
     };
 

@@ -550,8 +550,10 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
             int c = 0;
             if (!cond.empty()) {
                 {
-                    ShellScriptInterpreter::LoopScope loop_scope(shell ? shell->get_interpreter()
-                                                                       : nullptr);
+                    std::optional<ShellScriptInterpreter::LoopScope> loop_scope;
+                    if (shell && shell->get_interpreter()) {
+                        loop_scope.emplace(*shell->get_interpreter());
+                    }
                     Shell::ErrexitScope scope(shell.get());
                     c = execute_simple_or_pipeline(cond);
                 }

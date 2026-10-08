@@ -164,21 +164,17 @@ class ShellScriptInterpreter {
 
     class LoopScope {
        public:
-        explicit LoopScope(ShellScriptInterpreter* owner) : owner_(owner) {
-            if (owner_) {
-                ++owner_->loop_depth;
-            }
+        explicit LoopScope(ShellScriptInterpreter& owner) : owner_(owner) {
+            ++owner_.loop_depth;
         }
         ~LoopScope() {
-            if (owner_) {
-                --owner_->loop_depth;
-            }
+            --owner_.loop_depth;
         }
         LoopScope(const LoopScope&) = delete;
         LoopScope& operator=(const LoopScope&) = delete;
 
        private:
-        ShellScriptInterpreter* owner_;
+        ShellScriptInterpreter& owner_;
     };
 
     VariableManager& get_variable_manager();
