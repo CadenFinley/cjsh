@@ -133,7 +133,7 @@ void VariableManager::set_local_variable(const std::string& name, const std::str
 }
 
 void VariableManager::set_environment_variable(const std::string& name, const std::string& value) {
-    if (g_shell) {
+    if (shell) {
         auto& env_vars = cjsh_env::env_vars();
         env_vars[name] = value;
         cjsh_env::mirror_set_to_process_env(name, value);
@@ -142,7 +142,7 @@ void VariableManager::set_environment_variable(const std::string& name, const st
         (void)global_associative_array_variables.erase(name);
         (void)global_nameref_variables.erase(name);
 
-        if (auto* parser = g_shell->get_parser()) {
+        if (auto* parser = shell->get_parser()) {
             parser->set_env_var(name, value);
         }
     }
@@ -916,7 +916,7 @@ std::vector<std::string> VariableManager::get_variable_names() const {
         (void)name_set.insert(entry.first);
     }
 
-    if (g_shell) {
+    if (shell) {
         const auto& env_vars = cjsh_env::env_vars();
         for (const auto& entry : env_vars) {
             (void)name_set.insert(entry.first);
@@ -1282,7 +1282,7 @@ bool VariableManager::assign_array_element_value(const std::string& name,
 
 VariableManager::VariableLookup VariableManager::lookup_global_scalar(const std::string& name,
                                                                       bool include_value) const {
-    if (g_shell) {
+    if (shell) {
         const auto& variables = cjsh_env::env_vars();
         const auto it = variables.find(name);
         if (it != variables.end()) {
@@ -1303,11 +1303,11 @@ std::string VariableManager::get_global_scalar_value(const std::string& name) co
 }
 
 void VariableManager::remove_global_scalar_binding(const std::string& name) {
-    if (g_shell) {
+    if (shell) {
         auto& env_vars = cjsh_env::env_vars();
         (void)env_vars.erase(name);
 
-        if (auto* parser = g_shell->get_parser()) {
+        if (auto* parser = shell->get_parser()) {
             parser->unset_env_var(name);
         }
     }

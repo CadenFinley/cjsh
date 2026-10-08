@@ -37,7 +37,7 @@
 #include "shell_env.h"
 #include "token_classifier.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 namespace {
 
@@ -51,7 +51,7 @@ bool expect(bool condition, const char* message) {
 
 bool test_function_keyword_with_parentheses() {
     const std::string definition = "function name() {}";
-    ShellScriptInterpreter* interpreter = g_shell->get_shell_script_interpreter();
+    ShellScriptInterpreter* interpreter = shell->get_interpreter();
     if (!expect(interpreter != nullptr, "shell interpreter should be available")) {
         return false;
     }
@@ -69,9 +69,8 @@ bool test_function_keyword_with_parentheses() {
                 "function classifier should return only the function name") &&
          ok;
 
-    ok =
-        expect(g_shell->execute(definition) == 0, "function name() should register successfully") &&
-        ok;
+    ok = expect(shell->execute(definition) == 0, "function name() should register successfully") &&
+         ok;
     ok = expect(interpreter->has_function("name"),
                 "registered function should use the name without parentheses") &&
          ok;
@@ -82,7 +81,7 @@ bool test_function_keyword_with_parentheses() {
 }
 
 bool test_invalid_keyword_function_name_still_fails_validation() {
-    ShellScriptInterpreter* interpreter = g_shell->get_shell_script_interpreter();
+    ShellScriptInterpreter* interpreter = shell->get_interpreter();
     if (!expect(interpreter != nullptr, "shell interpreter should be available")) {
         return false;
     }
@@ -100,7 +99,7 @@ bool test_invalid_keyword_function_name_still_fails_validation() {
 }
 
 bool test_inline_function_validation() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     const std::vector<std::string> definitions = {
         "function sayhello {echo hello}",
         "function sayhello { echo hello; }",
@@ -126,15 +125,15 @@ bool test_inline_function_validation() {
                     ("closed function should not request more input: " + definition).c_str()) &&
              ok;
     }
-    ok = expect(g_shell->execute("function compact {return 7}") == 0 &&
-                    g_shell->execute("compact") == 7,
-                "compact function should still register and execute") &&
-         ok;
+    ok =
+        expect(shell->execute("function compact {return 7}") == 0 && shell->execute("compact") == 7,
+               "compact function should still register and execute") &&
+        ok;
     return ok;
 }
 
 bool test_function_brace_matching() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     const std::vector<std::string> complete = {
         "function braces { echo '{'; }",
         "function braces { echo \"}\"; }",
@@ -189,13 +188,12 @@ bool test_function_brace_matching() {
 }
 
 bool test_function_definition_lifetime() {
-    bool ok = expect(g_shell->execute("self_unset() { unset -f self_unset; return 7; }") == 0 &&
-                         g_shell->execute("self_unset") == 7,
+    bool ok = expect(shell->execute("self_unset() { unset -f self_unset; return 7; }") == 0 &&
+                         shell->execute("self_unset") == 7,
                      "an active function body survives unsetting its definition");
-    ok = expect(
-             g_shell->execute("self_replace() { self_replace() { return 9; }; return 8; }") == 0 &&
-                 g_shell->execute("self_replace") == 8 && g_shell->execute("self_replace") == 9,
-             "redefinition preserves the active body and replaces subsequent calls") &&
+    ok = expect(shell->execute("self_replace() { self_replace() { return 9; }; return 8; }") == 0 &&
+                    shell->execute("self_replace") == 8 && shell->execute("self_replace") == 9,
+                "redefinition preserves the active body and replaces subsequent calls") &&
          ok;
     return ok;
 }
@@ -203,17 +201,16 @@ bool test_function_definition_lifetime() {
 bool test_function_validation_after_dialect_change() {
     const auto original_dialect = config::shell_dialect();
     config::set_shell_dialect(config::ShellDialect::Cjsh);
-    bool ok =
-        expect(g_shell->execute("native_body() { [[ yes = yes ]]; }") == 0 &&
-                   g_shell->execute("native_body") == 0 && g_shell->execute("native_body") == 0,
-               "a valid native function can be invoked repeatedly");
+    bool ok = expect(shell->execute("native_body() { [[ yes = yes ]]; }") == 0 &&
+                         shell->execute("native_body") == 0 && shell->execute("native_body") == 0,
+                     "a valid native function can be invoked repeatedly");
     config::set_shell_dialect(config::ShellDialect::Posix);
-    ok = expect(g_shell->execute("native_body") == 2,
+    ok = expect(shell->execute("native_body") == 2,
                 "a previously invoked body is revalidated after changing dialect") &&
          ok;
     cjsh_env::clear_exit_request();
     config::set_shell_dialect(config::ShellDialect::Cjsh);
-    ok = expect(g_shell->execute("native_body") == 0,
+    ok = expect(shell->execute("native_body") == 0,
                 "the original body remains usable after restoring its dialect") &&
          ok;
     config::set_shell_dialect(original_dialect);
@@ -229,8 +226,8 @@ int main() {
     // constructor can claim the terminal from the test runner.
     config::interactive_mode = false;
     config::force_interactive = false;
-    g_shell = std::make_unique<Shell>();
-    g_shell->set_interactive_mode(false);
+    shell = std::make_unique<Shell>();
+    shell->set_interactive_mode(false);
 
     size_t failures = 0;
     if (!test_function_keyword_with_parentheses()) {
@@ -254,7 +251,7 @@ int main() {
 
     // Match the executable's explicit teardown before process-wide registries
     // are destroyed by static finalization.
-    g_shell.reset();
+    shell.reset();
 
     if (failures != 0) {
         (void)std::fprintf(stderr, "%zu/6 function syntax tests failed\n", failures);

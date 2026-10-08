@@ -91,9 +91,9 @@ class SignalHandler {
     void setup_signal_handlers();
     void setup_interactive_handlers();
 
-    SignalProcessingResult process_pending_signals(Exec* shell_exec, bool reap_children = true);
+    SignalProcessingResult process_pending_signals(Exec* executor, bool reap_children = true);
     static bool has_pending_signals();
-    static void reap_pending_children(Exec* shell_exec, bool managed_jobs_only = false);
+    static void reap_pending_children(Exec* executor, bool managed_jobs_only = false);
     static bool has_pending_termination_signal();
     static bool take_pending_sigint();
     static void note_startup_interrupt();

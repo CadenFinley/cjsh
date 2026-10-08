@@ -1535,13 +1535,13 @@ static bool test_default_completer_suppresses_inside_known_command() {
 static bool test_known_shell_command_completion_without_path() {
     const char* test_name = "known_shell_command_completion_without_path";
     ScopedEnvironmentValue path("PATH", "/cjsh-completion-nonexistent-path");
-    auto previous_shell = std::move(g_shell);
+    auto previous_shell = std::move(shell);
     const bool previous_interactive = config::interactive_mode;
     config::interactive_mode = false;
-    g_shell = std::make_unique<Shell>();
+    shell = std::make_unique<Shell>();
     const bool ok = [&] {
-        g_shell->set_aliases({{"auditalias", "echo"}});
-        EXPECT_TRUE(g_shell->execute("auditfunction() { :; }") == 0, test_name,
+        shell->set_aliases({{"auditalias", "echo"}});
+        EXPECT_TRUE(shell->execute("auditfunction() { :; }") == 0, test_name,
                     "function fixture should be defined");
         EXPECT_TRUE(write_completion_history("echo_more\nauditalias_more\nauditfunction_more\n"),
                     test_name, "competing history completions should exist");
@@ -1553,14 +1553,14 @@ static bool test_known_shell_command_completion_without_path() {
             EXPECT_TRUE(count == 0, test_name,
                         "builtins, aliases and functions stay known without any PATH entries");
         }
-        g_shell->set_aliases({});
+        shell->set_aliases({});
         {
             const auto count = run_completion_generation_at("auditalias argument", 2,
                                                             &cjsh_default_completer, 256);
             clear_generated_completions();
             EXPECT_TRUE(count > 0, test_name, "removed aliases must become unknown immediately");
         }
-        g_shell = std::make_unique<Shell>();
+        shell = std::make_unique<Shell>();
         for (const char* command : {"auditalias argument", "auditfunction argument"}) {
             const auto count =
                 run_completion_generation_at(command, 2, &cjsh_default_completer, 256);
@@ -1570,7 +1570,7 @@ static bool test_known_shell_command_completion_without_path() {
         }
         return true;
     }();
-    g_shell = std::move(previous_shell);
+    shell = std::move(previous_shell);
     config::interactive_mode = previous_interactive;
     return ok;
 }
@@ -2501,7 +2501,7 @@ static bool test_command_completion_ranking() {
     fs::create_directory(root / "g1");
     fs::create_symlink(root / "missing", root / "g2");
     const ScopedEnvironmentValue path("PATH", root.string());
-    auto previous_shell = std::move(g_shell);
+    auto previous_shell = std::move(shell);
     const bool previous_case = is_completion_case_sensitive();
     const bool previous_learning = config::completion_learning_enabled;
     config::completion_learning_enabled = false;
@@ -2545,7 +2545,7 @@ static bool test_command_completion_ranking() {
     clear_generated_completions();
     set_completion_case_sensitive(previous_case);
     config::completion_learning_enabled = previous_learning;
-    g_shell = std::move(previous_shell);
+    shell = std::move(previous_shell);
     return ok;
 }
 
@@ -2559,17 +2559,17 @@ static bool test_command_completion_ranking_across_sources() {
         fs::permissions(root / name, fs::perms::owner_all);
     }
     const ScopedEnvironmentValue path("PATH", root.string());
-    auto previous_shell = std::move(g_shell);
+    auto previous_shell = std::move(shell);
     const bool previous_interactive = config::interactive_mode;
     const bool previous_learning = config::completion_learning_enabled;
     config::interactive_mode = false;
     config::completion_learning_enabled = false;
-    g_shell = std::make_unique<Shell>();
+    shell = std::make_unique<Shell>();
     const bool ok = [&] {
-        EXPECT_TRUE(g_shell->execute("gdup() { :; }; gzz_function() { :; }") == 0, test_name,
+        EXPECT_TRUE(shell->execute("gdup() { :; }; gzz_function() { :; }") == 0, test_name,
                     "function fixtures should be defined");
-        g_shell->set_aliases({{"ga_alias", "echo alias"}, {"gdup", "echo duplicate"}});
-        g_shell->set_abbreviations({{"gb_abbr", "echo abbreviation"}});
+        shell->set_aliases({{"ga_alias", "echo alias"}, {"gdup", "echo duplicate"}});
+        shell->set_abbreviations({{"gb_abbr", "echo abbreviation"}});
         (void)run_completion_generation("g", &cjsh_command_completer, 256);
         const auto actual = generated_completion_replacements();
         EXPECT_TRUE(!actual.empty() && actual.front() == "git ", test_name,
@@ -2597,7 +2597,7 @@ static bool test_command_completion_ranking_across_sources() {
         return true;
     }();
     clear_generated_completions();
-    g_shell = std::move(previous_shell);
+    shell = std::move(previous_shell);
     config::interactive_mode = previous_interactive;
     config::completion_learning_enabled = previous_learning;
     return ok;

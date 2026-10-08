@@ -238,7 +238,7 @@ void setup_environment_variables(const char* argv0) {
 
     if (!needs_account || pw != nullptr) {
         auto env_vars = setup_user_system_vars(
-            pw, g_shell ? g_shell->get_built_ins()->get_current_directory() : std::string{});
+            pw, shell ? shell->get_builtins()->get_current_directory() : std::string{});
 
         for (const auto& [name, value] : env_vars) {
             (void)setenv(name.c_str(), value.c_str(), 1);
@@ -249,8 +249,8 @@ void setup_environment_variables(const char* argv0) {
 // use interpreter lookup once available so callers see shell bindings, not just
 // exported variables. process lookup remains available during early bootstrap.
 std::string get_shell_variable_value(const std::string& name) {
-    if (g_shell) {
-        if (auto* interpreter = g_shell->get_shell_script_interpreter()) {
+    if (shell) {
+        if (auto* interpreter = shell->get_interpreter()) {
             return interpreter->get_variable_value(name);
         }
     }
@@ -268,8 +268,8 @@ std::string get_shell_variable_value(const char* name) {
 
 // existence is distinct from an empty value, notably for IFS and startup overrides.
 bool shell_variable_is_set(const std::string& name) {
-    if (g_shell) {
-        if (auto* interpreter = g_shell->get_shell_script_interpreter()) {
+    if (shell) {
+        if (auto* interpreter = shell->get_interpreter()) {
             return interpreter->get_variable_manager().variable_is_set(name);
         }
     }
@@ -288,10 +288,10 @@ bool shell_variable_is_set(const char* name) {
 // dialect's process-mirroring policy are updated together. this requires a live
 // interpreter; unlike reads, writes do not fall back to bootstrap process state.
 bool set_shell_variable_value(const std::string& name, const std::string& value) {
-    if (!g_shell) {
+    if (!shell) {
         return false;
     }
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     if (!interpreter) {
         return false;
     }
@@ -302,10 +302,10 @@ bool set_shell_variable_value(const std::string& name, const std::string& value)
 // remove the global environment-map binding and its parser copy. this is not
 // local-scope removal; callers targeting a local binding use the helper below.
 bool unset_shell_variable_value(const std::string& name) {
-    if (!g_shell) {
+    if (!shell) {
         return false;
     }
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     if (!interpreter) {
         return false;
     }
@@ -315,7 +315,7 @@ bool unset_shell_variable_value(const std::string& name) {
         return true;
     }
 
-    if (auto* parser = g_shell->get_parser()) {
+    if (auto* parser = shell->get_parser()) {
         parser->unset_env_var(name);
     }
 
@@ -366,7 +366,7 @@ std::string quote_shell_value(const std::string& value) {
 void mirror_set_to_process_env(const std::string& name, const std::string& value) {
     if (config::is_posix_mode()) {
         if (getenv(name.c_str()) != nullptr || exported_names.count(name) != 0 ||
-            (g_shell && g_shell->get_shell_option(ShellOption::Allexport))) {
+            (shell && shell->get_shell_option(ShellOption::Allexport))) {
             exported_names.insert(name);
             (void)setenv(name.c_str(), value.c_str(), 1);
         }
@@ -395,7 +395,7 @@ void mirror_unset_from_process_env(const std::string& name) {
 bool set_shell_or_local_variable_value(Shell* shell, const std::string& name,
                                        const std::string& value) {
     if (shell != nullptr) {
-        if (auto* interpreter = shell->get_shell_script_interpreter();
+        if (auto* interpreter = shell->get_interpreter();
             interpreter && interpreter->is_local_variable(name)) {
             interpreter->set_local_variable(name, value);
             return true;
@@ -407,7 +407,7 @@ bool set_shell_or_local_variable_value(Shell* shell, const std::string& name,
 
 bool unset_shell_or_local_variable_value(Shell* shell, const std::string& name) {
     if (shell != nullptr) {
-        if (auto* interpreter = shell->get_shell_script_interpreter();
+        if (auto* interpreter = shell->get_interpreter();
             interpreter && interpreter->is_local_variable(name)) {
             (void)interpreter->unset_local_variable(name);
             return true;
@@ -906,7 +906,7 @@ int handle_non_interactive_mode(const std::string& script_file) {
 
     std::optional<ScriptZeroGuard> zero_guard;
     if (!script_file.empty()) {
-        (void)zero_guard.emplace(g_shell.get(), script_file);
+        (void)zero_guard.emplace(shell.get(), script_file);
     }
 
     if (!script_file.empty()) {
@@ -940,13 +940,13 @@ int handle_non_interactive_mode(const std::string& script_file) {
         }
 
         script_content = read_result.value();
-    } else if ((config::is_posix_mode() || config::read_stdin) && g_shell) {
+    } else if ((config::is_posix_mode() || config::read_stdin) && shell) {
         // do not buffer past a complete command: read and external commands
         // must be able to consume subsequent bytes from this same descriptor.
         int status = 0;
         char byte;
         for (;;) {
-            (void)g_shell->process_pending_signals();
+            (void)shell->process_pending_signals();
             if (cjsh_env::exit_requested()) {
                 return read_exit_code_or(status);
             }
@@ -968,11 +968,11 @@ int handle_non_interactive_mode(const std::string& script_file) {
             // retain our own prepared lines while completeness checks inspect
             // syntax. validation may parse functions and replace the parser cache;
             // pending heredocs and open constructs keep accumulating input.
-            const auto lines = g_shell->get_parser()->prepare_interactive_input(script_content);
-            if (g_shell->get_parser()->awaiting_here_document()) {
+            const auto lines = shell->get_parser()->prepare_interactive_input(script_content);
+            if (shell->get_parser()->awaiting_here_document()) {
                 continue;
             }
-            if (g_shell->get_shell_script_interpreter()->needs_additional_input(lines)) {
+            if (shell->get_interpreter()->needs_additional_input(lines)) {
                 continue;
             }
             // comment-only and blank input should not replace the last command's
@@ -985,13 +985,13 @@ int handle_non_interactive_mode(const std::string& script_file) {
                 script_content.clear();
                 continue;
             }
-            status = g_shell->execute(script_content);
+            status = shell->execute(script_content);
             script_content.clear();
         }
         // submit a final unterminated line at EOF too. the interpreter owns any
         // syntax error for an incomplete construct left in the final buffer.
         if (!script_content.empty()) {
-            status = g_shell->execute(script_content);
+            status = shell->execute(script_content);
         }
         return read_exit_code_or(status);
     } else {
@@ -999,8 +999,8 @@ int handle_non_interactive_mode(const std::string& script_file) {
         // reads, but dispatch pending signals between reads so exit can stop loading.
         char buffer[4096];
         for (;;) {
-            if (g_shell) {
-                (void)g_shell->process_pending_signals();
+            if (shell) {
+                (void)shell->process_pending_signals();
             }
             if (cjsh_env::exit_requested()) {
                 return read_exit_code_or(128 + SignalHandler::termination_signal());
@@ -1020,7 +1020,7 @@ int handle_non_interactive_mode(const std::string& script_file) {
     // loaded files and buffered stdin share evaluation. an explicit exit override
     // takes precedence over the interpreter's ordinary result.
     if (!script_content.empty()) {
-        int code = g_shell ? g_shell->execute(script_content) : 1;
+        int code = shell ? shell->execute(script_content) : 1;
         return read_exit_code_or(code);
     }
 

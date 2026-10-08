@@ -85,7 +85,7 @@ user-facing contract; do not assume every Bash behavior is intended cjsh behavio
 - **Signals and jobs:** keep signal-handler work async-signal-safe; do not add allocation,
   ordinary logging, or script evaluation to handlers. Preserve child signal dispositions,
   process groups, child reaping, and foreground terminal handoff/recovery.
-- **Shared state:** `g_shell` and other process-wide state mean the runtime is not a generally
+- **Shared state:** `shell` and other process-wide state mean the runtime is not a generally
   reentrant or thread-safe library. New background work must not assume independent shell instances.
 - **Interactive versus scripting behavior:** validation/highlighting must not accidentally
   execute user commands. Keep startup, native/POSIX dialect, noninteractive, and syntax-only

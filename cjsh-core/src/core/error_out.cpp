@@ -224,7 +224,7 @@ bool should_colorize_output() {
         return false;
     }
 
-    if (!g_shell || !g_shell->get_interactive_mode()) {
+    if (!shell || !shell->get_interactive_mode()) {
         return false;
     }
 

@@ -66,7 +66,7 @@ int source_command(const std::vector<std::string>& args) {
         return posix_special_builtin_error(1);
     }
 
-    if (!g_shell) {
+    if (!shell) {
         print_error({ErrorType::FATAL_ERROR, command_name, "shell not initialized properly", {}});
         return 1;
     }
@@ -104,5 +104,5 @@ int source_command(const std::vector<std::string>& args) {
         return posix_special_builtin_error(1);
     }
 
-    return g_shell->execute_script_file(target_path);
+    return shell->execute_script_file(target_path);
 }

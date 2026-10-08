@@ -58,7 +58,7 @@ extern "C" {
 #include "shell_env.h"
 #include "token_constants.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 extern "C" void syntax_highlight_bridge(ic_highlight_env_t* henv, const char* input, void* arg) {
     SyntaxHighlighter::highlight(henv, input, arg);
@@ -655,28 +655,28 @@ static bool test_split_unknown_command_fragment_highlighting_with_gap() {
 
 static bool test_split_unknown_command_fragment_highlighting_with_known_second_token() {
     const char* test_name = "split_unknown_command_fragment_highlighting_with_known_second_token";
-    if (g_shell == nullptr) {
+    if (shell == nullptr) {
         log_failure(test_name, "shell instance is not initialized");
         return false;
     }
 
-    auto original_aliases = g_shell->get_aliases();
+    auto original_aliases = shell->get_aliases();
     auto updated_aliases = original_aliases;
     updated_aliases["code"] = "echo known-code-fragment";
     updated_aliases["opencode"] = "echo merged-command";
-    g_shell->set_aliases(updated_aliases);
+    shell->set_aliases(updated_aliases);
 
     const std::string input = "ope code";
     attrbuf_t* attrs = highlight_input(input, test_name);
     if (attrs == nullptr) {
-        g_shell->set_aliases(original_aliases);
+        shell->set_aliases(original_aliases);
         return false;
     }
 
     ic_env_t* env = ensure_env(test_name);
     if (env == nullptr) {
         attrbuf_free(attrs);
-        g_shell->set_aliases(original_aliases);
+        shell->set_aliases(original_aliases);
         return false;
     }
 
@@ -685,7 +685,7 @@ static bool test_split_unknown_command_fragment_highlighting_with_known_second_t
     if (first_pos == std::string::npos || second_pos == std::string::npos) {
         log_failure(test_name, "failed to locate split command fragments");
         attrbuf_free(attrs);
-        g_shell->set_aliases(original_aliases);
+        shell->set_aliases(original_aliases);
         return false;
     }
 
@@ -697,7 +697,7 @@ static bool test_split_unknown_command_fragment_highlighting_with_known_second_t
             "known second fragment should still be highlighted as unknown in a split typo");
 
     attrbuf_free(attrs);
-    g_shell->set_aliases(original_aliases);
+    shell->set_aliases(original_aliases);
     return ok;
 }
 
@@ -1084,12 +1084,12 @@ static bool test_history_expansion_caret_highlighting() {
                            "caret history expansion should be highlighted as history expansion");
 
     attrbuf_free(attrs);
-    auto original_aliases = g_shell->get_aliases();
+    auto original_aliases = shell->get_aliases();
     auto updated_aliases = original_aliases;
     updated_aliases[input] = "echo alias";
-    g_shell->set_aliases(updated_aliases);
+    shell->set_aliases(updated_aliases);
     attrs = highlight_input("  " + input, test_name);
-    g_shell->set_aliases(original_aliases);
+    shell->set_aliases(original_aliases);
     if (attrs == nullptr) {
         return false;
     }
@@ -1746,16 +1746,16 @@ static bool test_subshell_group_highlighting() {
 static bool test_subshell_tokens_known_to_validator() {
     const char* test_name = "subshell_tokens_known_to_validator";
 
-    if (g_shell == nullptr) {
+    if (shell == nullptr) {
         log_failure(test_name, "shell instance is not initialized");
         return false;
     }
 
-    const std::unordered_set<std::string> available_commands = g_shell->get_available_commands();
+    const std::unordered_set<std::string> available_commands = shell->get_available_commands();
     bool open_paren_known =
-        command_analysis::is_known_command_token("(", 0, g_shell.get(), available_commands);
+        command_analysis::is_known_command_token("(", 0, shell.get(), available_commands);
     bool close_paren_known =
-        command_analysis::is_known_command_token(")", 0, g_shell.get(), available_commands);
+        command_analysis::is_known_command_token(")", 0, shell.get(), available_commands);
 
     EXPECT_TRUE(open_paren_known, test_name, "'(' should be treated as a known shell token");
     EXPECT_TRUE(close_paren_known, test_name, "')' should be treated as a known shell token");
@@ -2027,16 +2027,16 @@ static bool test_command_membership_changes_between_redraws() {
     };
     bool ok = check(name, 0, "cjsh-unknown-command");
     // Direct map edits are supported by the shell; no cache invalidation hook is required.
-    g_shell->get_aliases()[name] = "echo alias";
+    shell->get_aliases()[name] = "echo alias";
     ok = check(name, 0, "cjsh-builtin") && ok;
     ok = check("sudo " + name, 5, "cjsh-builtin") && ok;
-    g_shell->get_aliases().erase(name);
+    shell->get_aliases().erase(name);
     ok = check(name, 0, "cjsh-unknown-command") && ok;
-    ok = (g_shell->execute(name + "() { :; }") == 0) && ok;
+    ok = (shell->execute(name + "() { :; }") == 0) && ok;
     ok = check(name, 0, "cjsh-builtin") && ok;
     ok = check("sudo " + name, 5, "cjsh-builtin") && ok;
-    g_shell->get_aliases()[name] = "echo alias over function";
-    g_shell->get_aliases().erase(name);
+    shell->get_aliases()[name] = "echo alias over function";
+    shell->get_aliases().erase(name);
     ok = check(name, 0, "cjsh-builtin") && ok;
     return ok;
 }
@@ -2118,8 +2118,8 @@ static const test_case_t kTests[] = {
 int main() {
     cjsh_env::reset_shell_state();
     cjsh_env::set_startup_active(false);
-    g_shell = std::make_unique<Shell>();
-    g_shell->set_interactive_mode(false);
+    shell = std::make_unique<Shell>();
+    shell->set_interactive_mode(false);
     config::history_expansion_enabled = true;
 
     size_t failures = 0;
@@ -2134,7 +2134,7 @@ int main() {
 
     // Match the executable's explicit teardown before process-wide registries
     // are destroyed by static finalization.
-    g_shell.reset();
+    shell.reset();
 
     if (failures > 0) {
         (void)std::fprintf(stderr, "%zu/%zu syntax highlighting tests failed\n", failures,

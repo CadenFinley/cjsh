@@ -39,7 +39,7 @@
 #include "shell_dialect.h"
 #include "shell_env.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 namespace {
 
@@ -55,7 +55,7 @@ void expect(bool condition, const std::string& message) {
 }
 
 void test_validation_and_continuation() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     const std::vector<std::vector<std::string>> invalid = {
         {"for in in {1..10};", "do", "echo $i", "done"},
         {"select in in one; do :; done"},
@@ -119,30 +119,30 @@ void test_validation_and_continuation() {
 }
 
 void test_prepared_input_execution() {
-    auto* parser = g_shell->get_parser();
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* parser = shell->get_parser();
+    auto* interpreter = shell->get_interpreter();
     const std::string loop = "for item in one two; do PREPARED_RESULT=$item; done";
     expect(!interpreter->needs_additional_input(parser->prepare_interactive_input(loop)),
            "prepared loop is complete");
-    expect(g_shell->execute(loop) == 0 &&
-               cjsh_env::get_shell_variable_value("PREPARED_RESULT") == "two",
-           "prepared loop executes its final iteration");
+    expect(
+        shell->execute(loop) == 0 && cjsh_env::get_shell_variable_value("PREPARED_RESULT") == "two",
+        "prepared loop executes its final iteration");
 
     const std::string substituted_loop =
         "for item in $(printf 'three four'); do PREPARED_RESULT=$item; done";
     expect(
         !interpreter->needs_additional_input(parser->prepare_interactive_input(substituted_loop)),
         "prepared loop with command substitution is complete");
-    expect(g_shell->execute(substituted_loop) == 0 &&
+    expect(shell->execute(substituted_loop) == 0 &&
                cjsh_env::get_shell_variable_value("PREPARED_RESULT") == "four",
            "prepared loop expands command substitution before iterating");
 
     const std::string heredoc = "read PREPARED_RESULT <<EOF\noriginal\nEOF";
     expect(!interpreter->needs_additional_input(parser->prepare_interactive_input(heredoc)),
            "prepared heredoc is complete");
-    expect(g_shell->execute("read HOOK_RESULT <<EOF\nhook\nEOF") == 0,
+    expect(shell->execute("read HOOK_RESULT <<EOF\nhook\nEOF") == 0,
            "intervening hook executes a different heredoc");
-    expect(g_shell->execute(heredoc) == 0 &&
+    expect(shell->execute(heredoc) == 0 &&
                cjsh_env::get_shell_variable_value("PREPARED_RESULT") == "original",
            "intervening parsing cannot replace the prepared command's heredoc");
 
@@ -151,7 +151,7 @@ void test_prepared_input_execution() {
     expect(!interpreter->needs_additional_input(parser->prepare_interactive_input(expansion)),
            "heredoc analysis leaves expansion for execution");
     (void)cjsh_env::set_shell_variable_value("PREPARED_SOURCE", "after");
-    expect(g_shell->execute(expansion) == 0 &&
+    expect(shell->execute(expansion) == 0 &&
                cjsh_env::get_shell_variable_value("PREPARED_RESULT") == "after",
            "prepared syntax reads the current variable value");
 
@@ -190,9 +190,9 @@ void test_runtime_guards_without_validation() {
             auto* previous = std::cerr.rdbuf(errors.rdbuf());
             int rc = header.rfind("for", 0) == 0
                          ? loop_evaluator::handle_for_block(lines, index, body, nullptr, trailing,
-                                                            g_shell->get_parser())
+                                                            shell->get_parser())
                          : loop_evaluator::handle_select_block(lines, index, body, trailing,
-                                                               g_shell->get_parser());
+                                                               shell->get_parser());
             std::cerr.rdbuf(previous);
 
             expect(rc == 2, "runtime syntax status for " + header);
@@ -213,13 +213,13 @@ int main() {
     cjsh_env::set_startup_active(false);
     config::interactive_mode = false;
     config::force_interactive = false;
-    g_shell = std::make_unique<Shell>();
-    g_shell->set_interactive_mode(false);
+    shell = std::make_unique<Shell>();
+    shell->set_interactive_mode(false);
 
     test_validation_and_continuation();
     test_runtime_guards_without_validation();
     test_prepared_input_execution();
-    g_shell.reset();
+    shell.reset();
     std::printf("Loop syntax: %zu checks, %zu failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

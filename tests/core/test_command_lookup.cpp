@@ -49,7 +49,7 @@
 #include "suggestion_utils.h"
 #include "type_which_command.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 namespace {
 namespace fs = std::filesystem;
@@ -75,7 +75,7 @@ BuiltinResult run_builtin(int (*command)(const std::vector<std::string>&, Shell*
                           const std::vector<std::string>& args) {
     std::ostringstream output;
     auto* previous = std::cout.rdbuf(output.rdbuf());
-    const int status = command(args, g_shell.get());
+    const int status = command(args, shell.get());
     std::cout.rdbuf(previous);
     return {status, output.str()};
 }
@@ -116,17 +116,17 @@ bool test_suggestions(const fs::path& root) {
                 "suggestions must not eagerly hash unrelated PATH executables") &&
          ok;
 
-    g_shell->set_aliases({{"lookupplain", "echo alias"}});
-    g_shell->set_abbreviations({{"lookupbroken", "echo abbreviation"}});
-    ok = expect(g_shell->execute("lookupfunction() { :; }") == 0,
+    shell->set_aliases({{"lookupplain", "echo alias"}});
+    shell->set_abbreviations({{"lookupbroken", "echo abbreviation"}});
+    ok = expect(shell->execute("lookupfunction() { :; }") == 0,
                 "create a function for suggestion lookup") &&
          ok;
     ok = expect(suggests("lookupplai", "lookupplain") && suggests("lookupbrokn", "lookupbroken") &&
                     suggests("lookupfunctio", "lookupfunction"),
                 "aliases, abbreviations, and functions remain valid suggestion sources") &&
          ok;
-    g_shell->set_aliases({});
-    g_shell->set_abbreviations({});
+    shell->set_aliases({});
+    shell->set_abbreviations({});
     return ok;
 }
 
@@ -134,7 +134,7 @@ bool test_builtin_resolution(const fs::path& root) {
     executable(root / "echo");
     executable(root / "cjshopt");
     executable(root / "lookupfunction");
-    g_shell->set_aliases({{"lookupalias", "echo alias"}});
+    shell->set_aliases({{"lookupalias", "echo alias"}});
     cjsh_filesystem::reset_path_hash();
     bool ok = true;
     for (const auto& args : std::vector<std::vector<std::string>>{{"type", "echo"},
@@ -180,7 +180,7 @@ bool test_builtin_resolution(const fs::path& root) {
                     all_which.output.find((root / "echo").string()) != std::string::npos,
                 "which -a still searches PATH for custom builtins") &&
          ok;
-    g_shell->set_aliases({});
+    shell->set_aliases({});
     return ok;
 }
 
@@ -243,8 +243,8 @@ bool test_status_lookup_scope(const fs::path& root) {
         (void)cjsh_filesystem::find_executable_in_path("lookupcallback");
     }
     executable(root / "lookupcallback");
-    ok = expect(g_shell->execute("lookupstatus() { command -v lookupcallback >/dev/null && "
-                                 "CJSH_STATUS_OUTPUT=fresh; }") == 0,
+    ok = expect(shell->execute("lookupstatus() { command -v lookupcallback >/dev/null && "
+                               "CJSH_STATUS_OUTPUT=fresh; }") == 0,
                 "create a status callback containing an explicit query") &&
          ok;
     status_line::set_user_status_callback_function("lookupstatus");
@@ -298,14 +298,14 @@ bool test_cursor_command_path(const fs::path& root) {
                 "display the executable symlink path rather than its realpath") &&
          ok;
 
-    g_shell->set_aliases({{"lookuptool", "echo alias"}});
+    shell->set_aliases({{"lookuptool", "echo alias"}});
     ok = expect(hint("lookuptool", 3).empty(), "aliases shadow external path hints") && ok;
-    g_shell->set_aliases({});
-    g_shell->set_interactive_mode(true);
-    g_shell->set_abbreviations({{"lookuptool", "echo abbreviation"}});
+    shell->set_aliases({});
+    shell->set_interactive_mode(true);
+    shell->set_abbreviations({{"lookuptool", "echo abbreviation"}});
     ok = expect(hint("lookuptool", 3).empty(), "interactive abbreviations shadow path hints") && ok;
-    g_shell->set_abbreviations({});
-    g_shell->set_interactive_mode(false);
+    shell->set_abbreviations({});
+    shell->set_interactive_mode(false);
 
     const fs::path first = root / "first";
     fs::create_directory(first);
@@ -316,7 +316,7 @@ bool test_cursor_command_path(const fs::path& root) {
          ok;
     (void)cjsh_env::set_shell_variable_value("PATH", root.string());
 
-    ok = expect(g_shell->execute(
+    ok = expect(shell->execute(
                     "pathstatus() { CJSH_PATH_STATUS_COUNT=$((CJSH_PATH_STATUS_COUNT + 1)); "
                     "CJSH_STATUS_OUTPUT=banner; }") == 0,
                 "create a callback to check cursor-only status refreshes") &&
@@ -391,11 +391,10 @@ bool test_cursor_shell_command_hints() {
                 "shell command hints work after command separators") &&
          ok;
 
-    ok = expect(g_shell->execute("pwd() { :; }") == 0, "create a function shadowing a builtin") &&
-         ok;
+    ok = expect(shell->execute("pwd() { :; }") == 0, "create a function shadowing a builtin") && ok;
     ok = expect(hint("pwd", 2) == "(function) - pwd", "functions take precedence over builtins") &&
          ok;
-    g_shell->set_aliases({{"pwd", "lookuptool --flag"}, {"lookupalias", "echo\n\tvalue\r\x1b"}});
+    shell->set_aliases({{"pwd", "lookuptool --flag"}, {"lookupalias", "echo\n\tvalue\r\x1b"}});
     ok = expect(hint("pwd", 2) == "(alias) - lookuptool --flag",
                 "aliases show their definition and take precedence over functions") &&
          ok;
@@ -403,17 +402,17 @@ bool test_cursor_shell_command_hints() {
                 "alias expansion text is sanitized to a single safe status line") &&
          ok;
 
-    g_shell->set_abbreviations({{"pwd", "lookupfunction --arg"}});
-    g_shell->set_interactive_mode(true);
+    shell->set_abbreviations({{"pwd", "lookupfunction --arg"}});
+    shell->set_interactive_mode(true);
     ok = expect(hint("pwd", 2) == "(abbreviation) - lookupfunction --arg",
                 "interactive abbreviations show their expansion before alias resolution") &&
          ok;
-    g_shell->set_interactive_mode(false);
+    shell->set_interactive_mode(false);
     ok = expect(hint("pwd", 2) == "(alias) - lookuptool --flag",
                 "abbreviations do not apply outside interactive mode") &&
          ok;
-    g_shell->set_abbreviations({});
-    g_shell->set_aliases({});
+    shell->set_abbreviations({});
+    shell->set_aliases({});
 
     config::colors_enabled = true;
     config::syntax_highlighting_enabled = true;
@@ -428,19 +427,19 @@ bool test_cursor_shell_command_hints() {
                     external.substr(external.size() - 4) == ")[/]",
                 "external paths use the completion source tag style with no dangling separator") &&
          ok;
-    g_shell->set_aliases({{"lookupalias", "echo [red]value[/] \\suffix"}});
+    shell->set_aliases({{"lookupalias", "echo [red]value[/] \\suffix"}});
     ok = expect(hint("lookupalias", 3) ==
                     "[ic-diminish](alias)[/] - echo \\[red]value\\[/] \\\\suffix",
                 "alias definitions cannot inject BBCode styles into the status line") &&
          ok;
-    g_shell->set_aliases({});
-    g_shell->set_abbreviations({{"lookupabbr", "echo [value]"}});
-    g_shell->set_interactive_mode(true);
+    shell->set_aliases({});
+    shell->set_abbreviations({{"lookupabbr", "echo [value]"}});
+    shell->set_interactive_mode(true);
     ok = expect(hint("lookupabbr", 3) == "[ic-diminish](abbreviation)[/] - echo \\[value]",
                 "abbreviation hints use source tag styling and escape expansion text") &&
          ok;
-    g_shell->set_abbreviations({});
-    g_shell->set_interactive_mode(false);
+    shell->set_abbreviations({});
+    shell->set_interactive_mode(false);
     config::syntax_highlighting_enabled = false;
     ok = expect(hint("echo", 2) == echo_hint,
                 "disabled syntax highlighting leaves command hints unstyled") &&
@@ -477,8 +476,8 @@ int main() {
     config::history_enabled = false;
     config::completion_learning_enabled = false;
     config::colors_enabled = false;
-    g_shell = std::make_unique<Shell>();
-    g_shell->set_interactive_mode(false);
+    shell = std::make_unique<Shell>();
+    shell->set_interactive_mode(false);
     (void)cjsh_env::set_shell_variable_value("PATH", root.string());
 
     const bool suggestions = test_suggestions(root);
@@ -487,7 +486,7 @@ int main() {
     const bool status = test_status_lookup_scope(root);
     const bool cursor_path = test_cursor_command_path(root);
     const bool shell_hints = test_cursor_shell_command_hints();
-    g_shell.reset();
+    shell.reset();
     fs::remove_all(root);
     if (!(suggestions && builtins && default_path && status && cursor_path && shell_hints)) {
         return 1;

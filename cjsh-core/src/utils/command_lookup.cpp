@@ -57,8 +57,8 @@ bool is_shell_keyword(const std::string& token) {
 }
 
 bool is_shell_builtin(const std::string& token, Shell* shell) {
-    return shell != nullptr && shell->get_built_ins() != nullptr &&
-           shell->get_built_ins()->is_builtin_command(token) != 0;
+    return shell != nullptr && shell->get_builtins() != nullptr &&
+           shell->get_builtins()->is_builtin_command(token) != 0;
 }
 
 bool token_allows_split_command_merge(const std::string& token) {
@@ -90,7 +90,7 @@ bool has_shell_function(const std::string& token, Shell* shell) {
         return false;
     }
 
-    const auto* interpreter = shell->get_shell_script_interpreter();
+    const auto* interpreter = shell->get_interpreter();
     return interpreter != nullptr && interpreter->has_function(token);
 }
 
@@ -107,12 +107,12 @@ bool should_auto_cd_token(const std::string& token, Shell* shell, bool* director
         return false;
     }
 
-    Built_ins* built_ins = shell->get_built_ins();
-    if (built_ins == nullptr) {
+    Built_ins* builtins = shell->get_builtins();
+    if (builtins == nullptr) {
         return false;
     }
 
-    const std::string cwd = built_ins->get_current_directory();
+    const std::string cwd = builtins->get_current_directory();
     const std::string previous_directory = shell->get_previous_directory();
     const bool is_directory =
         cjsh_filesystem::is_auto_cd_directory_token(token, cwd, previous_directory);

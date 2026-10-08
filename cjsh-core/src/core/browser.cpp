@@ -99,7 +99,7 @@ bool handle_runoff_key(ic_keycode_t key) {
 
 bool open_buffer() {
     const char* raw_buffer = ic_get_buffer();
-    if (raw_buffer == nullptr || g_shell == nullptr) {
+    if (raw_buffer == nullptr || shell == nullptr) {
         return false;
     }
     const std::string input = string_utils::trim_ascii_whitespace_copy(raw_buffer);
@@ -127,7 +127,7 @@ bool open_buffer() {
                      {"Set BROWSER to a browser executable and optional arguments."}});
     } else {
         args.push_back(browser_url(input));
-        const int exit_code = g_shell->execute_command(args, false);
+        const int exit_code = shell->execute_command(args, false);
         if (exit_code != 0) {
             print_error({ErrorType::RUNTIME_ERROR,
                          "browser",

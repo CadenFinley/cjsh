@@ -189,12 +189,12 @@ int export_command(const std::vector<std::string>& args, Shell* shell) {
             std::string var_value;
             bool is_local = false;
 
-            auto* script_interpreter = shell->get_shell_script_interpreter();
-            if (script_interpreter != nullptr && script_interpreter->is_local_variable(name)) {
-                var_value = script_interpreter->get_variable_value(name);
+            auto* interpreter = shell->get_interpreter();
+            if (interpreter != nullptr && interpreter->is_local_variable(name)) {
+                var_value = interpreter->get_variable_value(name);
                 is_local = true;
 
-                script_interpreter->mark_local_as_exported(name);
+                interpreter->mark_local_as_exported(name);
             } else {
                 if (cjsh_env::shell_variable_is_set(name)) {
                     var_value = cjsh_env::get_shell_variable_value(name);
@@ -232,7 +232,7 @@ int unset_command(const std::vector<std::string>& args, Shell* shell) {
 
     bool success = true;
     auto& env_vars = cjsh_env::env_vars();
-    auto* script_interpreter = shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     bool nameref_only = false;
     bool functions_only = false;
     size_t operand_start = 1;
@@ -255,7 +255,7 @@ int unset_command(const std::vector<std::string>& args, Shell* shell) {
             if (!cjsh_env::is_valid_env_name(name)) {
                 print_error({ErrorType::INVALID_ARGUMENT, "unset", "invalid name: " + name, {}});
                 success = false;
-            } else if (script_interpreter && !script_interpreter->unset_function(name)) {
+            } else if (interpreter && !interpreter->unset_function(name)) {
                 success = false;
             }
             continue;
@@ -274,12 +274,12 @@ int unset_command(const std::vector<std::string>& args, Shell* shell) {
             continue;
         }
 
-        if (script_interpreter != nullptr) {
+        if (interpreter != nullptr) {
             if (nameref_only) {
-                (void)script_interpreter->get_variable_manager().unset_nameref(base_name);
+                (void)interpreter->get_variable_manager().unset_nameref(base_name);
                 continue;
             }
-            bool removed = script_interpreter->get_variable_manager().unset_variable(name);
+            bool removed = interpreter->get_variable_manager().unset_variable(name);
             if (removed || has_index) {
                 continue;
             }

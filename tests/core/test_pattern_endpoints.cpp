@@ -41,7 +41,7 @@
 #include "shell_env.h"
 #include "string_utils.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 bool check_multibyte_endpoints(PatternMatcher& matcher, size_t& checks) {
     const std::string saved_locale = std::setlocale(LC_ALL, nullptr);

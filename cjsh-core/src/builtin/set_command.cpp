@@ -217,7 +217,7 @@ int set_command(const std::vector<std::string>& args, Shell* shell) {
 
     if (args.size() == 1) {
         if (config::is_posix_mode()) {
-            auto& manager = shell->get_shell_script_interpreter()->get_variable_manager();
+            auto& manager = shell->get_interpreter()->get_variable_manager();
             auto names = manager.get_variable_names();
             std::sort(names.begin(), names.end());
             for (const auto& name : names) {

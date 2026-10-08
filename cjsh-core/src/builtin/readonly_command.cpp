@@ -182,13 +182,13 @@ int readonly_command(const std::vector<std::string>& args) {
             return 0;
         }
 
-        if (!g_shell || !g_shell->get_shell_script_interpreter()) {
+        if (!shell || !shell->get_interpreter()) {
             print_error(
                 {ErrorType::RUNTIME_ERROR, "readonly", "shell interpreter not available", {}});
             return 1;
         }
 
-        auto* interpreter = g_shell->get_shell_script_interpreter();
+        auto* interpreter = shell->get_interpreter();
         for (size_t i = start_index; i < args.size(); ++i) {
             const std::string& func_name = args[i];
             if (!interpreter->has_function(func_name)) {

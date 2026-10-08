@@ -930,8 +930,8 @@ void safe_close(int fd) {
 // install a file on the target descriptor, closing only the temporary open fd.
 // restoration of an earlier target belongs to the caller's redirection scope.
 Result<void> redirect_fd(const std::string& file, int target_fd, int flags, bool force_overwrite) {
-    const bool noclobber = !force_overwrite && (flags & O_TRUNC) && g_shell &&
-                           g_shell->get_shell_option(ShellOption::Noclobber);
+    const bool noclobber = !force_overwrite && (flags & O_TRUNC) && shell &&
+                           shell->get_shell_option(ShellOption::Noclobber);
     // under noclobber, inspect an existing target without truncating it. if absent,
     // exclusive creation prevents overwriting a file created between open attempts.
     auto open_result = safe_open(file, noclobber ? flags & ~(O_TRUNC | O_CREAT) : flags, 0666);
@@ -1122,8 +1122,8 @@ std::optional<HereStringError> setup_here_string_stdin(const std::string& here_s
     }
 
     std::string content = here_string;
-    if (g_shell && (g_shell->get_parser() != nullptr)) {
-        g_shell->get_parser()->expand_env_vars(content);
+    if (shell && (shell->get_parser() != nullptr)) {
+        shell->get_parser()->expand_env_vars(content);
     }
     content.push_back('\n');
 
@@ -1149,7 +1149,7 @@ bool should_noclobber_prevent_overwrite(const std::string& filename, bool force_
         return false;
     }
 
-    if (!g_shell || !g_shell->get_shell_option(ShellOption::Noclobber)) {
+    if (!shell || !shell->get_shell_option(ShellOption::Noclobber)) {
         return false;
     }
 
@@ -1575,7 +1575,7 @@ bool execute_startup_file_if_present(const std::filesystem::path& path, bool opt
     if (ec) {
         source_path = path;
     }
-    (void)g_shell->execute_script_content(content.value(), source_path.lexically_normal().string());
+    (void)shell->execute_script_content(content.value(), source_path.lexically_normal().string());
     return true;
 }
 
@@ -1689,7 +1689,7 @@ void process_posix_env_file() {
     }
     // expand parameters (and arithmetic), without splitting, globbing, tilde
     // expansion, PATH search, or evaluating ENV as a command string.
-    g_shell->get_parser()->expand_env_vars(path);
+    shell->get_parser()->expand_env_vars(path);
     if (!path.empty() && !cjsh_env::exit_requested()) {
         (void)execute_startup_file_if_present(path, true);
     }

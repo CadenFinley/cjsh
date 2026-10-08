@@ -64,19 +64,19 @@ int handle_for_block(
     const std::vector<std::string>& src_lines, size_t& idx,
     const std::function<int(const std::vector<std::string>&)>& execute_block,
     const std::function<long long(const std::string&)>& evaluate_arithmetic_expression,
-    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* shell_parser,
+    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* parser,
     const std::function<bool()>& should_abort_execution = nullptr);
 
 int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
                         const std::function<int(const std::vector<std::string>&)>& execute_block,
                         const std::function<int(const std::string&)>& execute_simple_or_pipeline,
-                        Parser* shell_parser,
+                        Parser* parser,
                         const std::function<bool()>& should_abort_execution = nullptr);
 
 int handle_condition_loop_block(
     LoopCondition condition, const std::vector<std::string>& src_lines, size_t& idx,
     const std::function<int(const std::vector<std::string>&)>& execute_block,
-    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* shell_parser,
+    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* parser,
     const std::function<bool()>& should_abort_execution = nullptr);
 
 std::optional<int> try_execute_inline_do_block(

@@ -278,7 +278,7 @@ std::string build_user_status_callback_message(Shell* shell, const std::string& 
         return {};
     }
 
-    ShellScriptInterpreter* interpreter = shell->get_shell_script_interpreter();
+    ShellScriptInterpreter* interpreter = shell->get_interpreter();
     if (interpreter == nullptr || !interpreter->has_function(g_user_status_callback_function)) {
         return {};
     }
@@ -449,11 +449,11 @@ bool is_auto_cd_token(const std::string& token, Shell* shell) {
 }
 
 std::string resolve_auto_cd_target(const std::string& token, Shell* shell) {
-    if (shell == nullptr || shell->get_built_ins() == nullptr || token.empty()) {
+    if (shell == nullptr || shell->get_builtins() == nullptr || token.empty()) {
         return {};
     }
 
-    const std::string cwd = shell->get_built_ins()->get_current_directory();
+    const std::string cwd = shell->get_builtins()->get_current_directory();
     const std::string previous_directory = shell->get_previous_directory();
     return cjsh_filesystem::resolve_existing_shell_directory_token(token, cwd, previous_directory);
 }
@@ -771,7 +771,7 @@ std::string build_cjsh_status_reporting_message(Shell* shell, const std::string&
         return {};
     }
 
-    ShellScriptInterpreter* interpreter = shell->get_shell_script_interpreter();
+    ShellScriptInterpreter* interpreter = shell->get_interpreter();
     if (interpreter == nullptr) {
         return {};
     }
@@ -934,14 +934,13 @@ const char* create_below_syntax_message_at_cursor(const char* input_buffer, size
 
     const std::string current_input = (input_buffer != nullptr) ? input_buffer : "";
 
-    Shell* shell = g_shell.get();
     // Cursor-only refreshes should not repeat syntax validation or invoke user functions.
     if (!previous_passed_buffer_valid || previous_passed_buffer != current_input) {
         previous_passed_buffer = current_input;
         previous_passed_buffer_valid = true;
-        buffer_message = build_user_status_callback_message(shell, current_input);
+        buffer_message = build_user_status_callback_message(shell.get(), current_input);
         const std::string reporting_message =
-            build_cjsh_status_reporting_message(shell, current_input);
+            build_cjsh_status_reporting_message(shell.get(), current_input);
         if (!reporting_message.empty()) {
             if (!buffer_message.empty()) {
                 buffer_message.push_back('\n');
@@ -951,7 +950,8 @@ const char* create_below_syntax_message_at_cursor(const char* input_buffer, size
     }
 
     status_message = buffer_message;
-    const std::string command_hint = build_command_hint_message(shell, current_input, cursor_pos);
+    const std::string command_hint =
+        build_command_hint_message(shell.get(), current_input, cursor_pos);
     if (!command_hint.empty()) {
         if (!status_message.empty()) {
             status_message.push_back('\n');

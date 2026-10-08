@@ -59,7 +59,7 @@
 // source the applicable startup files, select an input path, and run cleanup.
 // the shell is shared with builtins and execution helpers, but this file owns its
 // lifetime so exit hooks finish before its subsystems are destroyed.
-std::unique_ptr<Shell> g_shell = nullptr;
+std::unique_ptr<Shell> shell = nullptr;
 
 namespace {
 
@@ -80,7 +80,7 @@ void cleanup_resources() {
 
     // help, version output, and argument errors can finish without constructing
     // a shell. an exit during construction can also reach this callback too early.
-    if (!g_shell) {
+    if (!shell) {
         return;
     }
 
@@ -90,7 +90,7 @@ void cleanup_resources() {
     // without starting another cleanup sequence while exit hooks are running.
     {
         SignalMask transition({SIGHUP, SIGTERM});
-        (void)g_shell->process_pending_signals();
+        (void)shell->process_pending_signals();
         SignalHandler::begin_shutdown();
     }
 
@@ -104,12 +104,12 @@ void cleanup_resources() {
 
     // the shell coordinates its exit function, exit trap, and login logout file.
     // capture any explicit exit status they leave before destroying shell state.
-    g_shell->run_exit_handlers(status);
+    shell->run_exit_handlers(status);
     cleanup_exit_status = read_exit_code_or(status);
 
     // destruction handles remaining jobs and restores the terminal. detach the
     // trap manager afterward so it cannot retain a pointer to the destroyed shell.
-    g_shell.reset();
+    shell.reset();
     trap_manager_set_shell(nullptr);
 
     // restore termination handling only after resources are released. if a signal
@@ -131,9 +131,9 @@ void initialize_shell(int argc, char* argv[], const flags::ParseResult& parse_re
 
     // construct the execution subsystems, then apply invocation options before
     // queries or startup files inspect them. interactivity also affects defaults.
-    g_shell = std::make_unique<Shell>();
-    g_shell->apply_startup_options(parse_result.shell_options);
-    g_shell->set_interactive_mode(config::interactive_mode);
+    shell = std::make_unique<Shell>();
+    shell->apply_startup_options(parse_result.shell_options);
+    shell->set_interactive_mode(config::interactive_mode);
 
     // reuse the set and shopt builtins to display requested option listings. the
     // reusable form prints commands that can restore the current option settings.
@@ -144,13 +144,13 @@ void initialize_shell(int argc, char* argv[], const flags::ParseResult& parse_re
         } else if (reusable) {
             query.emplace_back("-p");
         }
-        (void)g_shell->get_built_ins()->builtin_command(query);
+        (void)shell->get_builtins()->builtin_command(query);
     }
 
     // install interactive signal dispositions before startup files run, including
     // terminal resize handling and protection from terminal quit and stop signals.
     if (config::interactive_mode) {
-        g_shell->setup_interactive_handlers();
+        shell->setup_interactive_handlers();
     }
 
     // positional arguments must already be available to expansions in startup files.
@@ -163,7 +163,7 @@ void initialize_shell(int argc, char* argv[], const flags::ParseResult& parse_re
     // resulting environment into the shell and parser.
     cjsh_env::setup_environment_variables(argv[0]);
     flags::save_startup_arguments(argc, argv);
-    cjsh_env::sync_env_vars_from_system(*g_shell);
+    cjsh_env::sync_env_vars_from_system(*shell);
 
     // an explicit configuration directory from the command line takes precedence
     // over the environment override. an empty override leaves the default in place.
@@ -246,7 +246,7 @@ int run_command_or_script(const std::string& script_file, bool startup_interrupt
     // command strings use the interpreter directly. an explicit exit requested by
     // the command overrides its ordinary execution result when one is available.
     if (config::execute_command) {
-        return read_exit_code_or(g_shell->execute(config::cmd_to_execute));
+        return read_exit_code_or(shell->execute(config::cmd_to_execute));
     }
 
     // the shared reader loads a named script or reads standard input when no file
@@ -262,7 +262,7 @@ int run_interactive_session(const std::string& script_file) {
 
     // prepare persistence and terminal presentation before the interactive startup
     // file runs. directory setup can disable unavailable persistence and still continue.
-    g_shell->set_interactive_mode(true);
+    shell->set_interactive_mode(true);
     (void)cjsh_filesystem::initialize_cjsh_directories();
 
     prompt::initialize_colors();
@@ -288,7 +288,7 @@ int run_interactive_session(const std::string& script_file) {
         !cjsh_env::exit_requested()) {
         // dispatch signals once more before sampling startup cancellation. pass the
         // result by value because the execution helper ends the startup phase.
-        (void)g_shell->process_pending_signals();
+        (void)shell->process_pending_signals();
         return run_command_or_script(script_file, SignalHandler::startup_interrupted());
     }
 

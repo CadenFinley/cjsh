@@ -58,7 +58,7 @@ class Built_ins {
     Built_ins();
     ~Built_ins();
 
-    void set_shell(Shell* shell_ptr);
+    void set_shell(Shell* shell);
     std::string get_current_directory() const;
     std::string get_previous_directory() const;
     void set_current_directory();

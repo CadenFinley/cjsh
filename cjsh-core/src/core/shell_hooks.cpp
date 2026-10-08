@@ -126,13 +126,12 @@ void Shell::execute_hooks(HookType hook_type, const std::vector<std::string>& ar
         }
         // defined functions receive event arguments as distinct words. otherwise
         // evaluate the registered text as shell code without appending arguments.
-        if (shell_script_interpreter != nullptr &&
-            shell_script_interpreter->has_function(function_name)) {
+        if (interpreter != nullptr && interpreter->has_function(function_name)) {
             std::vector<std::string> hook_arguments;
             hook_arguments.reserve(arguments.size() + 1);
             hook_arguments.push_back(function_name);
             hook_arguments.insert(hook_arguments.end(), arguments.begin(), arguments.end());
-            (void)shell_script_interpreter->invoke_function(hook_arguments);
+            (void)interpreter->invoke_function(hook_arguments);
         } else {
             (void)execute(function_name);
         }

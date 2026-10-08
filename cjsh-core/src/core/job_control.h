@@ -153,7 +153,7 @@ class JobManager {
     int previous_job = -1;
     pid_t last_background_pid = -1;
     std::unordered_map<pid_t, int> completed_pid_statuses;
-    Shell* shell_ref = nullptr;
+    Shell* shell = nullptr;
     bool allow_deferred_notifications = false;
 
     void update_current_previous(int new_current);

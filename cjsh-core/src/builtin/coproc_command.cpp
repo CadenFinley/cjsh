@@ -175,7 +175,7 @@ int launch_coprocess(const std::string& variable_name, const std::string& comman
     set_close_on_exec(coprocess_read_fd);
     set_close_on_exec(coprocess_write_fd);
 
-    auto& variables = shell->get_shell_script_interpreter()->get_variable_manager();
+    auto& variables = shell->get_interpreter()->get_variable_manager();
     (void)variables.assign_global_array_literal(
         variable_name, {std::to_string(coprocess_read_fd), std::to_string(coprocess_write_fd)},
         false);
@@ -207,7 +207,7 @@ int coproc_command(const std::vector<std::string>& args, Shell* shell) {
                      {"Run without --posix to use coprocesses"}});
         return 1;
     }
-    if (shell == nullptr || shell->get_shell_script_interpreter() == nullptr) {
+    if (shell == nullptr || shell->get_interpreter() == nullptr) {
         print_error({ErrorType::RUNTIME_ERROR, "coproc", "shell interpreter not available", {}});
         return 1;
     }
@@ -229,7 +229,7 @@ int coproc_script_command(const std::string& command_text, Shell* shell) {
                      {"Run without --posix to use coprocesses"}});
         return 1;
     }
-    if (shell == nullptr || shell->get_shell_script_interpreter() == nullptr) {
+    if (shell == nullptr || shell->get_interpreter() == nullptr) {
         print_error({ErrorType::RUNTIME_ERROR, "coproc", "shell interpreter not available", {}});
         return 1;
     }
@@ -258,6 +258,6 @@ int coproc_script_command(const std::string& command_text, Shell* shell) {
     }
 
     return launch_coprocess(variable_name, "coproc " + remainder, shell, [shell, script] {
-        return shell->get_shell_script_interpreter()->execute_block({script});
+        return shell->get_interpreter()->execute_block({script});
     });
 }

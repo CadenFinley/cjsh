@@ -116,29 +116,29 @@ std::vector<std::string> generate_command_suggestions(const std::string& command
     const cjsh_filesystem::ScopedInteractivePathLookup path_lookup;
     std::unordered_set<std::string> shell_commands;
 
-    if (g_shell && g_shell->get_built_ins()) {
-        auto builtin_commands = g_shell->get_built_ins()->get_builtin_commands();
+    if (shell && shell->get_builtins()) {
+        auto builtin_commands = shell->get_builtins()->get_builtin_commands();
         for (const auto& builtin : builtin_commands) {
             (void)shell_commands.insert(builtin);
         }
     }
 
-    if (g_shell) {
-        auto& aliases = g_shell->get_aliases();
+    if (shell) {
+        auto& aliases = shell->get_aliases();
         for (const auto& alias_pair : aliases) {
             (void)shell_commands.insert(alias_pair.first);
         }
     }
 
-    if (g_shell) {
-        auto& abbreviations = g_shell->get_abbreviations();
+    if (shell) {
+        auto& abbreviations = shell->get_abbreviations();
         for (const auto& abbr_pair : abbreviations) {
             (void)shell_commands.insert(abbr_pair.first);
         }
     }
 
-    if (g_shell && g_shell->get_shell_script_interpreter()) {
-        auto function_names = g_shell->get_shell_script_interpreter()->get_function_names();
+    if (shell && shell->get_interpreter()) {
+        auto function_names = shell->get_interpreter()->get_function_names();
         for (const auto& func_name : function_names) {
             (void)shell_commands.insert(func_name);
         }

@@ -474,19 +474,19 @@ struct CommandCompletionSources {
 
 CommandCompletionSources collect_command_completion_sources() {
     CommandCompletionSources sources;
-    if (g_shell && (g_shell->get_built_ins() != nullptr)) {
-        sources.builtin_cmds = g_shell->get_built_ins()->get_builtin_commands();
+    if (shell && (shell->get_builtins() != nullptr)) {
+        sources.builtin_cmds = shell->get_builtins()->get_builtin_commands();
     }
 
-    if (g_shell && (g_shell->get_shell_script_interpreter() != nullptr)) {
-        sources.function_names = g_shell->get_shell_script_interpreter()->get_function_names();
+    if (shell && (shell->get_interpreter() != nullptr)) {
+        sources.function_names = shell->get_interpreter()->get_function_names();
     }
 
-    if (g_shell) {
-        sources.alias_map = &g_shell->get_aliases();
+    if (shell) {
+        sources.alias_map = &shell->get_aliases();
         sources.alias_names = collect_map_keys(*sources.alias_map);
 
-        sources.abbreviation_map = &g_shell->get_abbreviations();
+        sources.abbreviation_map = &shell->get_abbreviations();
         sources.abbreviation_names = collect_map_keys(*sources.abbreviation_map);
     }
 
@@ -510,13 +510,13 @@ bool command_resolution_is_unknown(const std::string& token) {
     // This is an existence query, not a request for every resolution (as in
     // `type -a`). A known shell command needs no filesystem work, particularly
     // no interactive PATH index rebuild on each argument-completion request.
-    const auto resolution = command_lookup::resolve_command(token, g_shell.get(), false);
+    const auto resolution = command_lookup::resolve_command(token, shell.get(), false);
     if (resolution.is_keyword || resolution.is_builtin || resolution.has_alias ||
         resolution.has_function) {
         return false;
     }
 
-    if (command_lookup::should_auto_cd_token(token, g_shell.get())) {
+    if (command_lookup::should_auto_cd_token(token, shell.get())) {
         return false;
     }
 
@@ -814,9 +814,8 @@ bool add_variable_completions(ic_completion_env_t* cenv, const std::string& pref
     }
 
     std::unordered_set<std::string> candidates;
-    if (g_shell && g_shell->get_shell_script_interpreter()) {
-        auto names =
-            g_shell->get_shell_script_interpreter()->get_variable_manager().get_variable_names();
+    if (shell && shell->get_interpreter()) {
+        auto names = shell->get_interpreter()->get_variable_manager().get_variable_names();
         candidates.insert(names.begin(), names.end());
     } else {
         const auto& env_vars = cjsh_env::env_vars();
@@ -1111,23 +1110,22 @@ bool add_builtin_argument_completions(ic_completion_env_t* cenv,
     };
 
     if (matches_command("builtin")) {
-        if (context.argument_index != 1 || g_shell == nullptr ||
-            g_shell->get_built_ins() == nullptr) {
+        if (context.argument_index != 1 || shell == nullptr || shell->get_builtins() == nullptr) {
             return false;
         }
-        auto builtin_cmds = g_shell->get_built_ins()->get_builtin_commands();
+        auto builtin_cmds = shell->get_builtins()->get_builtin_commands();
         add_builtin_command_candidates(cenv, builtin_cmds, context.current_prefix, prefix_len);
         return ic_has_completions(cenv);
     }
 
     if (matches_command("alias") || matches_command("unalias")) {
-        if (context.argument_index < 1 || g_shell == nullptr) {
+        if (context.argument_index < 1 || shell == nullptr) {
             return false;
         }
         if (context.current_prefix.find('=') != std::string::npos) {
             return false;
         }
-        const auto& alias_map = g_shell->get_aliases();
+        const auto& alias_map = shell->get_aliases();
         auto alias_names = collect_map_keys(alias_map);
         auto alias_source_provider = make_map_source_provider(&alias_map);
         process_command_candidates(
@@ -1139,13 +1137,13 @@ bool add_builtin_argument_completions(ic_completion_env_t* cenv,
 
     if (matches_command("abbr") || matches_command("abbreviate") || matches_command("unabbr") ||
         matches_command("unabbreviate")) {
-        if (context.argument_index < 1 || g_shell == nullptr) {
+        if (context.argument_index < 1 || shell == nullptr) {
             return false;
         }
         if (context.current_prefix.find('=') != std::string::npos) {
             return false;
         }
-        const auto& abbr_map = g_shell->get_abbreviations();
+        const auto& abbr_map = shell->get_abbreviations();
         auto abbr_names = collect_map_keys(abbr_map);
         auto abbr_source_provider = make_map_source_provider(&abbr_map);
         process_command_candidates(
@@ -1194,17 +1192,17 @@ bool add_builtin_argument_completions(ic_completion_env_t* cenv,
             return add_hook_type_completions(cenv, context.current_prefix, prefix_len);
         }
 
-        if ((is_add || is_remove) && context.argument_index == 3 && g_shell != nullptr) {
+        if ((is_add || is_remove) && context.argument_index == 3 && shell != nullptr) {
             std::vector<std::string> candidates;
             if (tokens.size() >= 3) {
                 auto hook_type = parse_hook_type(tokens[2]);
                 if (hook_type.has_value()) {
-                    candidates = g_shell->get_hooks(*hook_type);
+                    candidates = shell->get_hooks(*hook_type);
                 }
             }
 
-            if (candidates.empty() && g_shell->get_shell_script_interpreter() != nullptr) {
-                candidates = g_shell->get_shell_script_interpreter()->get_function_names();
+            if (candidates.empty() && shell->get_interpreter() != nullptr) {
+                candidates = shell->get_interpreter()->get_function_names();
             }
 
             if (!candidates.empty()) {
@@ -1688,7 +1686,7 @@ bool history_match_file_completion(const HistoryMatch& match, const std::string&
     }
 
     const std::string cwd = cjsh_filesystem::safe_current_directory();
-    const std::string previous_directory = g_shell ? g_shell->get_previous_directory() : "";
+    const std::string previous_directory = shell ? shell->get_previous_directory() : "";
     auto expand_special_path = [&](const std::string& path) {
         if (path == "~" || path.rfind("~/", 0) == 0 || path == "-" || path.rfind("-/", 0) == 0) {
             return cjsh_filesystem::expand_shell_path_token(path, cwd, previous_directory).string();
@@ -1777,14 +1775,14 @@ void prepare_history_completions(HistoryCompletionBatch& batch,
                 completion_tracker::prioritize_completion(command_name.c_str(), batch.prefix_len);
                 if (string_utils::trim_right_ascii_whitespace_copy(match.command) == command_name) {
                     const auto resolution =
-                        command_lookup::resolve_command(command_name, g_shell.get(), false);
+                        command_lookup::resolve_command(command_name, shell.get(), false);
                     // Let the regular command supply its description and trailing space.
                     // Keep history as a fallback if that completion cannot be emitted.
                     match.defer_to_command_completion =
                         resolution.is_keyword ||
                         (resolution.is_builtin && is_interactive_builtin(command_name)) ||
                         resolution.has_alias || resolution.has_function ||
-                        (g_shell && g_shell->get_abbreviations().count(command_name) != 0) ||
+                        (shell && shell->get_abbreviations().count(command_name) != 0) ||
                         !cjsh_filesystem::find_executable_in_path(command_name).empty();
                 }
             }
@@ -1882,7 +1880,7 @@ void cjsh_filename_completer(ic_completion_env_t* cenv, const char* prefix) {
         (has_dash && (special_part.length() == 1 || special_part[1] == '/'))) {
         std::string unquoted_special = completion_utils::unquote_path(special_part);
         const std::string cwd = cjsh_filesystem::safe_current_directory();
-        const std::string previous_directory = g_shell ? g_shell->get_previous_directory() : "";
+        const std::string previous_directory = shell ? shell->get_previous_directory() : "";
 
         std::filesystem::path expanded =
             cjsh_filesystem::expand_shell_path_token(unquoted_special, cwd, previous_directory);

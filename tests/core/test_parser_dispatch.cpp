@@ -50,7 +50,7 @@
 #include "tokenizer.h"
 #include "variable_expander.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 namespace {
 size_t checks = 0;
@@ -193,34 +193,33 @@ void test_help() {
 }
 
 void test_execution() {
-    expect(g_shell->execute("dispatch_value=initial\n"
-                            "false && dispatch_value=wrong\n"
-                            "true || dispatch_value=wrong\n"
-                            "true && dispatch_value='one;two'\n"
-                            "dispatch_value=\"${dispatch_value#one;}\" # comment\n") == 0 &&
+    expect(shell->execute("dispatch_value=initial\n"
+                          "false && dispatch_value=wrong\n"
+                          "true || dispatch_value=wrong\n"
+                          "true && dispatch_value='one;two'\n"
+                          "dispatch_value=\"${dispatch_value#one;}\" # comment\n") == 0 &&
                cjsh_env::get_shell_variable_value("dispatch_value") == "two",
            "execution retains short circuiting, assignments, quotes, and parameter expansion");
-    expect(g_shell->execute("dispatch_fn() { dispatch_value=$1; }\n"
-                            "dispatch_fn first\ndispatch_fn second\n") == 0 &&
+    expect(shell->execute("dispatch_fn() { dispatch_value=$1; }\n"
+                          "dispatch_fn first\ndispatch_fn second\n") == 0 &&
                cjsh_env::get_shell_variable_value("dispatch_value") == "second",
            "repeated function calls see current positional parameters");
-    expect(g_shell->execute(": ignored --help") == 0 &&
-               g_shell->execute("true ignored --help") == 0 &&
-               g_shell->execute("false ignored --help") == 1,
+    expect(shell->execute(": ignored --help") == 0 && shell->execute("true ignored --help") == 0 &&
+               shell->execute("false ignored --help") == 1,
            "boolean and null builtins retain status with non-help operands");
-    expect(g_shell->execute("dispatch_value=\n"
-                            "if_value=plain\n"
-                            "for_value=plain\n"
-                            "select_value=plain\n"
-                            "while_value=plain\n"
-                            "until_value=plain\n"
-                            "case_value=plain\n"
-                            "for n in if for select while until case; do\n"
-                            "dispatch_value=\"$dispatch_value $n\"\n"
-                            "done\n"
-                            "if\ttrue; then :; fi\n"
-                            "while false; do dispatch_value=wrong; done\n"
-                            "until true; do dispatch_value=wrong; done\n") == 0 &&
+    expect(shell->execute("dispatch_value=\n"
+                          "if_value=plain\n"
+                          "for_value=plain\n"
+                          "select_value=plain\n"
+                          "while_value=plain\n"
+                          "until_value=plain\n"
+                          "case_value=plain\n"
+                          "for n in if for select while until case; do\n"
+                          "dispatch_value=\"$dispatch_value $n\"\n"
+                          "done\n"
+                          "if\ttrue; then :; fi\n"
+                          "while false; do dispatch_value=wrong; done\n"
+                          "until true; do dispatch_value=wrong; done\n") == 0 &&
                cjsh_env::get_shell_variable_value("dispatch_value") ==
                    " if for select while until case" &&
                cjsh_env::get_shell_variable_value("case_value") == "plain",
@@ -284,7 +283,7 @@ void test_redirection_argument_boundaries(Parser& parser) {
 
 void test_repeated_expansion(Parser& parser) {
     for (const char* value : {"first", "second", ""}) {
-        g_shell->execute(std::string("profile_value='") + value + "'");
+        shell->execute(std::string("profile_value='") + value + "'");
         expect(
             parser.parse_command(": \"$profile_value\"") == std::vector<std::string>({":", value}),
             "repeated command text expands the current variable value");
@@ -308,27 +307,27 @@ void test_repeated_expansion(Parser& parser) {
                "repeated pipeline tokens use current aliases");
     }
     parser.set_aliases({});
-    g_shell->execute("profile_value='a:b c'");
-    g_shell->execute("IFS=:");
+    shell->execute("profile_value='a:b c'");
+    shell->execute("IFS=:");
     expect(parser.parse_command("echo $profile_value") ==
                std::vector<std::string>({"echo", "a", "b c"}),
            "field splitting uses changed IFS");
     expect(parser.parse_pipeline_with_preprocessing("echo $profile_value >/dev/null")[0].args ==
                std::vector<std::string>({"echo", "a", "b c"}),
            "pipeline field splitting uses current IFS");
-    g_shell->execute("IFS=' '");
+    shell->execute("IFS=' '");
     expect(parser.parse_command("echo $profile_value") ==
                std::vector<std::string>({"echo", "a:b", "c"}),
            "repeated command text does not cache IFS");
     expect(parser.parse_pipeline_with_preprocessing("echo $profile_value >/dev/null")[0].args ==
                std::vector<std::string>({"echo", "a:b", "c"}),
            "repeated pipeline tokens do not cache IFS");
-    g_shell->execute("unset IFS");
+    shell->execute("unset IFS");
     const bool old_extglob = config::extglob_enabled;
     for (bool enabled : {false, true, false}) {
         config::extglob_enabled = enabled;
         Parser fresh;
-        fresh.set_shell(g_shell.get());
+        fresh.set_shell(shell.get());
         expect(parser.parse_command(": @(missing-one|missing-two)") ==
                    fresh.parse_command(": @(missing-one|missing-two)"),
                "tokenization reflects extglob changes");
@@ -431,7 +430,7 @@ void test_redirection_path_expansion() {
     namespace fs = std::filesystem;
     const fs::path original_cwd = fs::current_path();
     const fs::path& user_home = cjsh_filesystem::g_user_home_path();
-    VariableExpander expander(g_shell.get(), cjsh_env::env_vars());
+    VariableExpander expander(shell.get(), cjsh_env::env_vars());
     Command plain;
     plain.output_file = "relative-output";
     plain.stderr_file = "/dev/null";
@@ -470,20 +469,20 @@ int main() {
     cjsh_env::set_startup_active(false);
     config::interactive_mode = false;
     config::force_interactive = false;
-    g_shell = std::make_unique<Shell>();
-    g_shell->set_interactive_mode(false);
-    test_logical_commands(*g_shell->get_parser());
-    test_semicolon_commands(*g_shell->get_parser());
+    shell = std::make_unique<Shell>();
+    shell->set_interactive_mode(false);
+    test_logical_commands(*shell->get_parser());
+    test_semicolon_commands(*shell->get_parser());
     test_comments();
     test_ampersand_commands();
     test_help();
     test_execution();
-    test_escaped_whitespace(*g_shell->get_parser());
-    test_redirection_argument_boundaries(*g_shell->get_parser());
+    test_escaped_whitespace(*shell->get_parser());
+    test_redirection_argument_boundaries(*shell->get_parser());
     test_redirection_path_expansion();
-    test_repeated_expansion(*g_shell->get_parser());
+    test_repeated_expansion(*shell->get_parser());
     test_simple_glob_matches_libc();
-    g_shell.reset();
+    shell.reset();
     if (failures != 0) {
         (void)std::fprintf(stderr, "%zu/%zu parser dispatch tests failed\n", failures, checks);
         return 1;

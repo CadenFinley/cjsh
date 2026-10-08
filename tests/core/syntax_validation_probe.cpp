@@ -34,16 +34,16 @@
 #include "shell.h"
 #include "shell_env.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 int main(int argc, char** argv) {
     cjsh_env::reset_shell_state();
     cjsh_env::set_startup_active(false);
     config::interactive_mode = false;
     config::force_interactive = false;
-    g_shell = std::make_unique<Shell>();
-    g_shell->set_interactive_mode(false);
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    shell = std::make_unique<Shell>();
+    shell->set_interactive_mode(false);
+    auto* interpreter = shell->get_interpreter();
     for (int i = 1; i < argc; ++i) {
         auto lines = interpreter->parse_into_lines(argv[i]);
         std::cout << "INPUT " << std::quoted(argv[i]) << '\n';
@@ -56,5 +56,5 @@ int main(int argc, char** argv) {
                       << std::quoted(error.message) << '\n';
         }
     }
-    g_shell.reset();
+    shell.reset();
 }

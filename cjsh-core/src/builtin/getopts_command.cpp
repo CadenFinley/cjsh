@@ -93,7 +93,7 @@ int getopts_command(const std::vector<std::string>& args, Shell* shell) {
 
     int optind = 1;
     std::string optind_source;
-    if (auto* interpreter = shell->get_shell_script_interpreter()) {
+    if (auto* interpreter = shell->get_interpreter()) {
         optind_source = interpreter->get_variable_value("OPTIND");
     }
     if (optind_source.empty() && cjsh_env::shell_variable_is_set("OPTIND")) {

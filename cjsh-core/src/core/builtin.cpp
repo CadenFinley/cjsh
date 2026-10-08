@@ -337,8 +337,8 @@ Built_ins::Built_ins() : shell(nullptr) {
 
 Built_ins::~Built_ins() = default;
 
-void Built_ins::set_shell(Shell* shell_ptr) {
-    shell = shell_ptr;
+void Built_ins::set_shell(Shell* shell) {
+    this->shell = shell;
 }
 
 std::string Built_ins::get_current_directory() const {

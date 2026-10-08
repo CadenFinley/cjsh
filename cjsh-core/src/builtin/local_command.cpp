@@ -58,8 +58,8 @@ int local_command(const std::vector<std::string>& args, Shell* shell) {
         return 1;
     }
 
-    auto* script_interpreter = shell->get_shell_script_interpreter();
-    if (script_interpreter == nullptr || !script_interpreter->in_function_scope()) {
+    auto* interpreter = shell->get_interpreter();
+    if (interpreter == nullptr || !interpreter->in_function_scope()) {
         print_error({ErrorType::RUNTIME_ERROR, "local", "not available outside of functions", {}});
         return 1;
     }
@@ -117,13 +117,13 @@ int local_command(const std::vector<std::string>& args, Shell* shell) {
                 continue;
             }
 
-            if (!script_interpreter->is_local_variable(target_name)) {
-                script_interpreter->set_local_variable(target_name, "");
+            if (!interpreter->is_local_variable(target_name)) {
+                interpreter->set_local_variable(target_name, "");
             }
 
             std::vector<std::string> words(args.begin() + (i + 2), args.begin() + close_index);
-            if (!script_interpreter->get_variable_manager().assign_array_literal(target_name, words,
-                                                                                 append)) {
+            if (!interpreter->get_variable_manager().assign_array_literal(target_name, words,
+                                                                          append)) {
                 print_error({ErrorType::INVALID_ARGUMENT,
                              "local",
                              "invalid array assignment for " + target_name,
@@ -152,13 +152,13 @@ int local_command(const std::vector<std::string>& args, Shell* shell) {
             }
 
             if (append) {
-                if (!script_interpreter->is_local_variable(base_name)) {
-                    script_interpreter->set_local_variable(base_name, "");
+                if (!interpreter->is_local_variable(base_name)) {
+                    interpreter->set_local_variable(base_name, "");
                 }
-                std::string current_value = script_interpreter->get_variable_value(target_name);
-                script_interpreter->set_local_variable(target_name, current_value + operand.value);
+                std::string current_value = interpreter->get_variable_value(target_name);
+                interpreter->set_local_variable(target_name, current_value + operand.value);
             } else {
-                script_interpreter->set_local_variable(target_name, operand.value);
+                interpreter->set_local_variable(target_name, operand.value);
             }
 
             ++i;
@@ -176,7 +176,7 @@ int local_command(const std::vector<std::string>& args, Shell* shell) {
             continue;
         }
 
-        script_interpreter->set_local_variable(base_name, "");
+        interpreter->set_local_variable(base_name, "");
         ++i;
     }
 

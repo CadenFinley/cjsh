@@ -170,7 +170,7 @@ class ShellScriptInterpreter {
     std::optional<StructuralSyntax> structural_syntax;
     StructuralSyntax take_structural_syntax(const std::vector<std::string>& lines);
 
-    Parser* shell_parser = nullptr;
+    Parser* parser = nullptr;
     function_evaluator::FunctionMap functions;
 
     VariableManager variable_manager;

@@ -164,14 +164,14 @@ struct HighlightPathContext {
                                                           size_t absolute_start) {
         // Quick history substitution is only recognized at the start of the input.
         if (!token.empty() && token.front() == '^') {
-            return command_analysis::classify_command_token(token, absolute_start, g_shell.get());
+            return command_analysis::classify_command_token(token, absolute_start, shell.get());
         }
         const auto found = classifications.find(token);
         if (found != classifications.end()) {
             return found->second;
         }
         const auto result =
-            command_analysis::classify_command_token(token, absolute_start, g_shell.get());
+            command_analysis::classify_command_token(token, absolute_start, shell.get());
         if (classifications.size() < kMaxHighlightCacheEntries) {
             classifications.emplace(token, result);
         }
@@ -181,14 +181,13 @@ struct HighlightPathContext {
     void initialize() {
         if (!cwd.has_value()) {
             cwd = cjsh_filesystem::safe_current_directory();
-            previous_directory = g_shell ? g_shell->get_previous_directory() : "";
+            previous_directory = shell ? shell->get_previous_directory() : "";
         }
     }
 
     const std::unordered_set<std::string>& available_commands() {
         if (!commands.has_value()) {
-            commands =
-                g_shell ? g_shell->get_available_commands() : std::unordered_set<std::string>{};
+            commands = shell ? shell->get_available_commands() : std::unordered_set<std::string>{};
         }
         return *commands;
     }
@@ -491,14 +490,13 @@ void highlight_command_range(ic_highlight_env_t* henv, const char* input,
                         }
                     } else {
                         bool is_abbreviation = false;
-                        if (g_shell != nullptr && g_shell->get_interactive_mode()) {
-                            const auto& abbreviations = g_shell->get_abbreviations();
+                        if (shell != nullptr && shell->get_interactive_mode()) {
+                            const auto& abbreviations = shell->get_abbreviations();
                             is_abbreviation = abbreviations.find(arg) != abbreviations.end();
                         }
 
-                        if (is_abbreviation ||
-                            (g_shell && g_shell->get_aliases().count(arg) != 0) ||
-                            command_lookup::has_shell_function(arg, g_shell.get()) ||
+                        if (is_abbreviation || (shell && shell->get_aliases().count(arg) != 0) ||
+                            command_lookup::has_shell_function(arg, shell.get()) ||
                             is_shell_builtin(arg)) {
                             ic_highlight(henv, static_cast<long>(absolute_arg_start),
                                          static_cast<long>(arg_length), "cjsh-builtin");

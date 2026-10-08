@@ -182,20 +182,20 @@ Shell::Shell() : shell_pid(getpid()) {
     trap_manager_initialize();
 
     // the shell owns these objects; their cross-references below are non-owning.
-    shell_exec = std::make_unique<Exec>();
+    executor = std::make_unique<Exec>();
     signal_handler = std::make_unique<SignalHandler>();
-    shell_parser = std::make_unique<Parser>();
-    built_ins = std::make_unique<Built_ins>();
-    shell_script_interpreter = std::make_unique<ShellScriptInterpreter>();
+    parser = std::make_unique<Parser>();
+    builtins = std::make_unique<Built_ins>();
+    interpreter = std::make_unique<ShellScriptInterpreter>();
 
     // let parsing, evaluation, and builtins share this shell's state rather than
     // creating independent variable, option, or directory contexts.
-    if (shell_script_interpreter && shell_parser) {
-        shell_script_interpreter->set_parser(shell_parser.get());
-        shell_parser->set_shell(this);
+    if (interpreter && parser) {
+        interpreter->set_parser(parser.get());
+        parser->set_shell(this);
     }
-    built_ins->set_shell(this);
-    built_ins->set_current_directory();
+    builtins->set_shell(this);
+    builtins->set_current_directory();
 
     // start with stdin; job-control setup prefers a private terminal descriptor
     // so later command redirections do not change the terminal used for handoff.
@@ -217,14 +217,13 @@ Shell::Shell() : shell_pid(getpid()) {
 Shell::~Shell() {
     // exit hooks run before destruction. now either signal remaining children
     // or detach them according to the shutdown cause and huponexit setting.
-    if (shell_exec) {
+    if (executor) {
         const int terminating_signal = SignalHandler::termination_signal();
         const bool hang_up_on_exit = get_shell_option(ShellOption::Huponexit);
         if (terminating_signal != 0 || hang_up_on_exit) {
-            shell_exec->terminate_all_child_process(terminating_signal == SIGTERM ? SIGTERM
-                                                                                  : SIGHUP);
+            executor->terminate_all_child_process(terminating_signal == SIGTERM ? SIGTERM : SIGHUP);
         } else {
-            shell_exec->abandon_all_child_processes();
+            executor->abandon_all_child_processes();
         }
     }
 
@@ -269,8 +268,7 @@ void Shell::run_exit_handlers(int status) {
     prepare_handler();
     trap_manager_set_shell(this);
 
-    if (auto* interpreter = get_shell_script_interpreter();
-        interpreter != nullptr && !config::minimal_mode && !config::secure_mode &&
+    if (interpreter != nullptr && !config::minimal_mode && !config::secure_mode &&
         !config::is_posix_mode() && interpreter->has_function("cjshexit")) {
         (void)interpreter->invoke_function({"cjshexit"});
     }
@@ -293,12 +291,12 @@ int Shell::execute(const std::string& script, bool skip_validation) {
     }
 
     // preserve shell-aware line boundaries rather than splitting blindly on newlines.
-    std::vector<std::string> lines = shell_parser->parse_into_lines(script);
+    std::vector<std::string> lines = parser->parse_into_lines(script);
 
-    if (shell_script_interpreter) {
+    if (interpreter) {
         // remember the submitted text after evaluation so nested execution cannot
         // leave last_command pointing at an inner command instead.
-        int exit_code = shell_script_interpreter->execute_block(lines, skip_validation, false);
+        int exit_code = interpreter->execute_block(lines, skip_validation, false);
         last_command = script;
         return exit_code;
     }
@@ -328,7 +326,7 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
         }
     }
     // dispatch requires both the builtin and external execution paths to be wired.
-    if (!shell_exec || !built_ins) {
+    if (!executor || !builtins) {
         print_error({ErrorType::FATAL_ERROR, "", "shell not initialized properly", {}});
     }
 
@@ -349,15 +347,14 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
 
     // a lone assignment changes shell state instead of launching a process.
     // expand its value through the parser and store it through variable management.
-    if (args.size() == 1 && shell_parser) {
+    if (args.size() == 1 && parser) {
         std::string var_name;
         std::string var_value;
-        if (shell_parser->is_env_assignment(args[0], var_name, var_value)) {
-            shell_parser->expand_env_vars(var_value);
+        if (parser->is_env_assignment(args[0], var_name, var_value)) {
+            parser->expand_env_vars(var_value);
 
-            if (shell_script_interpreter) {
-                shell_script_interpreter->get_variable_manager().set_environment_variable(
-                    var_name, var_value);
+            if (interpreter) {
+                interpreter->get_variable_manager().set_environment_variable(var_name, var_value);
             }
 
             return 0;
@@ -377,7 +374,7 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
         has_temporary_env && !run_in_background && is_posix_special_builtin(command_args[0]);
 
     const bool is_direct_command =
-        !command_args.empty() && (built_ins->is_builtin_or_runtime_command(command_args[0]) != 0);
+        !command_args.empty() && (builtins->is_builtin_or_runtime_command(command_args[0]) != 0);
 
     command.is_builtin = is_direct_command;
 
@@ -386,17 +383,17 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
     if (is_direct_command) {
         cjsh_env::TemporaryEnvAssignmentScope assignments(this, env_assignments,
                                                           assignments_persist);
-        return built_ins->builtin_or_runtime_command(command_args);
+        return builtins->builtin_or_runtime_command(command_args);
     }
 
     // implicit cd is only considered for a lone foreground interactive token
     // after builtin lookup; the lookup helper enforces autocd and dialect policy.
-    if (interactive_mode && !run_in_background && command_args.size() == 1 && built_ins) {
+    if (interactive_mode && !run_in_background && command_args.size() == 1 && builtins) {
         const std::string& candidate = command_args[0];
 
         if (command_lookup::should_auto_cd_token(candidate, this)) {
             std::vector<std::string> cd_args = {"cd", candidate};
-            int code = built_ins->builtin_command(cd_args);
+            int code = builtins->builtin_command(cd_args);
             return code;
         }
     }
@@ -404,9 +401,9 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
     // background launch returns without waiting. publish the job's last process
     // as $! when launch produced a job record; its completion is handled later.
     if (run_in_background) {
-        int job_id = shell_exec->execute_prepared_command_async(std::move(command));
+        int job_id = executor->execute_prepared_command_async(std::move(command));
         if (job_id > 0) {
-            auto jobs = shell_exec->get_jobs();
+            auto jobs = executor->get_jobs();
             auto it = jobs.find(job_id);
             if (it != jobs.end() && !it->second.pids.empty()) {
                 pid_t last_pid = it->second.pids.back();
@@ -420,16 +417,16 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
 
     // let the execution layer own foreground waiting and stopped-job handling,
     // then report any launch error associated with its result.
-    int exit_code = shell_exec->execute_prepared_command_sync(
+    int exit_code = executor->execute_prepared_command_sync(
         std::move(command), auto_background_on_stop, auto_background_on_stop_silent);
-    shell_exec->print_error_if_needed(exit_code);
+    executor->print_error_if_needed(exit_code);
     return exit_code;
 }
 
 // read a source file into the current shell rather than starting a new process.
 // optional files suppress open failures, but still report errors in loaded code.
 int Shell::execute_script_file(const std::filesystem::path& path, bool optional) {
-    if (!shell_script_interpreter) {
+    if (!interpreter) {
         print_error({ErrorType::FATAL_ERROR, "", "shell not initialized properly", {}});
     }
 
@@ -478,22 +475,22 @@ int Shell::execute_script_file(const std::filesystem::path& path, bool optional)
 }
 
 int Shell::execute_script_content(const std::string& content, const std::string& source_path) {
-    if (!shell_script_interpreter) {
+    if (!interpreter) {
         print_error({ErrorType::FATAL_ERROR, "", "shell not initialized properly", {}});
     }
-    auto parsed_lines = shell_script_interpreter->parse_into_lines(content);
+    auto parsed_lines = interpreter->parse_into_lines(content);
     if (parsed_lines.empty()) {
         return 0;
     }
 
     // nested source calls temporarily replace diagnostic context and establish a
     // return boundary without discarding the surrounding shell's state.
-    const std::string previous_error_source = shell_script_interpreter->get_error_source();
-    shell_script_interpreter->set_error_source(source_path);
-    shell_script_interpreter->push_source_scope();
-    int exit_code = shell_script_interpreter->execute_block(parsed_lines, false, false);
-    shell_script_interpreter->pop_source_scope();
-    shell_script_interpreter->set_error_source(previous_error_source);
+    const std::string previous_error_source = interpreter->get_error_source();
+    interpreter->set_error_source(source_path);
+    interpreter->push_source_scope();
+    int exit_code = interpreter->execute_block(parsed_lines, false, false);
+    interpreter->pop_source_scope();
+    interpreter->set_error_source(previous_error_source);
 
     // return is interpreter control flow inside a sourced file. consume that
     // sentinel here and expose its numeric status to the caller as an ordinary result.
@@ -532,8 +529,7 @@ SignalProcessingResult Shell::process_pending_signals(bool reap_children) {
     }
 
     mark_terminal_dirty();
-    Exec* exec_ptr = shell_exec ? shell_exec.get() : nullptr;
-    return signal_handler->process_pending_signals(exec_ptr, reap_children);
+    return signal_handler->process_pending_signals(executor.get(), reap_children);
 }
 
 void Shell::setup_signal_handlers() {
@@ -844,8 +840,8 @@ std::unordered_map<std::string, std::string>& Shell::get_abbreviations() {
 
 void Shell::set_aliases(const std::unordered_map<std::string, std::string>& new_aliases) {
     aliases = new_aliases;
-    if (shell_parser) {
-        shell_parser->set_aliases(aliases);
+    if (parser) {
+        parser->set_aliases(aliases);
     }
 }
 
@@ -999,33 +995,33 @@ bool Shell::should_abort_on_nonzero_exit(int exit_code) const {
 // lookup and are intentionally outside this inventory.
 std::unordered_set<std::string> Shell::get_available_commands() const {
     std::unordered_set<std::string> cmds;
-    if (built_ins) {
-        auto b = built_ins->get_builtin_commands();
+    if (builtins) {
+        auto b = builtins->get_builtin_commands();
         cmds.insert(b.begin(), b.end());
     }
     for (const auto& alias : aliases) {
         (void)cmds.insert(alias.first);
     }
 
-    if (shell_script_interpreter) {
-        auto function_names = shell_script_interpreter->get_function_names();
+    if (interpreter) {
+        auto function_names = interpreter->get_function_names();
         cmds.insert(function_names.begin(), function_names.end());
     }
     return cmds;
 }
 
 std::string Shell::get_previous_directory() const {
-    return built_ins->get_previous_directory();
+    return builtins->get_previous_directory();
 }
 
-Built_ins* Shell::get_built_ins() {
-    return built_ins.get();
+Built_ins* Shell::get_builtins() {
+    return builtins.get();
 }
 
-ShellScriptInterpreter* Shell::get_shell_script_interpreter() {
-    return shell_script_interpreter.get();
+ShellScriptInterpreter* Shell::get_interpreter() {
+    return interpreter.get();
 }
 
 Parser* Shell::get_parser() {
-    return shell_parser.get();
+    return parser.get();
 }

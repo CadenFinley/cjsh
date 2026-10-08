@@ -1033,8 +1033,8 @@ std::string render_prompt_eol_mark() {
 std::string render_trace_prompt() {
     std::string ps4 = get_ps("PS4", "+ ");
     std::string trace_prompt = expand_prompt_string(ps4, PromptContext::Primary);
-    if (g_shell != nullptr) {
-        if (Parser* parser = g_shell->get_parser()) {
+    if (shell != nullptr) {
+        if (Parser* parser = shell->get_parser()) {
             parser->expand_env_vars(trace_prompt);
         }
     }
@@ -1142,7 +1142,7 @@ bool advance_with_transient_final_prompt(const std::string& new_buffer) {
 }
 
 void execute_prompt_command() {
-    if (!g_shell) {
+    if (!shell) {
         return;
     }
     if (config::secure_mode || config::is_posix_mode()) {
@@ -1152,7 +1152,7 @@ void execute_prompt_command() {
     if (command.empty()) {
         return;
     }
-    (void)g_shell->execute(command);
+    (void)shell->execute(command);
 }
 
 void initialize_colors() {

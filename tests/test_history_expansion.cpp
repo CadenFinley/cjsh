@@ -37,7 +37,7 @@
 #include "history_file_utils.h"
 #include "shell.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 static void log_failure(const char* test_name, const char* message) {
     (void)std::fprintf(stderr, "[FAIL] %s: %s\n", test_name, message);

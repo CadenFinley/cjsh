@@ -39,11 +39,11 @@ namespace pipeline_status_utils {
 void set_last_status_env(int status_code);
 
 void apply_execution_status_env(
-    int status_code, Exec* exec_ptr,
+    int status_code, Exec* executor,
     const std::function<void(const std::string&)>& on_pipe_set_callback = {},
     const std::function<void()>& on_pipe_unset_callback = {});
 
-void apply_pipeline_status_env(Exec* exec_ptr,
+void apply_pipeline_status_env(Exec* executor,
                                const std::function<void(const std::string&)>& on_set_callback = {},
                                const std::function<void()>& on_unset_callback = {});
 

@@ -66,8 +66,8 @@ VariableExpander::VariableExpander(Shell* shell,
 }
 
 std::string VariableExpander::get_variable_value(const std::string& var_name) {
-    if ((shell != nullptr) && (shell->get_shell_script_interpreter() != nullptr)) {
-        std::string result = shell->get_shell_script_interpreter()->get_variable_value(var_name);
+    if ((shell != nullptr) && (shell->get_interpreter() != nullptr)) {
+        std::string result = shell->get_interpreter()->get_variable_value(var_name);
         return result;
     }
 
@@ -76,13 +76,13 @@ std::string VariableExpander::get_variable_value(const std::string& var_name) {
 
 std::string VariableExpander::get_exported_variable_value(const std::string& var_name) {
     if (parameter_utils::is_named_special_parameter_name(var_name) &&
-        ((shell != nullptr) && (shell->get_shell_script_interpreter() != nullptr))) {
-        return shell->get_shell_script_interpreter()->get_variable_value(var_name);
+        ((shell != nullptr) && (shell->get_interpreter() != nullptr))) {
+        return shell->get_interpreter()->get_variable_value(var_name);
     }
 
     if ((var_name.length() == 1 && (isdigit(var_name[0]) != 0)) &&
-        ((shell != nullptr) && (shell->get_shell_script_interpreter() != nullptr))) {
-        return shell->get_shell_script_interpreter()->get_variable_value(var_name);
+        ((shell != nullptr) && (shell->get_interpreter() != nullptr))) {
+        return shell->get_interpreter()->get_variable_value(var_name);
     }
 
     return cjsh_env::get_shell_variable_value(var_name);
@@ -157,10 +157,9 @@ std::string VariableExpander::resolve_parameter_value(const std::string& var_nam
     std::string value = get_variable_value(var_name);
     if (value.empty()) {
         bool is_set_in_interpreter = false;
-        if ((shell != nullptr) && (shell->get_shell_script_interpreter() != nullptr)) {
+        if ((shell != nullptr) && (shell->get_interpreter() != nullptr)) {
             is_set_in_interpreter =
-                shell->get_shell_script_interpreter()->get_variable_manager().variable_is_set(
-                    var_name);
+                shell->get_interpreter()->get_variable_manager().variable_is_set(var_name);
         }
 
         auto it = env_vars.find(var_name);
@@ -214,11 +213,10 @@ void VariableExpander::expand_env_vars(std::string& arg) {
                         [this](const std::string& name) { return get_variable_value(name); },
                         [this](std::string& val) { expand_env_vars(val); });
                 } else {
-                    if ((shell != nullptr) && (shell->get_shell_script_interpreter() != nullptr)) {
+                    if ((shell != nullptr) && (shell->get_interpreter() != nullptr)) {
                         try {
                             value =
-                                shell->get_shell_script_interpreter()->expand_parameter_expression(
-                                    param_expr);
+                                shell->get_interpreter()->expand_parameter_expression(param_expr);
                         } catch (...) {
                             if (config::is_posix_mode()) {
                                 throw;
@@ -553,7 +551,7 @@ bool VariableExpander::try_append_arithmetic_expansion(
     auto [handled, arith_result] =
         try_expand_arithmetic_expression(arg, i, expand_func, [this](const std::string& s) {
             if (shell != nullptr) {
-                if (auto* interpreter = shell->get_shell_script_interpreter()) {
+                if (auto* interpreter = shell->get_interpreter()) {
                     return interpreter->evaluate_arithmetic_expression(s);
                 }
                 if (auto* parser = shell->get_parser()) {

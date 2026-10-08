@@ -193,12 +193,12 @@ class Shell {
 
     std::unordered_set<std::string> get_available_commands() const;
     std::string get_previous_directory() const;
-    Built_ins* get_built_ins();
-    ShellScriptInterpreter* get_shell_script_interpreter();
+    Built_ins* get_builtins();
+    ShellScriptInterpreter* get_interpreter();
     Parser* get_parser();
 
     std::string last_command;
-    std::unique_ptr<Exec> shell_exec;
+    std::unique_ptr<Exec> executor;
 
    private:
     bool interactive_mode = false;
@@ -215,9 +215,9 @@ class Shell {
     bool interactive_job_control_available = false;
 
     std::unique_ptr<SignalHandler> signal_handler;
-    std::unique_ptr<Built_ins> built_ins;
-    std::unique_ptr<Parser> shell_parser;
-    std::unique_ptr<ShellScriptInterpreter> shell_script_interpreter;
+    std::unique_ptr<Built_ins> builtins;
+    std::unique_ptr<Parser> parser;
+    std::unique_ptr<ShellScriptInterpreter> interpreter;
 
     std::unordered_map<std::string, std::string> abbreviations;
     std::unordered_map<std::string, std::string> aliases;
@@ -233,7 +233,7 @@ class Shell {
     void apply_abbreviations_to_line_editor();
 };
 
-extern std::unique_ptr<Shell> g_shell;
+extern std::unique_ptr<Shell> shell;
 
 int read_exit_code_or(int fallback);
 

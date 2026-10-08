@@ -107,11 +107,11 @@ std::string expand_loop_substitutions(const std::string& words,
 }
 
 const std::shared_ptr<std::vector<std::string>>& get_cached_inline_loop_body(
-    const std::string& body, Parser* shell_parser) {
+    const std::string& body, Parser* parser) {
     static const std::shared_ptr<std::vector<std::string>> kEmptyBody =
         std::make_shared<std::vector<std::string>>();
 
-    if (body.empty() || shell_parser == nullptr) {
+    if (body.empty() || parser == nullptr) {
         return kEmptyBody;
     }
 
@@ -120,7 +120,7 @@ const std::shared_ptr<std::vector<std::string>>& get_cached_inline_loop_body(
         return cache_it->second;
     }
 
-    auto parsed_lines = shell_parser->parse_into_lines(body);
+    auto parsed_lines = parser->parse_into_lines(body);
     auto parsed_ptr = std::make_shared<std::vector<std::string>>(std::move(parsed_lines));
 
     if (g_inline_loop_cache.size() >= kInlineLoopCacheLimit) {
@@ -140,7 +140,7 @@ const std::shared_ptr<std::vector<std::string>>& get_cached_inline_loop_body(
 }
 
 bool check_loop_interrupt(int& rc) {
-    if (!g_shell) {
+    if (!shell) {
         return false;
     }
 
@@ -148,7 +148,7 @@ bool check_loop_interrupt(int& rc) {
         return false;
     }
 
-    SignalProcessingResult pending = g_shell->process_pending_signals();
+    SignalProcessingResult pending = shell->process_pending_signals();
     int exit_code = shell_script_interpreter::detail::pending_signal_exit_code(pending);
     if (exit_code >= 0) {
         rc = exit_code;
@@ -428,11 +428,10 @@ struct ParsedLoopBlock {
 };
 
 bool parse_multiline_loop_block(const std::vector<std::string>& src_lines, size_t start_index,
-                                const std::string& first, Parser* shell_parser,
-                                ParsedLoopBlock& parsed) {
+                                const std::string& first, Parser* parser, ParsedLoopBlock& parsed) {
     parsed = ParsedLoopBlock{};
     parsed.end_index = start_index;
-    if (shell_parser == nullptr) {
+    if (parser == nullptr) {
         return false;
     }
 
@@ -469,8 +468,7 @@ bool parse_multiline_loop_block(const std::vector<std::string>& src_lines, size_
     auto suffix_parts = split_done_suffix(trim(body.substr(done_pos + 4)));
     parsed.done_redirections = std::move(suffix_parts.first);
     parsed.trailing_commands = std::move(suffix_parts.second);
-    const auto& body_lines =
-        get_cached_inline_loop_body(trim(body.substr(0, done_pos)), shell_parser);
+    const auto& body_lines = get_cached_inline_loop_body(trim(body.substr(0, done_pos)), parser);
     if (body_lines == nullptr) {
         return false;
     }
@@ -478,20 +476,18 @@ bool parse_multiline_loop_block(const std::vector<std::string>& src_lines, size_
     return true;
 }
 
-bool parse_inline_loop_block(const std::string& first, Parser* shell_parser,
-                             ParsedLoopBlock& parsed) {
-    return parse_multiline_loop_block({first}, 0, first, shell_parser, parsed);
+bool parse_inline_loop_block(const std::string& first, Parser* parser, ParsedLoopBlock& parsed) {
+    return parse_multiline_loop_block({first}, 0, first, parser, parsed);
 }
 
-bool trailing_contains_block_closer_segment(const std::string& trailing_commands,
-                                            Parser* shell_parser) {
+bool trailing_contains_block_closer_segment(const std::string& trailing_commands, Parser* parser) {
     if (trailing_commands.empty()) {
         return false;
     }
 
     std::vector<std::string> segments;
-    if (shell_parser != nullptr) {
-        segments = shell_parser->parse_semicolon_commands(trailing_commands);
+    if (parser != nullptr) {
+        segments = parser->parse_semicolon_commands(trailing_commands);
     }
 
     if (segments.empty()) {
@@ -508,13 +504,13 @@ bool trailing_contains_block_closer_segment(const std::string& trailing_commands
 
 int execute_loop_trailing_commands(
     int loop_rc, const std::string& trailing_commands,
-    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* shell_parser,
+    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* parser,
     const std::function<bool()>& should_abort_execution) {
     if (trailing_commands.empty()) {
         return loop_rc;
     }
 
-    if (trailing_contains_block_closer_segment(trailing_commands, shell_parser)) {
+    if (trailing_contains_block_closer_segment(trailing_commands, parser)) {
         return loop_rc;
     }
 
@@ -535,7 +531,7 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
                       const std::string& keyword, bool is_until,
                       const std::function<int(const std::vector<std::string>&)>& execute_block,
                       const std::function<int(const std::string&)>& execute_simple_or_pipeline,
-                      Parser* shell_parser, const std::function<bool()>& should_abort_execution) {
+                      Parser* parser, const std::function<bool()>& should_abort_execution) {
     // shared while/until evaluator used by interpreter loop dispatch
     std::string first = trim(strip_inline_comment(src_lines[idx]));
     if (first != keyword && first.rfind(keyword + " ", 0) != 0) {
@@ -547,7 +543,7 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
     };
 
     ParsedLoopBlock parsed_loop;
-    if (!parse_multiline_loop_block(src_lines, idx, first, shell_parser, parsed_loop)) {
+    if (!parse_multiline_loop_block(src_lines, idx, first, parser, parsed_loop)) {
         idx = parsed_loop.end_index;
         return 1;
     }
@@ -570,7 +566,7 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
             int c = 0;
             if (!cond.empty()) {
                 {
-                    Shell::ErrexitScope scope(g_shell.get());
+                    Shell::ErrexitScope scope(shell.get());
                     c = execute_simple_or_pipeline(cond);
                 }
                 if (abort_pending()) {
@@ -612,25 +608,25 @@ int handle_loop_block(const std::vector<std::string>& src_lines, size_t& idx,
 
     // Only redirections after `done` belong to the loop itself. Parsing the entire
     // loop here also lifted redirections from its condition/body into this scope.
-    if (!done_redirections.empty() && shell_parser && g_shell && g_shell->shell_exec) {
+    if (!done_redirections.empty() && parser && shell && shell->executor) {
         std::vector<Command> redirection_commands;
         try {
             redirection_commands =
-                shell_parser->parse_pipeline_with_preprocessing("true " + done_redirections);
+                parser->parse_pipeline_with_preprocessing("true " + done_redirections);
         } catch (const std::exception&) {
             // Best-effort parse; fall back to normal loop execution.
         }
         if (!redirection_commands.empty()) {
-            const int exit_code = g_shell->shell_exec->run_with_command_redirections(
+            const int exit_code = shell->executor->run_with_command_redirections(
                 redirection_commands[0], run_loop_logic, keyword, false);
             return execute_loop_trailing_commands(exit_code, trailing_commands,
-                                                  execute_simple_or_pipeline, shell_parser,
+                                                  execute_simple_or_pipeline, parser,
                                                   should_abort_execution);
         }
     }
 
     return execute_loop_trailing_commands(run_loop_logic(), trailing_commands,
-                                          execute_simple_or_pipeline, shell_parser,
+                                          execute_simple_or_pipeline, parser,
                                           should_abort_execution);
 }
 
@@ -669,7 +665,7 @@ LoopCommandOutcome handle_loop_command_result(int rc, int break_consumed_rc, int
     }
 #endif
     if (rc != 0) {
-        if (g_shell && g_shell->should_abort_on_nonzero_exit()) {
+        if (shell && shell->should_abort_on_nonzero_exit()) {
             return {LoopFlow::BREAK, rc};
         }
         if (!allow_error_continue) {
@@ -683,7 +679,7 @@ int handle_for_block(
     const std::vector<std::string>& src_lines, size_t& idx,
     const std::function<int(const std::vector<std::string>&)>& execute_block,
     const std::function<long long(const std::string&)>& evaluate_arithmetic_expression,
-    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* shell_parser,
+    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* parser,
     const std::function<bool()>& should_abort_execution) {
     // main for evaluator called after interpreter classifies a block as for
     std::string first = trim(strip_inline_comment(src_lines[idx]));
@@ -699,14 +695,13 @@ int handle_for_block(
     };
 
     auto finalize_with_trailing_commands = [&](int loop_rc, const std::string& trailing_commands) {
-        return execute_loop_trailing_commands(loop_rc, trailing_commands,
-                                              execute_simple_or_pipeline, shell_parser,
-                                              should_abort_execution);
+        return execute_loop_trailing_commands(
+            loop_rc, trailing_commands, execute_simple_or_pipeline, parser, should_abort_execution);
     };
 
     auto assign_loop_variable = [&](const std::string& value) {
-        if (g_shell != nullptr &&
-            cjsh_env::set_shell_or_local_variable_value(g_shell.get(), var, value)) {
+        if (shell != nullptr &&
+            cjsh_env::set_shell_or_local_variable_value(shell.get(), var, value)) {
             return;
         }
 
@@ -748,7 +743,7 @@ int handle_for_block(
             const std::string expanded_words =
                 expand_loop_substitutions(parsed.words, execute_simple_or_pipeline);
             // A fixed command prefix keeps list words out of alias/assignment-command handling.
-            auto toks = shell_parser->parse_command("for " + var + " in " + expanded_words);
+            auto toks = parser->parse_command("for " + var + " in " + expanded_words);
             if (toks.size() < 3) {
                 report_loop_header_error("for", "could not parse iteration words after 'in'");
                 return false;
@@ -865,7 +860,7 @@ int handle_for_block(
     };
 
     ParsedLoopBlock parsed_loop;
-    if (parse_inline_loop_block(first, shell_parser, parsed_loop)) {
+    if (parse_inline_loop_block(first, parser, parsed_loop)) {
         if (!parse_header(parsed_loop.header)) {
             return 2;
         }
@@ -879,13 +874,13 @@ int handle_for_block(
             return handle_loop_command_result(body_rc, 0, 255, 0, 254, true);
         };
 
-        if (!parsed_loop.done_redirections.empty() && g_shell && g_shell->shell_exec) {
+        if (!parsed_loop.done_redirections.empty() && shell && shell->executor) {
             try {
-                auto redir_cmds = shell_parser->parse_pipeline_with_preprocessing(
+                auto redir_cmds = parser->parse_pipeline_with_preprocessing(
                     "true " + parsed_loop.done_redirections);
                 if (!redir_cmds.empty()) {
                     bool action_invoked = false;
-                    int exit_code = g_shell->shell_exec->run_with_command_redirections(
+                    int exit_code = shell->executor->run_with_command_redirections(
                         redir_cmds[0],
                         [&] { return execute_for_iterations(run_cached_body, "", [] {}); }, "for",
                         false, &action_invoked);
@@ -903,7 +898,7 @@ int handle_for_block(
         return execute_for_iterations(run_cached_body, parsed_loop.trailing_commands, [] {});
     }
 
-    if (!parse_multiline_loop_block(src_lines, idx, first, shell_parser, parsed_loop)) {
+    if (!parse_multiline_loop_block(src_lines, idx, first, parser, parsed_loop)) {
         idx = parsed_loop.end_index;
         return report_loop_header_error("for", "expected 'do' and 'done' to complete the loop");
     }
@@ -930,7 +925,7 @@ int handle_for_block(
 int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
                         const std::function<int(const std::vector<std::string>&)>& execute_block,
                         const std::function<int(const std::string&)>& execute_simple_or_pipeline,
-                        Parser* shell_parser, const std::function<bool()>& should_abort_execution) {
+                        Parser* parser, const std::function<bool()>& should_abort_execution) {
     if (config::is_posix_mode()) {
         (void)report_loop_header_error("select", "select is disabled in POSIX mode");
         return cjsh_env::posix_error_exit(2);
@@ -947,14 +942,13 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
     };
 
     auto finalize_with_trailing_commands = [&](int loop_rc, const std::string& trailing_commands) {
-        return execute_loop_trailing_commands(loop_rc, trailing_commands,
-                                              execute_simple_or_pipeline, shell_parser,
-                                              should_abort_execution);
+        return execute_loop_trailing_commands(
+            loop_rc, trailing_commands, execute_simple_or_pipeline, parser, should_abort_execution);
     };
 
     auto assign_select_variable = [&](const std::string& name, const std::string& value) {
-        if (g_shell != nullptr &&
-            cjsh_env::set_shell_or_local_variable_value(g_shell.get(), name, value)) {
+        if (shell != nullptr &&
+            cjsh_env::set_shell_or_local_variable_value(shell.get(), name, value)) {
             return;
         }
 
@@ -976,7 +970,7 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
         if (parsed.has_in) {
             const std::string expanded_words =
                 expand_loop_substitutions(parsed.words, execute_simple_or_pipeline);
-            auto toks = shell_parser->parse_command("select " + var + " in " + expanded_words);
+            auto toks = parser->parse_command("select " + var + " in " + expanded_words);
             if (toks.size() < 3) {
                 report_loop_header_error("select", "could not parse selection words after 'in'");
                 return false;
@@ -1051,7 +1045,7 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
     };
 
     ParsedLoopBlock parsed_loop;
-    if (parse_inline_loop_block(first, shell_parser, parsed_loop)) {
+    if (parse_inline_loop_block(first, parser, parsed_loop)) {
         if (!parse_header(parsed_loop.header)) {
             return 2;
         }
@@ -1059,7 +1053,7 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
         return execute_select_iterations(parsed_loop.body_lines, parsed_loop.trailing_commands);
     }
 
-    if (!parse_multiline_loop_block(src_lines, idx, first, shell_parser, parsed_loop)) {
+    if (!parse_multiline_loop_block(src_lines, idx, first, parser, parsed_loop)) {
         idx = parsed_loop.end_index;
         return report_loop_header_error("select", "expected 'do' and 'done' to complete the loop");
     }
@@ -1076,13 +1070,13 @@ int handle_select_block(const std::vector<std::string>& src_lines, size_t& idx,
 int handle_condition_loop_block(
     LoopCondition condition, const std::vector<std::string>& src_lines, size_t& idx,
     const std::function<int(const std::vector<std::string>&)>& execute_block,
-    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* shell_parser,
+    const std::function<int(const std::string&)>& execute_simple_or_pipeline, Parser* parser,
     const std::function<bool()>& should_abort_execution) {
     // thin dispatcher that maps while/until into the shared loop-block implementation
     const char* keyword = condition == LoopCondition::WHILE ? "while" : "until";
     bool is_until = condition == LoopCondition::UNTIL;
     return handle_loop_block(src_lines, idx, keyword, is_until, execute_block,
-                             execute_simple_or_pipeline, shell_parser, should_abort_execution);
+                             execute_simple_or_pipeline, parser, should_abort_execution);
 }
 
 std::optional<int> try_execute_inline_do_block(

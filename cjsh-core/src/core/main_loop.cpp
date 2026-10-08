@@ -115,7 +115,7 @@ bool typeahead_capture_allowed(void*) {
 }
 
 void recover_prompt_terminal() {
-    g_shell->recover_prompt_terminal();
+    shell->recover_prompt_terminal();
 }
 
 struct CommandProcessResult {
@@ -144,7 +144,7 @@ CommandProcessResult process_command_line(const std::string& command) {
     // expand history before hooks and parsing so both observe the command that
     // will actually run. expansion errors leave execution and history untouched.
     std::string expanded_command = command;
-    Parser* parser = (g_shell != nullptr) ? g_shell->get_parser() : nullptr;
+    Parser* parser = (shell != nullptr) ? shell->get_parser() : nullptr;
     if (parser != nullptr) {
         auto expansion_result = parser->perform_history_expansion(command);
         if (expansion_result.has_error) {
@@ -168,7 +168,7 @@ CommandProcessResult process_command_line(const std::string& command) {
     // native preexec hooks receive the expanded text as an argument. the DEBUG
     // trap follows them and is dispatched independently of native hook support.
     if (!config::is_posix_mode()) {
-        g_shell->execute_hooks(HookType::Preexec, {expanded_command});
+        shell->execute_hooks(HookType::Preexec, {expanded_command});
     }
     trap_manager_execute_debug_trap();
 
@@ -176,8 +176,8 @@ CommandProcessResult process_command_line(const std::string& command) {
     // capture the starting directory because the command itself may change it.
     const std::string command_directory = history_working_directory();
     const auto command_start_time = std::chrono::steady_clock::now();
-    int exit_code = g_shell->execute(expanded_command);
-    g_shell->set_last_interactive_command(expanded_command);
+    int exit_code = shell->execute(expanded_command);
+    shell->set_last_interactive_command(expanded_command);
     const auto command_end_time = std::chrono::steady_clock::now();
     const auto elapsed_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(command_end_time - command_start_time)
@@ -187,8 +187,8 @@ CommandProcessResult process_command_line(const std::string& command) {
 
     // publish the result before the next prompt can inspect status or duration.
     // pipeline status comes from the execution layer rather than the scalar result.
-    Exec* exec_ptr = (g_shell && g_shell->shell_exec) ? g_shell->shell_exec.get() : nullptr;
-    pipeline_status_utils::apply_execution_status_env(exit_code, exec_ptr);
+    Exec* executor = (shell && shell->executor) ? shell->executor.get() : nullptr;
+    pipeline_status_utils::apply_execution_status_env(exit_code, executor);
     (void)cjsh_env::set_shell_variable_value("CJSH_COMMAND_DURATION_MS",
                                              std::to_string(static_cast<long long>(elapsed_ms)));
 
@@ -224,7 +224,7 @@ CommandProcessResult process_command_line(const std::string& command) {
 // collect child state before retiring completed jobs. editor callbacks pass false
 // so job notifications can be queued rather than disrupting the active input line.
 void update_job_management(bool at_prompt = true) {
-    SignalHandler::reap_pending_children(g_shell->shell_exec.get(), true);
+    SignalHandler::reap_pending_children(shell->executor.get(), true);
     JobManager::instance().cleanup_finished_jobs(at_prompt);
 }
 
@@ -295,7 +295,7 @@ std::optional<std::string> get_next_command() {
     // precmd runs once per new prompt, not each time an idle callback resumes
     // the same buffer. hooks can run external commands and disturb terminal state.
     if (!config::is_posix_mode()) {
-        g_shell->execute_hooks(HookType::Precmd);
+        shell->execute_hooks(HookType::Precmd);
         recover_prompt_terminal();
     }
 
@@ -314,7 +314,7 @@ std::optional<std::string> get_next_command() {
 
         long idle_timeout_ms = 0;
         if (!config::is_posix_mode() && !config::secure_mode && config::idle_timeout_seconds > 0 &&
-            !g_shell->get_hooks(HookType::Idle).empty()) {
+            !shell->get_hooks(HookType::Idle).empty()) {
             idle_timeout_ms = config::idle_timeout_seconds * 1000;
         }
         (void)ic_set_idle_timeout(idle_timeout_ms);
@@ -335,7 +335,7 @@ std::optional<std::string> get_next_command() {
         // async prompt refresh is allowed only while readline owns the display.
         prompt::set_prompt_refresh_allowed(false);
         ic_prepare_terminal_for_command();
-        g_shell->mark_terminal_dirty();
+        shell->mark_terminal_dirty();
 
         char* input = readline_result.input;
         // idle is a temporary handoff, not a submission. retain the buffer and
@@ -348,7 +348,7 @@ std::optional<std::string> get_next_command() {
                 ic_free(input);
             }
 
-            g_shell->execute_hooks(HookType::Idle);
+            shell->execute_hooks(HookType::Idle);
             recover_prompt_terminal();
             if (cjsh_env::exit_requested()) {
                 return std::nullopt;
@@ -366,7 +366,7 @@ std::optional<std::string> get_next_command() {
             if (input != nullptr) {
                 ic_free(input);
             }
-            (void)g_shell->process_pending_signals();
+            (void)shell->process_pending_signals();
             if (readline_result.tty_lost) {
                 cjsh_env::request_exit();
             }
@@ -379,7 +379,7 @@ std::optional<std::string> get_next_command() {
             if (input != nullptr) {
                 ic_free(input);
             }
-            if (g_shell->get_shell_option(ShellOption::Ignoreeof)) {
+            if (shell->get_shell_option(ShellOption::Ignoreeof)) {
                 std::cerr << "Use 'exit' to leave the shell.\n";
                 continue;
             }
@@ -422,7 +422,7 @@ std::optional<std::string> get_next_command() {
 // expose the active buffer and cursor through temporary widget variables. run
 // the binding with readline suspended, then apply edits before resuming input.
 bool execute_custom_editor_command(const std::string& command) {
-    if (command.empty() || g_shell == nullptr) {
+    if (command.empty() || shell == nullptr) {
         return false;
     }
 
@@ -436,7 +436,7 @@ bool execute_custom_editor_command(const std::string& command) {
     (void)cjsh_env::set_shell_variable_value("CJSH_POINT", std::to_string(cursor_pos));
 
     const bool terminal_suspended = ic_suspend_readline_terminal();
-    (void)g_shell->execute(command);
+    (void)shell->execute(command);
     if (terminal_suspended) {
         (void)ic_resume_readline_terminal();
     }
@@ -655,12 +655,12 @@ bool buffer_requires_additional_input(const std::string& buffer) {
         return true;
     }
 
-    if (g_shell == nullptr) {
+    if (shell == nullptr) {
         return false;
     }
 
-    Parser* parser = g_shell->get_parser();
-    ShellScriptInterpreter* interpreter = g_shell->get_shell_script_interpreter();
+    Parser* parser = shell->get_parser();
+    ShellScriptInterpreter* interpreter = shell->get_interpreter();
     if (parser == nullptr || interpreter == nullptr) {
         return false;
     }
@@ -729,7 +729,7 @@ void main_process_loop() {
     while (true) {
         // dispatch traps and termination outside readline before starting another
         // prompt. this also handles signals that interrupted the previous read.
-        (void)g_shell->process_pending_signals();
+        (void)shell->process_pending_signals();
 
         if (cjsh_env::exit_requested()) {
             break;
@@ -781,11 +781,11 @@ void main_process_loop() {
 // transition from startup into a real prompt session. interactive -c and script
 // invocations bypass this path even though they can load interactive startup files.
 void start_interactive_process() {
-    g_shell->begin_interactive_input();
+    shell->begin_interactive_input();
     initialize_isocline();
     // sample startup cancellation before clearing startup state, which disables
     // the signal handler's startup-specific interruption query.
-    (void)g_shell->process_pending_signals();
+    (void)shell->process_pending_signals();
     if (SignalHandler::startup_interrupted()) {
         pipeline_status_utils::set_last_status_env(128 + SIGINT);
     }

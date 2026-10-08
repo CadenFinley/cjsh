@@ -388,8 +388,8 @@ std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobMa
         const pid_t pid = waitpid(target, &status, WUNTRACED | WCONTINUED);
         if (pid < 0) {
             if (errno == EINTR) {
-                if (g_shell) {
-                    (void)g_shell->process_pending_signals();
+                if (shell) {
+                    (void)shell->process_pending_signals();
                 }
                 if (cjsh_env::exit_requested()) {
                     return std::nullopt;
@@ -413,8 +413,8 @@ std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobMa
 
         // waitpid consumes the report; publish it to both tables before deciding
         // whether the entire job has completed or stopped.
-        if (g_shell && g_shell->shell_exec) {
-            g_shell->shell_exec->handle_child_signal(pid, status);
+        if (shell && shell->executor) {
+            shell->executor->handle_child_signal(pid, status);
         }
         job_manager.handle_child_status(pid, status);
         if (status_pid != nullptr && (WIFEXITED(status) || WIFSIGNALED(status))) {
@@ -646,8 +646,8 @@ void JobManager::update_job_statuses() {
     }
 
     for (const auto& [pid, status] : status_changes) {
-        if (shell_ref && shell_ref->shell_exec) {
-            shell_ref->shell_exec->handle_child_signal(pid, status);
+        if (shell && shell->executor) {
+            shell->executor->handle_child_signal(pid, status);
         }
         handle_child_status(pid, status);
     }
@@ -674,7 +674,7 @@ pid_t JobManager::get_last_background_pid() const {
 }
 
 void JobManager::set_shell(Shell* shell) {
-    shell_ref = shell;
+    this->shell = shell;
 }
 
 // emit a stop once per stop/resume cycle. POSIX background notifications can wait
@@ -689,8 +689,7 @@ void JobManager::notify_job_stopped(const std::shared_ptr<JobControlJob>& job) c
     }
 
     if (config::is_posix_mode() && job->background.load(std::memory_order_relaxed) &&
-        !allow_deferred_notifications && shell_ref &&
-        !shell_ref->get_shell_option(ShellOption::Notify)) {
+        !allow_deferred_notifications && shell && !shell->get_shell_option(ShellOption::Notify)) {
         return;
     }
 
@@ -742,8 +741,8 @@ void JobManager::notify_job_finished(const std::shared_ptr<JobControlJob>& job) 
     if (state != JobState::DONE && state != JobState::TERMINATED) {
         return;
     }
-    if (config::is_posix_mode() && is_background && !allow_deferred_notifications && shell_ref &&
-        !shell_ref->get_shell_option(ShellOption::Notify)) {
+    if (config::is_posix_mode() && is_background && !allow_deferred_notifications && shell &&
+        !shell->get_shell_option(ShellOption::Notify)) {
         return;
     }
 

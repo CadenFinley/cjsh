@@ -252,13 +252,13 @@ bool print_function_declarations(const std::vector<std::string>& names, const st
 int handle_function_mode(const std::vector<std::string>& args, size_t operand_start,
                          const DeclareOptions& opts, const std::string& command_name,
                          Shell* shell) {
-    if (shell == nullptr || shell->get_shell_script_interpreter() == nullptr) {
+    if (shell == nullptr || shell->get_interpreter() == nullptr) {
         print_error(
             {ErrorType::RUNTIME_ERROR, command_name, "shell interpreter not available", {}});
         return 1;
     }
 
-    auto* interpreter = shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
 
     bool success = true;
     std::vector<std::string> function_names;
@@ -524,13 +524,13 @@ int declare_command(const std::vector<std::string>& args, Shell* shell) {
         return 1;
     }
 
-    if (shell == nullptr || shell->get_shell_script_interpreter() == nullptr) {
+    if (shell == nullptr || shell->get_interpreter() == nullptr) {
         print_error(
             {ErrorType::RUNTIME_ERROR, command_name, "shell interpreter not available", {}});
         return 1;
     }
 
-    auto* interpreter = shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
 
     DeclareOptions opts;
     size_t operand_start = 1;

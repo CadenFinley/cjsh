@@ -165,8 +165,8 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
     // copied shell state in a forked child is not authority to take the tty.
     // require the original interactive shell and a job with its own process group.
     const bool main_shell_controls_terminal =
-        job->process_group && g_shell && g_shell->is_job_control_enabled() &&
-        g_shell->manages_terminal() && shell_is_interactive && (isatty(shell_terminal) != 0) &&
+        job->process_group && shell && shell->is_job_control_enabled() &&
+        shell->manages_terminal() && shell_is_interactive && (isatty(shell_terminal) != 0) &&
         shell_pgid > 0 && getpid() == shell_pgid && getpgrp() == shell_pgid;
 
     bool terminal_control_acquired = false;
@@ -321,8 +321,8 @@ void Exec::wait_for_job(int job_id) {
     const auto process_wait_signals = [&] {
         // this waiter owns the foreground children's status reports. reaping
         // a stop elsewhere could leave us waiting for a child that cannot run.
-        if (g_shell) {
-            (void)g_shell->process_pending_signals(false);
+        if (shell) {
+            (void)shell->process_pending_signals(false);
         } else if (auto* signal_handler = SignalHandler::instance()) {
             (void)signal_handler->process_pending_signals(this, false);
         }

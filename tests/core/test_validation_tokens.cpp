@@ -40,7 +40,7 @@
 #include "shell_env.h"
 #include "validation_common.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 namespace {
 
@@ -103,7 +103,7 @@ bool test_whitespace_and_locale() {
 }
 
 bool test_variable_diagnostics() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     const std::vector<std::string> lines = {
         "export __audit_export='two words'; read -r -p 'prompt words' __audit_read; "
         "declare __audit_declared=value",
@@ -129,7 +129,7 @@ bool test_variable_diagnostics() {
 }
 
 bool test_execution_variable_syntax() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     const std::vector<std::string> cases = {
         ": literal",
         "value=unused",
@@ -180,7 +180,7 @@ bool test_execution_variable_syntax() {
 }
 
 bool test_assignment_diagnostics() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     const std::vector<std::string> defined = {
         "__audit_first=1; __audit_second=2; : $__audit_first $__audit_second",
         "__audit_first=1 __audit_second=2; : $__audit_first $__audit_second",
@@ -250,7 +250,7 @@ bool test_assignment_diagnostics() {
 }
 
 bool test_inline_prime_loop_diagnostics() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     bool ok = true;
     for (const std::string suffix : {"", "\n     "}) {
         const std::string script =
@@ -270,7 +270,7 @@ bool test_inline_prime_loop_diagnostics() {
 }
 
 bool test_control_validator_filter() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     bool ok = true;
     for (const auto& line : {": ordinary words", ": before select while until if case", "'for' x",
                              "different argument", "casework word"}) {
@@ -300,7 +300,7 @@ bool test_control_validator_filter() {
 }
 
 bool test_literal_control_keywords() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     const std::vector<std::pair<std::string, std::string>> blocks = {
         {"if true; then", "fi"},      {"while false; do", "done"}, {"until true; do", "done"},
         {"for i in one; do", "done"}, {"case x in x)", "esac"},
@@ -337,7 +337,7 @@ bool test_literal_control_keywords() {
 }
 
 bool test_unexpected_then() {
-    auto* interpreter = g_shell->get_shell_script_interpreter();
+    auto* interpreter = shell->get_interpreter();
     bool ok = true;
     const std::vector<std::string> typo = {"while false; do", "    f [ 1 -eq 1 ]; then",
                                            "        echo BODY", "    fi", "done"};
@@ -398,8 +398,8 @@ int main() {
     cjsh_env::set_startup_active(false);
     config::interactive_mode = false;
     config::force_interactive = false;
-    g_shell = std::make_unique<Shell>();
-    g_shell->set_interactive_mode(false);
+    shell = std::make_unique<Shell>();
+    shell->set_interactive_mode(false);
     const bool tokens_ok = test_whitespace_and_locale();
     const bool diagnostics_ok = test_variable_diagnostics();
     const bool execution_ok = test_execution_variable_syntax();
@@ -408,7 +408,7 @@ int main() {
     const bool control_ok = test_control_validator_filter();
     const bool literal_keywords_ok = test_literal_control_keywords();
     const bool unexpected_then_ok = test_unexpected_then();
-    g_shell.reset();
+    shell.reset();
     if (tokens_ok && diagnostics_ok && execution_ok && assignments_ok && prime_loop_ok &&
         control_ok && literal_keywords_ok && unexpected_then_ok) {
         std::puts("All 8 validation token tests passed");

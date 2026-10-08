@@ -869,8 +869,8 @@ void SignalHandler::restore_original_handlers() {
 
 // one wait status must update both execution-side and user-facing job state.
 // limit broad reaping per call so a burst of children does not monopolize dispatch.
-void SignalHandler::reap_pending_children(Exec* shell_exec, bool managed_jobs_only) {
-    if (shell_exec == nullptr || s_sigchld_received == 0) {
+void SignalHandler::reap_pending_children(Exec* executor, bool managed_jobs_only) {
+    if (executor == nullptr || s_sigchld_received == 0) {
         return;
     }
     s_sigchld_received = 0;
@@ -890,7 +890,7 @@ void SignalHandler::reap_pending_children(Exec* shell_exec, bool managed_jobs_on
             return;
         }
         ++count;
-        shell_exec->handle_child_signal(pid, status);
+        executor->handle_child_signal(pid, status);
         JobManager::instance().handle_child_status(pid, status);
     }
     // leave work pending after a burst; never consume a status beyond the batch limit.
@@ -901,8 +901,7 @@ void SignalHandler::reap_pending_children(Exec* shell_exec, bool managed_jobs_on
 // consume pending work at a shell safe point. reap_children=false lets a blocking
 // foreground waiter remain the sole consumer of its children's wait statuses;
 // the unconsumed SIGCHLD flag keeps that work visible for a later reaper.
-SignalProcessingResult SignalHandler::process_pending_signals(Exec* shell_exec,
-                                                              bool reap_children) {
+SignalProcessingResult SignalHandler::process_pending_signals(Exec* executor, bool reap_children) {
     bool should_process = s_signal_pending.exchange(false, std::memory_order_acq_rel);
     if (!should_process && !has_direct_pending_signal()) {
         return {};
@@ -916,8 +915,8 @@ SignalProcessingResult SignalHandler::process_pending_signals(Exec* shell_exec,
 
         bool is_observed = is_signal_observed(SIGINT);
 
-        if (!is_observed && (shell_exec != nullptr)) {
-            auto jobs = shell_exec->get_jobs();
+        if (!is_observed && (executor != nullptr)) {
+            auto jobs = executor->get_jobs();
             for (const auto& job_pair : jobs) {
                 const auto& job = job_pair.second;
                 if (!job.background && !job.completed && !job.stopped) {
@@ -936,7 +935,7 @@ SignalProcessingResult SignalHandler::process_pending_signals(Exec* shell_exec,
     }
 
     if (reap_children) {
-        reap_pending_children(shell_exec);
+        reap_pending_children(executor);
     }
 
     // a trap handles the signal without automatically exiting. untrapped hangup

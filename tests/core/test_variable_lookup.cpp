@@ -43,7 +43,7 @@
 #include "shell_env.h"
 #include "variable_manager.h"
 
-std::unique_ptr<Shell> g_shell;
+std::unique_ptr<Shell> shell;
 
 namespace {
 bool expect(bool condition, const char* message) {
@@ -65,17 +65,17 @@ bool test_environment_import() {
         setenv(name.c_str(), value.c_str(), 1);
     }
     cjsh_env::set_shell_variable_value("__import_shell_only", "retained");
-    cjsh_env::sync_env_vars_from_system(*g_shell);
+    cjsh_env::sync_env_vars_from_system(*shell);
     for (const auto& [name, value] : values) {
         setenv(name.c_str(), "changed", 1);
         ok = expect(cjsh_env::shell_variable_is_set(name) &&
                         cjsh_env::get_shell_variable_value(name) == value &&
-                        g_shell->get_parser()->parse_command(": \"$" + name + "\"") ==
+                        shell->get_parser()->parse_command(": \"$" + name + "\"") ==
                             std::vector<std::string>({":", value}),
                     "import owns values and preserves empty values and embedded equals") &&
              ok;
     }
-    cjsh_env::sync_env_vars_from_system(*g_shell);
+    cjsh_env::sync_env_vars_from_system(*shell);
     for (const auto& [name, value] : values) {
         ok = expect(cjsh_env::get_shell_variable_value(name) == "changed",
                     "a subsequent import updates existing variables") &&
@@ -149,7 +149,7 @@ bool test_scalar_and_nameref_transitions() {
 }
 
 bool test_variable_presence_and_scope() {
-    auto& variables = g_shell->get_shell_script_interpreter()->get_variable_manager();
+    auto& variables = shell->get_interpreter()->get_variable_manager();
     bool ok = true;
     auto check = [&](const std::string& name, const std::string& value, bool present) {
         ok = expect(variables.get_variable_value(name) == value, (name + " value").c_str()) && ok;
@@ -615,8 +615,8 @@ int main() {
     cjsh_env::reset_shell_state();
     config::interactive_mode = false;
     config::force_interactive = false;
-    g_shell = std::make_unique<Shell>();
-    g_shell->set_interactive_mode(false);
+    shell = std::make_unique<Shell>();
+    shell->set_interactive_mode(false);
     const bool transitions_ok = test_scalar_and_nameref_transitions();
     const bool lookup_ok = test_variable_presence_and_scope();
     const bool expansion_ok = test_parameter_expansion_work();
@@ -626,7 +626,7 @@ int main() {
     const bool pattern_ok = test_pattern_matching();
     const bool endpoints_ok = test_pattern_endpoints_and_expansion();
     const bool frontiers_ok = test_extended_pattern_frontiers();
-    g_shell.reset();
+    shell.reset();
     if (!lookup_ok || !expansion_ok || !replacement_ok || !removal_ok || !import_ok ||
         !pattern_ok || !transitions_ok || !endpoints_ok || !frontiers_ok) {
         return 1;

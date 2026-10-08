@@ -69,7 +69,7 @@ std::optional<job_control_helpers::ResolvedJob> resolve_updated_control_job(
 }
 
 bool require_monitor_mode(const char* command) {
-    if (g_shell && g_shell->is_job_control_enabled()) {
+    if (shell && shell->is_job_control_enabled()) {
         return true;
     }
     print_error({ErrorType::RUNTIME_ERROR, command, "no job control", {"Use 'set -m' first"}});
@@ -132,7 +132,7 @@ int suspend_command(const std::vector<std::string>& args) {
             {ErrorType::RUNTIME_ERROR, "suspend", "cannot suspend a login shell; use -f", {}});
         return 1;
     }
-    if (!config::interactive_mode || !g_shell || !g_shell->suspend()) {
+    if (!config::interactive_mode || !shell || !shell->suspend()) {
         print_error({ErrorType::RUNTIME_ERROR,
                      "suspend",
                      "requires an interactive shell with a controlling terminal",
@@ -151,7 +151,7 @@ int bg_command(const std::vector<std::string>& args) {
     auto& job_manager = JobManager::instance();
     job_manager.update_job_statuses();
 
-    if (!g_shell || !g_shell->is_job_control_enabled()) {
+    if (!shell || !shell->is_job_control_enabled()) {
         if (job_manager.get_all_jobs().empty()) {
             (void)job_control_helpers::resolve_control_job_target({"bg"}, job_manager);
             return 1;
@@ -188,8 +188,8 @@ int bg_command(const std::vector<std::string>& args) {
             continue;
         }
 
-        if (g_shell && g_shell->shell_exec) {
-            g_shell->shell_exec->set_job_output_forwarding(job->pgid, false);
+        if (shell && shell->executor) {
+            shell->executor->set_job_output_forwarding(job->pgid, false);
         }
         if (!signal_job_processes(job, SIGCONT)) {
             print_error_errno({ErrorType::RUNTIME_ERROR, "bg", "SIGCONT", {}});
@@ -256,7 +256,7 @@ int fg_command(const std::vector<std::string>& args) {
 
     bool close_terminal = false;
     const int terminal_fd =
-        g_shell && g_shell->manages_terminal() ? open_controlling_terminal(close_terminal) : -1;
+        shell && shell->manages_terminal() ? open_controlling_terminal(close_terminal) : -1;
     bool terminal_control_acquired = false;
     struct termios shell_modes{};
     const bool shell_modes_saved = terminal_fd >= 0 && tcgetattr(terminal_fd, &shell_modes) == 0;
@@ -293,8 +293,8 @@ int fg_command(const std::vector<std::string>& args) {
         }
     }
 
-    if (g_shell && g_shell->shell_exec) {
-        g_shell->shell_exec->set_job_output_forwarding(job->pgid, true);
+    if (shell && shell->executor) {
+        shell->executor->set_job_output_forwarding(job->pgid, true);
     }
 
     if (job->state.load(std::memory_order_relaxed) == JobState::STOPPED &&
@@ -638,8 +638,8 @@ int wait_command(const std::vector<std::string>& args) {
             pid_t pid = waitpid(-1, &status, WUNTRACED | WCONTINUED);
             if (pid < 0) {
                 if (errno == EINTR) {
-                    if (g_shell) {
-                        (void)g_shell->process_pending_signals();
+                    if (shell) {
+                        (void)shell->process_pending_signals();
                     }
                     continue;
                 }
@@ -647,8 +647,8 @@ int wait_command(const std::vector<std::string>& args) {
             }
 
             auto changed_job = job_manager.get_job_by_pid(pid);
-            if (g_shell && g_shell->shell_exec) {
-                g_shell->shell_exec->handle_child_signal(pid, status);
+            if (shell && shell->executor) {
+                shell->executor->handle_child_signal(pid, status);
             }
             job_manager.handle_child_status(pid, status);
 
@@ -711,8 +711,8 @@ int wait_command(const std::vector<std::string>& args) {
         const int options = force_completion ? 0 : WUNTRACED;
         pid_t waited = waitpid(target.pid, &status, options);
         while (waited < 0 && errno == EINTR) {
-            if (g_shell) {
-                (void)g_shell->process_pending_signals();
+            if (shell) {
+                (void)shell->process_pending_signals();
             }
             waited = waitpid(target.pid, &status, options);
         }
@@ -854,8 +854,8 @@ int disown_command(const std::vector<std::string>& args) {
     for (const auto& job : targets) {
         if (mark_hup_only) {
             job->hup_protected = true;
-            if (g_shell && g_shell->shell_exec) {
-                g_shell->shell_exec->set_job_hup_protected(job->pgid, true);
+            if (shell && shell->executor) {
+                shell->executor->set_job_hup_protected(job->pgid, true);
             }
             continue;
         }
@@ -863,8 +863,8 @@ int disown_command(const std::vector<std::string>& args) {
         const int job_id = job->job_id;
         const pid_t pgid = job->pgid;
         job_manager.remove_job(job_id);
-        if (g_shell && g_shell->shell_exec) {
-            g_shell->shell_exec->remove_job_by_pgid(pgid);
+        if (shell && shell->executor) {
+            shell->executor->remove_job_by_pgid(pgid);
         }
     }
 

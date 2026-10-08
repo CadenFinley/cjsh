@@ -110,11 +110,11 @@ constexpr std::string_view kSignalExitExceptionPrefix = "__CJSH_SIGNAL_EXIT__:";
 // dispatch pending signals at evaluation boundaries and preserve an explicit exit
 // override. no value means evaluation may continue, not a successful command result.
 std::optional<int> collect_pending_signal_exit_code() {
-    if (!g_shell) {
+    if (!shell) {
         return std::nullopt;
     }
 
-    SignalProcessingResult pending = g_shell->process_pending_signals();
+    SignalProcessingResult pending = shell->process_pending_signals();
     int exit_code = shell_script_interpreter::detail::pending_signal_exit_code(pending);
     if (cjsh_env::exit_requested()) {
         return numeric_utils::parse_exit_status_or(cjsh_env::get_shell_variable_value("EXIT_CODE"),
@@ -492,13 +492,13 @@ int handle_runtime_exception(const std::string& text, const std::runtime_error& 
 
 }  // namespace
 
-ShellScriptInterpreter::ShellScriptInterpreter() : shell_parser(nullptr) {
+ShellScriptInterpreter::ShellScriptInterpreter() : parser(nullptr) {
 }
 
 ShellScriptInterpreter::~ShellScriptInterpreter() = default;
 
 void ShellScriptInterpreter::set_parser(Parser* parser) {
-    shell_parser = parser;
+    this->parser = parser;
 }
 
 void ShellScriptInterpreter::set_error_source(const std::string& source) {
@@ -510,10 +510,10 @@ const std::string& ShellScriptInterpreter::get_error_source() const {
 }
 
 std::vector<std::string> ShellScriptInterpreter::parse_into_lines(const std::string& script) {
-    if (!shell_parser) {
+    if (!parser) {
         return {};
     }
-    return shell_parser->parse_into_lines(script);
+    return parser->parse_into_lines(script);
 }
 
 ShellScriptInterpreter::SyntaxError::SyntaxError(size_t line_num, const std::string& msg,
@@ -556,7 +556,7 @@ int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content
         }
 
         int exit_code =
-            execute_block(shell_parser->parse_into_lines(subshell_content), true, preexpanded);
+            execute_block(parser->parse_into_lines(subshell_content), true, preexpanded);
         exit_code = read_exit_code_or(exit_code);
 
         int child_status = 0;
@@ -566,7 +566,7 @@ int ShellScriptInterpreter::execute_subshell(const std::string& subshell_content
         // exit() destroys function-local statics (including JobManager) before
         // the inherited shell cleanup callback, which then accesses freed state.
         // run shell hooks explicitly and leave C++ teardown to the parent.
-        g_shell->run_exit_handlers(exit_code);
+        shell->run_exit_handlers(exit_code);
         exit_code = read_exit_code_or(exit_code);
         (void)std::cout.flush();
         (void)std::cerr.flush();
@@ -745,11 +745,11 @@ int ShellScriptInterpreter::handle_env_assignment(const std::vector<std::string>
 // followed by another parse that repeats assignment or substitution side effects.
 std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
     const std::string& command_text, bool* function_call) {
-    if (!shell_parser || command_text.find_first_of("|&;<>!(){}`") != std::string::npos) {
+    if (!parser || command_text.find_first_of("|&;<>!(){}`") != std::string::npos) {
         return std::nullopt;
     }
 
-    std::vector<std::string> quick_args = shell_parser->parse_command(command_text);
+    std::vector<std::string> quick_args = parser->parse_command(command_text);
     if (quick_args.empty()) {
         return 0;
     }
@@ -768,7 +768,7 @@ std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
         std::stringstream buffer;
         buffer << f.rdbuf();
         const auto content = buffer.str();
-        auto nested_lines = shell_parser->parse_into_lines(content);
+        auto nested_lines = parser->parse_into_lines(content);
         return execute_block(nested_lines);
     }
 
@@ -795,7 +795,7 @@ std::optional<int> ShellScriptInterpreter::try_execute_quick_command(
         return run_pipeline({function_command});
     }
 
-    int exit_code = g_shell->execute_prepared_command(std::move(prepared));
+    int exit_code = shell->execute_prepared_command(std::move(prepared));
     return set_last_status(exit_code);
 }
 
@@ -838,8 +838,8 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
     // with the full dispatcher, including POSIX expansion before tokenization.
     const std::string program(word);
     if ((!config::is_posix_mode() || !aliases_preexpanded) &&
-        (g_shell->get_aliases().count(program) != 0 ||
-         (word.find('=') != std::string_view::npos && !g_shell->get_aliases().empty()))) {
+        (shell->get_aliases().count(program) != 0 ||
+         (word.find('=') != std::string_view::npos && !shell->get_aliases().empty()))) {
         return std::nullopt;
     }
 
@@ -849,8 +849,8 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
     }
     // signal traps can change aliases while pending signals are dispatched.
     if ((!config::is_posix_mode() || !aliases_preexpanded) &&
-        (g_shell->get_aliases().count(program) != 0 ||
-         (word.find('=') != std::string_view::npos && !g_shell->get_aliases().empty()))) {
+        (shell->get_aliases().count(program) != 0 ||
+         (word.find('=') != std::string_view::npos && !shell->get_aliases().empty()))) {
         return std::nullopt;
     }
     if (cjsh_env::exit_requested()) {
@@ -861,13 +861,13 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
         return set_last_status(128 + SIGINT);
     }
     const std::string text(command);
-    if (g_shell->get_shell_option(ShellOption::Verbose)) {
+    if (shell->get_shell_option(ShellOption::Verbose)) {
         std::cerr << text << '\n';
     }
     bool function_call = false;
     int code = 0;
     try {
-        Shell::ErrexitScope scope(g_shell.get(), false);
+        Shell::ErrexitScope scope(shell.get(), false);
         const auto result = try_execute_quick_command(text, &function_call);
         if (!result) {
             return std::nullopt;
@@ -884,7 +884,7 @@ std::optional<int> ShellScriptInterpreter::try_execute_simple_block(
         return set_last_status(*signal);
     }
     if (code != 0 && !is_control_flow_exit_code(code) &&
-        g_shell->should_abort_on_nonzero_exit(code)) {
+        shell->should_abort_on_nonzero_exit(code)) {
         return cjsh_env::posix_error_exit(code);
     }
     if (!function_call && is_control_flow_exit_code(code)) {
@@ -939,19 +939,19 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         }
     } validation_scope(this, skip_validation);
 
-    if (g_shell) {
-        g_shell->mark_terminal_dirty();
+    if (shell) {
+        shell->mark_terminal_dirty();
     }
     const bool effective_skip = skip_validation_mode;
     if (!effective_skip) {
         g_parameter_expansion_fatal_error = false;
     }
 
-    if (g_shell == nullptr) {
+    if (shell == nullptr) {
         print_error({ErrorType::FATAL_ERROR, "", "shell not initialized properly", {}});
     }
 
-    if (shell_parser == nullptr) {
+    if (parser == nullptr) {
         std::vector<std::string> empty_suggestions;
         ErrorInfo error(ErrorType::FATAL_ERROR, ErrorSeverity::CRITICAL, "",
                         "shell not initialized properly", empty_suggestions);
@@ -981,7 +981,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
     // Both dialects validate syntax without allowing expansion, function invocation,
     // or the quick execution path to produce side effects under noexec.
-    if (g_shell->get_shell_option(ShellOption::Noexec)) {
+    if (shell->get_shell_option(ShellOption::Noexec)) {
         return 0;
     }
     if (auto simple_result = try_execute_simple_block(lines)) {
@@ -1001,7 +1001,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     // failure in a tested condition controls branch selection rather than errexit.
     // suppress it for nested execution without changing the user's set -e option.
     evaluate_logical_condition = [&](const std::string& condition) -> int {
-        Shell::ErrexitScope scope(g_shell.get());
+        Shell::ErrexitScope scope(shell.get());
         // conditions from if and elif headers are normalized through this shared path
         return evaluate_logical_condition_internal(condition, execute_simple_or_pipeline);
     };
@@ -1046,9 +1046,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                    !command.here_doc.empty();
         };
 
-        if (shell_parser &&
+        if (parser &&
             (text.find("&&") != std::string::npos || text.find("||") != std::string::npos)) {
-            std::vector<LogicalCommand> logical_cmds = shell_parser->parse_logical_commands(text);
+            std::vector<LogicalCommand> logical_cmds = parser->parse_logical_commands(text);
             bool has_logical_op = false;
             for (const auto& lc : logical_cmds) {
                 if (!lc.op.empty()) {
@@ -1084,7 +1084,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
                     last_executed_index = idx;
                     executed_command = true;
-                    Shell::ErrexitScope scope(g_shell.get(), idx + 1 < logical_cmds.size());
+                    Shell::ErrexitScope scope(shell.get(), idx + 1 < logical_cmds.size());
                     logical_status =
                         execute_simple_or_pipeline_impl(logical_cmds[idx].command, true, nullptr);
 
@@ -1098,9 +1098,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             }
         }
 
-        if (allow_semicolon_split && shell_parser &&
-            text.find_first_of(";&") != std::string::npos) {
-            auto semicolon_commands = shell_parser->parse_semicolon_commands(text);
+        if (allow_semicolon_split && parser && text.find_first_of(";&") != std::string::npos) {
+            auto semicolon_commands = parser->parse_semicolon_commands(text);
 
             if (semicolon_commands.size() > 1) {
                 int last_code = 0;
@@ -1120,9 +1119,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         return last_code;
                     }
 
-                    if (g_shell && g_shell->should_abort_on_nonzero_exit(last_code) &&
-                        last_code != 0 && !is_control_flow_exit_code(last_code) &&
-                        !errexit_exempt) {
+                    if (shell && shell->should_abort_on_nonzero_exit(last_code) && last_code != 0 &&
+                        !is_control_flow_exit_code(last_code) && !errexit_exempt) {
                         return cjsh_env::posix_error_exit(last_code);
                     }
                 }
@@ -1132,7 +1130,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
 
         if (text == "coproc" || (text.size() > 6 && text.rfind("coproc", 0) == 0 &&
                                  std::isspace(static_cast<unsigned char>(text[6])) != 0)) {
-            return set_last_status(coproc_script_command(text, g_shell.get()));
+            return set_last_status(coproc_script_command(text, shell.get()));
         }
 
         std::vector<std::string> parsed_args;
@@ -1155,8 +1153,8 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             try {
                 std::string expanded_expression = expand_all_substitutions(
                     arithmetic_command_expression, execute_simple_or_pipeline);
-                if (shell_parser != nullptr) {
-                    shell_parser->expand_env_vars(expanded_expression);
+                if (parser != nullptr) {
+                    parser->expand_env_vars(expanded_expression);
                 }
 
                 long long result = evaluate_arithmetic_expression(expanded_expression);
@@ -1195,7 +1193,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 return *quick_result;
             }
 
-            auto merged_tokens = shell_parser->tokenize_command_cached(text);
+            auto merged_tokens = parser->tokenize_command_cached(text);
             if (!merged_tokens.empty()) {
                 auto requires_operand = [&](const std::string& token) -> bool {
                     if (auto redirect = parse_redirect_operator(token)) {
@@ -1227,7 +1225,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 }
             }
 
-            cmds = shell_parser->parse_pipeline_with_preprocessing(text);
+            cmds = parser->parse_pipeline_with_preprocessing(text);
 
             has_multiple_commands = cmds.size() > 1;
             has_redir_or_pipe = has_multiple_commands;
@@ -1278,15 +1276,15 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         std::stringstream buffer;
                         buffer << f.rdbuf();
                         const auto content = buffer.str();
-                        auto nested_lines = shell_parser->parse_into_lines(content);
+                        auto nested_lines = parser->parse_into_lines(content);
                         return execute_block(nested_lines);
                     }
 
                     auto stmt_keyword = parse_statement_keyword_prefix(prog);
                     if (stmt_keyword.has_value() && *stmt_keyword != StatementKeyword::Case) {
                         std::vector<std::string> block_lines;
-                        if (shell_parser) {
-                            block_lines = shell_parser->parse_into_lines(text);
+                        if (parser) {
+                            block_lines = parser->parse_into_lines(text);
                         }
                         if (block_lines.empty()) {
                             block_lines.push_back(text);
@@ -1296,16 +1294,16 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         int exit_code = 0;
                         bool handled_with_redirections = false;
 
-                        if (g_shell && g_shell->shell_exec) {
+                        if (shell && shell->executor) {
                             try {
                                 std::vector<Command> control_cmds =
-                                    shell_parser->parse_pipeline_with_preprocessing(text);
+                                    parser->parse_pipeline_with_preprocessing(text);
                                 if (!control_cmds.empty()) {
                                     const Command& control_cmd = control_cmds[0];
                                     std::string command_name =
                                         control_cmd.args.empty() ? prog : control_cmd.args[0];
                                     bool action_invoked = false;
-                                    exit_code = g_shell->shell_exec->run_with_command_redirections(
+                                    exit_code = shell->executor->run_with_command_redirections(
                                         control_cmd, run_block, command_name, false,
                                         &action_invoked);
                                     if (!action_invoked) {
@@ -1362,7 +1360,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     }
 
                     if (c.args.size() >= 2) {
-                        int exit_code = g_shell ? g_shell->execute(c.args[1]) : 1;
+                        int exit_code = shell ? shell->execute(c.args[1]) : 1;
                         return set_last_status(exit_code);
                     }
 
@@ -1391,7 +1389,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                             pipeline_text += c.auto_background_on_stop_silent ? " &^!" : " &^";
                         }
                         std::vector<Command> pipeline_cmds =
-                            shell_parser->parse_pipeline_with_preprocessing(pipeline_text);
+                            parser->parse_pipeline_with_preprocessing(pipeline_text);
                         return run_pipeline(pipeline_cmds);
                     }
 
@@ -1411,9 +1409,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                         functions.count(expanded_args[function_index]) != 0U) {
                         return run_pipeline(cmds);
                     }
-                    int exit_code = g_shell->execute_command(expanded_args, c.background,
-                                                             c.auto_background_on_stop,
-                                                             c.auto_background_on_stop_silent);
+                    int exit_code = shell->execute_command(expanded_args, c.background,
+                                                           c.auto_background_on_stop,
+                                                           c.auto_background_on_stop_silent);
                     return set_last_status(exit_code);
                 }
             }
@@ -1465,7 +1463,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             return std::make_pair(expanded, std::vector<std::string>{});
         };
         return case_evaluator::handle_inline_case(candidate, execute_simple_or_pipeline,
-                                                  allow_command_substitution, true, shell_parser,
+                                                  allow_command_substitution, true, parser,
                                                   pattern_match_fn, cmd_sub_expander);
     };
 
@@ -1496,7 +1494,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
     auto handle_if_block = [&](const std::vector<std::string>& src_lines, size_t& idx) -> int {
         return conditional_evaluator::handle_if_block(
             src_lines, idx, execute_block_wrapper, execute_simple_or_pipeline,
-            evaluate_logical_condition, shell_parser, should_abort_for_parameter_expansion);
+            evaluate_logical_condition, parser, should_abort_for_parameter_expansion);
     };
 
     auto handle_for_block = [&](const std::vector<std::string>& src_lines, size_t& idx) -> int {
@@ -1505,12 +1503,12 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         return loop_evaluator::handle_for_block(
             src_lines, idx, execute_block_skip_validation,
             [this](const std::string& expr) { return evaluate_arithmetic_expression(expr); },
-            execute_simple_or_pipeline, shell_parser, should_abort_for_parameter_expansion);
+            execute_simple_or_pipeline, parser, should_abort_for_parameter_expansion);
     };
 
     auto handle_select_block = [&](const std::vector<std::string>& src_lines, size_t& idx) -> int {
         return loop_evaluator::handle_select_block(src_lines, idx, execute_block_skip_validation,
-                                                   execute_simple_or_pipeline, shell_parser,
+                                                   execute_simple_or_pipeline, parser,
                                                    should_abort_for_parameter_expansion);
     };
 
@@ -1528,7 +1526,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         size_t j = idx;
         bool found_in = false;
 
-        auto header_tokens = shell_parser->parse_command(header_accum);
+        auto header_tokens = parser->parse_command(header_accum);
         if (std::find(header_tokens.begin(), header_tokens.end(), "in") != header_tokens.end()) {
             found_in = true;
         }
@@ -1539,7 +1537,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 continue;
             }
             header_accum += " " + cur;
-            header_tokens = shell_parser->parse_command(header_accum);
+            header_tokens = parser->parse_command(header_accum);
             if (std::find(header_tokens.begin(), header_tokens.end(), "in") !=
                 header_tokens.end()) {
                 found_in = true;
@@ -1581,7 +1579,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             return 1;
         }
 
-        std::string case_value = case_evaluator::normalize_case_value(raw_case_value, shell_parser);
+        std::string case_value = case_evaluator::normalize_case_value(raw_case_value, parser);
 
         std::string inline_segment;
         if (expanded_header.length() >= in_pos + 4) {
@@ -1623,9 +1621,9 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             return pattern_matcher.matches_pattern(text, pattern, true);
         };
 
-        auto case_result = case_evaluator::evaluate_case_patterns(
-            combined_patterns, case_value, false, execute_simple_or_pipeline, shell_parser,
-            case_pattern_match_fn);
+        auto case_result = case_evaluator::evaluate_case_patterns(combined_patterns, case_value,
+                                                                  false, execute_simple_or_pipeline,
+                                                                  parser, case_pattern_match_fn);
         idx = esac_index;
         return case_result.first ? case_result.second : 0;
     };
@@ -1634,14 +1632,14 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         // while blocks use the shared condition loop evaluator
         return loop_evaluator::handle_condition_loop_block(
             loop_evaluator::LoopCondition::WHILE, src_lines, idx, execute_block_skip_validation,
-            execute_simple_or_pipeline, shell_parser, should_abort_for_parameter_expansion);
+            execute_simple_or_pipeline, parser, should_abort_for_parameter_expansion);
     };
 
     auto handle_until_block = [&](const std::vector<std::string>& src_lines, size_t& idx) -> int {
         // until blocks use the same evaluator with inverted continuation condition
         return loop_evaluator::handle_condition_loop_block(
             loop_evaluator::LoopCondition::UNTIL, src_lines, idx, execute_block_skip_validation,
-            execute_simple_or_pipeline, shell_parser, should_abort_for_parameter_expansion);
+            execute_simple_or_pipeline, parser, should_abort_for_parameter_expansion);
     };
 
     // walk the validated block in execution order. structural handlers advance the
@@ -1657,7 +1655,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         const auto& raw_line = lines[line_index];
         std::string line = trim(strip_inline_comment(raw_line));
         if (config::is_posix_mode() && !aliases_preexpanded) {
-            line = shell_parser->expand_aliases(line);
+            line = parser->expand_aliases(line);
         }
 
         if (line.empty()) {
@@ -1665,7 +1663,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         }
 
         if (should_skip_line(line)) {
-            if (g_shell != nullptr && g_shell->get_shell_option(ShellOption::Verbose)) {
+            if (shell != nullptr && shell->get_shell_option(ShellOption::Verbose)) {
                 std::cerr << line << '\n';
             }
             continue;
@@ -1698,7 +1696,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         if (function_evaluator::parse_function_header(line, true)) {
             auto parse_result = function_evaluator::parse_and_register_functions(
                 line, lines, line_index, functions, trim, strip_inline_comment,
-                [this](const std::string& body) { return shell_parser->parse_into_lines(body); });
+                [this](const std::string& body) { return parser->parse_into_lines(body); });
 
             if (!parse_result.remaining_line.empty()) {
                 line = parse_result.remaining_line;
@@ -1777,7 +1775,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             continue;
         }
 
-        std::vector<LogicalCommand> lcmds = shell_parser->parse_logical_commands(line);
+        std::vector<LogicalCommand> lcmds = parser->parse_logical_commands(line);
         if (lcmds.empty()) {
             continue;
         }
@@ -1843,7 +1841,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 continue;
             }
 
-            auto semis = shell_parser->parse_semicolon_commands(lc.command);
+            auto semis = parser->parse_semicolon_commands(lc.command);
             if (semis.empty()) {
                 last_code = 0;
                 continue;
@@ -1855,7 +1853,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     segs.push_back(semi);
                 }
                 for (const auto& cmd_text : segs) {
-                    if (g_shell != nullptr && g_shell->get_shell_option(ShellOption::Verbose)) {
+                    if (shell != nullptr && shell->get_shell_option(ShellOption::Verbose)) {
                         std::string verbose_text = trim(strip_inline_comment(cmd_text));
                         if (!verbose_text.empty()) {
                             std::cerr << verbose_text << '\n';
@@ -1878,7 +1876,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                             if (body_close_pos != std::string::npos) {
                                 std::string body_part = trim(t.substr(
                                     body_start_pos + 1, body_close_pos - body_start_pos - 1));
-                                body_lines = shell_parser->parse_into_lines(body_part);
+                                body_lines = parser->parse_into_lines(body_part);
                                 if (readonly_function_manager_is(func_name)) {
                                     print_error({ErrorType::INVALID_ARGUMENT,
                                                  "readonly",
@@ -2011,7 +2009,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     bool is_function_call = false;
                     try {
                         Shell::ErrexitScope scope(
-                            g_shell.get(),
+                            shell.get(),
                             !lc.op.empty() ||
                                 (!cmd_text.empty() && cmd_text[0] == '!' &&
                                  (cmd_text.size() == 1 ||
@@ -2040,7 +2038,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                     // errexit applies to ordinary failures, not loop/function
                     // control sentinels or failures used to decide a logical list.
                     const bool is_nonfinal_logical_command = !lc.op.empty();
-                    if (g_shell && g_shell->should_abort_on_nonzero_exit(code) && code != 0 &&
+                    if (shell && shell->should_abort_on_nonzero_exit(code) && code != 0 &&
                         !is_nonfinal_logical_command && !last_result_errexit_exempt) {
                         if (code != 253 && code != 254 && code != 255) {
                             return cjsh_env::posix_error_exit(code);
@@ -2089,7 +2087,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
         }
 
         if (last_code == exit_command_not_found) {
-            if (g_shell && g_shell->should_abort_on_nonzero_exit(last_code)) {
+            if (shell && shell->should_abort_on_nonzero_exit(last_code)) {
                 return cjsh_env::posix_error_exit(last_code);
             }
         } else if (is_control_flow_exit_code(last_code)) {
@@ -2171,8 +2169,8 @@ int ShellScriptInterpreter::evaluate_logical_condition_internal(
         if (depth == 0 && end + 1 < processed_cond.length()) {
             std::string expr = processed_cond.substr(start, end - start);
 
-            if (shell_parser != nullptr) {
-                shell_parser->expand_env_vars(expr);
+            if (parser != nullptr) {
+                parser->expand_env_vars(expr);
             }
 
             try {
@@ -2240,8 +2238,8 @@ long long ShellScriptInterpreter::evaluate_arithmetic_expression(const std::stri
 // publish scalar status together with the executor's most recent pipeline vector.
 // callers returning internal control sentinels can bypass publication until consumed.
 int ShellScriptInterpreter::set_last_status(int code) {
-    Exec* exec_ptr = (g_shell && g_shell->shell_exec) ? g_shell->shell_exec.get() : nullptr;
-    pipeline_status_utils::apply_execution_status_env(code, exec_ptr);
+    Exec* executor = (shell && shell->executor) ? shell->executor.get() : nullptr;
+    pipeline_status_utils::apply_execution_status_env(code, executor);
 
     return code;
 }
@@ -2249,12 +2247,12 @@ int ShellScriptInterpreter::set_last_status(int code) {
 // parsed commands cross into process/redirection ownership here. report executor
 // diagnostics before exposing its result to subsequent expansions and conditions.
 int ShellScriptInterpreter::run_pipeline(const std::vector<Command>& cmds) {
-    if (!g_shell || !g_shell->shell_exec) {
+    if (!shell || !shell->executor) {
         return set_last_status(1);
     }
 
-    int exit_code = g_shell->shell_exec->execute_pipeline(cmds);
-    g_shell->shell_exec->print_error_if_needed(exit_code);
+    int exit_code = shell->executor->execute_pipeline(cmds);
+    shell->executor->print_error_if_needed(exit_code);
     return set_last_status(exit_code);
 }
 
@@ -2264,9 +2262,9 @@ int ShellScriptInterpreter::run_pipeline(const std::vector<Command>& cmds) {
 std::string ShellScriptInterpreter::expand_parameter_expression(const std::string& param_expr,
                                                                 bool quoted) {
     auto var_reader = [this](const std::string& name) -> std::string {
-        if (config::is_posix_mode() && name == "-" && shell_parser) {
+        if (config::is_posix_mode() && name == "-" && parser) {
             std::string flags = "$-";
-            shell_parser->expand_env_vars(flags);
+            parser->expand_env_vars(flags);
             return flags;
         }
         return variable_manager.get_variable_value(name);
@@ -2307,9 +2305,8 @@ std::string ShellScriptInterpreter::expand_parameter_expression(const std::strin
     };
 
     auto word_expander = [this](const std::string& word) -> std::string {
-        std::string expanded = expand_all_substitutions(word, [](const std::string& command) {
-            return g_shell ? g_shell->execute(command) : 1;
-        });
+        std::string expanded = expand_all_substitutions(
+            word, [](const std::string& command) { return shell ? shell->execute(command) : 1; });
         std::string value;
         size_t start = 0;
         bool single = false;
@@ -2319,7 +2316,7 @@ std::string ShellScriptInterpreter::expand_parameter_expression(const std::strin
             }
             std::string part = expanded.substr(start, i - start);
             if (!single) {
-                shell_parser->expand_env_vars_selective(part);
+                parser->expand_env_vars_selective(part);
             }
             value += part;
             if (i < expanded.size()) {
@@ -2346,15 +2343,14 @@ std::string ShellScriptInterpreter::expand_parameter_expression(const std::strin
         if (!config::is_posix_mode() || !quoted) {
             return word_expander(word);
         }
-        std::string source = expand_all_substitutions(word, [](const std::string& command) {
-            return g_shell ? g_shell->execute(command) : 1;
-        });
+        std::string source = expand_all_substitutions(
+            word, [](const std::string& command) { return shell ? shell->execute(command) : 1; });
         std::string value;
         std::string part;
         char quote = '\0';
         auto flush = [&] {
             if (quote != '\'') {
-                shell_parser->expand_env_vars_selective(part);
+                parser->expand_env_vars_selective(part);
             }
             (void)strip_subst_literal_markers(part);
             value += strip_noenv_sentinels(part).first;
