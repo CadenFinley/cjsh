@@ -11,13 +11,37 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+### Added
+
+- Add `cjshopt scrollbars on|off|status` and corresponding isocline APIs to control input and menu scrollbars. Scrollbars remain enabled by default.
+- Add scrollbars for multiline input clipped by line limits, terminal height, or helper rows. With prompt mouse capture enabled, support track clicks and thumb dragging.
+- Add mouse-wheel navigation over scrollable multiline input in simple and smart mouse modes. Each wheel event moves the cursor one rendered row.
+- Add combined AddressSanitizer and UndefinedBehaviorSanitizer CI checks, plus a seeded parser fuzzer with bounded CI runs and saved failure artifacts. Expose the `CJSH_ENABLE_UBSAN` and `CJSH_BUILD_FUZZERS` build options.
+
+### Changed
+
+- Reuse bounded token caches for commands, aliases, pipelines, and redirections. Skip variable expansion and marker scans when input has no relevant syntax.
+- Extend optimized pattern-endpoint matching to supported ASCII patterns in UTF-8 locales while retaining locale-sensitive fallback behavior.
+- Centralize `cjshopt` dispatch, help, and completions in one registry for all 54 subcommands.
+- Use one ordered representation for redirections and shared job records for execution and job control. Remove duplicate expansion, redirection, and child-status paths.
+- Avoid repeated completion canonicalization and hash lookups. Use automatic cleanup for completion sessions and shared handlers for editor submission and menu mouse input.
+- Move compiled test executables and helper libraries into `<build-dir>/tests/`. Keep the shell executable at `<build-dir>/cjsh`.
+- Keep release memory limits enabled while reporting the RSS budget as skipped in sanitizer builds. Other resource checks remain active.
+
 ### Removed
 
 - Remove unused core helpers, fields, metadata, build definitions, test scaffolding, and an unreferenced documentation image. Limit isocline cleanup to unreferenced private helpers and declarations.
 
 ### Fixed
 
-- Correct invocation flag meanings, interactive `huponexit` and status-hint defaults, the startup configuration link, and WSL compiler guidance. Remove unsupported editor benchmark claims and obsolete debug-log instructions.
+- Make noninteractive `-n` and `noexec` check syntax without expansion or execution in both dialects. Interactive shells warn and ignore the option, with normal startup-file and PATH initialization.
+- Keep exit statuses 253–255 as ordinary command results. Track `return`, `break`, and `continue` separately, and restore loop scope across nested evaluation and traps.
+- Preserve `&&` and `||` after arithmetic expansion, including nested arithmetic, subshells, and short-circuited commands.
+- Prevent `printf` from advancing beyond missing or exhausted arguments, including missing dynamic width and precision values.
+- Preserve libc behavior on platforms that retry failed multibyte glob matches byte by byte.
+- Keep multiline input rendering stable during scrollbar paging and dragging, clear stale row text, and remove the scrollbar on submission.
+- Fix isocline's amalgamated include order so fuzzy-matching helpers are available before string-buffer code.
+- Fix documentation for invocation flags, interactive `huponexit` and status-hint defaults, the startup configuration link, and WSL compiler guidance. Remove unsupported editor benchmark claims and obsolete debug-log instructions.
 
 ## [1.5.10] - 2026-10-07
 
