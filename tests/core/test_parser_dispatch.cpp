@@ -45,6 +45,7 @@
 #include "interpreter_utils.h"
 #include "parser.h"
 #include "shell.h"
+#include "shell_dialect.h"
 #include "shell_env.h"
 #include "tokenizer.h"
 #include "variable_expander.h"
@@ -287,12 +288,24 @@ void test_repeated_expansion(Parser& parser) {
         expect(
             parser.parse_command(": \"$profile_value\"") == std::vector<std::string>({":", value}),
             "repeated command text expands the current variable value");
+        const auto pipeline = parser.parse_pipeline_with_preprocessing(
+            ": \"$profile_value\" >\"out-$profile_value\"");
+        expect(pipeline.size() == 1 && pipeline[0].args == std::vector<std::string>({":", value}) &&
+                   pipeline[0].output_file == std::string("out-") + value &&
+                   pipeline[0].redirection_order.size() == 1 &&
+                   pipeline[0].redirection_order[0].value == std::string("out-") + value,
+               "repeated pipeline tokens expand current arguments and ordered redirection targets");
     }
     for (const char* value : {"first", "second"}) {
         parser.set_aliases({{"profile_alias", std::string(": ") + value}});
         expect(parser.parse_command("profile_alias 'arg'") ==
                    std::vector<std::string>({":", value, "arg"}),
                "repeated command text uses current aliases");
+        const auto pipeline =
+            parser.parse_pipeline_with_preprocessing("profile_alias 'arg' >/dev/null");
+        expect(pipeline.size() == 1 &&
+                   pipeline[0].args == std::vector<std::string>({":", value, "arg"}),
+               "repeated pipeline tokens use current aliases");
     }
     parser.set_aliases({});
     g_shell->execute("profile_value='a:b c'");
@@ -300,10 +313,16 @@ void test_repeated_expansion(Parser& parser) {
     expect(parser.parse_command("echo $profile_value") ==
                std::vector<std::string>({"echo", "a", "b c"}),
            "field splitting uses changed IFS");
+    expect(parser.parse_pipeline_with_preprocessing("echo $profile_value >/dev/null")[0].args ==
+               std::vector<std::string>({"echo", "a", "b c"}),
+           "pipeline field splitting uses current IFS");
     g_shell->execute("IFS=' '");
     expect(parser.parse_command("echo $profile_value") ==
                std::vector<std::string>({"echo", "a:b", "c"}),
            "repeated command text does not cache IFS");
+    expect(parser.parse_pipeline_with_preprocessing("echo $profile_value >/dev/null")[0].args ==
+               std::vector<std::string>({"echo", "a:b", "c"}),
+           "repeated pipeline tokens do not cache IFS");
     g_shell->execute("unset IFS");
     const bool old_extglob = config::extglob_enabled;
     for (bool enabled : {false, true, false}) {
@@ -313,8 +332,36 @@ void test_repeated_expansion(Parser& parser) {
         expect(parser.parse_command(": @(missing-one|missing-two)") ==
                    fresh.parse_command(": @(missing-one|missing-two)"),
                "tokenization reflects extglob changes");
+        expect(parser.tokenize_command_cached(": @(missing-one|missing-two) >/dev/null") ==
+                   Tokenizer::tokenize_command(": @(missing-one|missing-two) >/dev/null"),
+               "shared lexical tokens reflect extglob changes");
     }
     config::extglob_enabled = old_extglob;
+
+    const auto saved_dialect = config::shell_dialect();
+    for (const auto dialect :
+         {config::ShellDialect::Cjsh, config::ShellDialect::Posix, config::ShellDialect::Cjsh}) {
+        config::set_shell_dialect(dialect);
+        expect(parser.tokenize_command_cached(": a'quoted'b >out") ==
+                   Tokenizer::tokenize_command(": a'quoted'b >out"),
+               "shared lexical tokens reflect dialect changes");
+    }
+    config::set_shell_dialect(config::ShellDialect::Posix);
+    // Tilde tokenization also protects characters selected by the current IFS.
+    const std::string saved_ifs = cjsh_env::get_shell_variable_value("IFS");
+    const bool had_ifs = cjsh_env::shell_variable_is_set("IFS");
+    for (const char* ifs : {"/", ":", " "}) {
+        (void)cjsh_env::set_shell_variable_value("IFS", ifs);
+        expect(parser.tokenize_command_cached(": ~ >/dev/null") ==
+                   Tokenizer::tokenize_command(": ~ >/dev/null"),
+               "POSIX tilde tokens are refreshed after environment changes");
+    }
+    if (had_ifs) {
+        (void)cjsh_env::set_shell_variable_value("IFS", saved_ifs);
+    } else {
+        (void)cjsh_env::unset_shell_variable_value("IFS");
+    }
+    config::set_shell_dialect(saved_dialect);
 }
 
 void test_simple_glob_matches_libc() {

@@ -36,7 +36,7 @@ CheckOptions:
   # Include their portable public counterparts instead of SDK-private paths.
   # Keep sys/types.h too: its types are defined in the ignored _types headers.
   - key:             misc-include-cleaner.IgnoreHeaders
-    value:           'MacOSX[^/]*\.sdk/usr/include/(_(stdio|stdlib|time)\.h|machine/limits\.h|sys/(_[^/]*\.h|_types/[^/]*\.h|dirent\.h|errno\.h|fcntl\.h|poll\.h|signal\.h|ttycom\.h|types\.h|unistd\.h))'
+    value:           'MacOSX[^/]*\.sdk/usr/include/(_(langinfo|stdio|stdlib|time)\.h|machine/limits\.h|sys/(_[^/]*\.h|_types/[^/]*\.h|dirent\.h|errno\.h|fcntl\.h|poll\.h|signal\.h|ttycom\.h|types\.h|unistd\.h))'
   - key:             cert-dcl16-c.NewSuffixes
     value:           'L;LL;LU;LLU'
   - key:             cert-oop54-cpp.WarnOnlyIfThisHasSuspiciousField

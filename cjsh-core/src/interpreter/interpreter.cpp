@@ -1195,7 +1195,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                 return *quick_result;
             }
 
-            auto merged_tokens = Tokenizer::tokenize_command(text);
+            auto merged_tokens = shell_parser->tokenize_command_cached(text);
             if (!merged_tokens.empty()) {
                 auto requires_operand = [&](const std::string& token) -> bool {
                     if (auto redirect = parse_redirect_operator(token)) {

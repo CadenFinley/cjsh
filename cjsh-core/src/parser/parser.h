@@ -131,6 +131,8 @@ class Parser {
     }
 
     std::vector<std::string> parse_command(const std::string& cmdline);
+    // Reuse lexical words across validation and execution, before live expansion.
+    std::vector<std::string> tokenize_command_cached(const std::string& cmdline);
     std::string expand_aliases(const std::string& source) const;
     std::vector<Command> parse_pipeline(const std::string& command);
     std::vector<LogicalCommand> parse_logical_commands(const std::string& command);

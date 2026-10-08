@@ -29,13 +29,16 @@
 #include "pattern_matcher.h"
 
 #include <fnmatch.h>
+#include <langinfo.h>
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cwchar>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -488,16 +491,33 @@ bool PatternMatcher::matches_pattern(const std::string& text, const std::string&
 std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std::string& text,
                                                                        const std::string& pattern,
                                                                        bool longest) const {
-    if (MB_CUR_MAX > 1) {
-        return std::nullopt;
+    const bool multibyte = MB_CUR_MAX > 1;
+    if (multibyte) {
+        // UTF-8 character boundaries are independent of preceding input. Keep
+        // other encodings on the locale matcher, including stateful encodings.
+        const std::string_view codeset(nl_langinfo(CODESET));
+        if (codeset != "UTF-8" && codeset != "UTF8") {
+            return std::nullopt;
+        }
     }
     const auto& compiled = compiled_pattern_for(pattern, false);
     // Non-repeating groups can share suffix results just like ordinary globs.
     // Repetition and negation still use the general matcher; do not change their
     // endpoint semantics by treating them as simple alternatives.
-    const auto supported_sequence = [](const auto& self,
-                                       const std::vector<PatternNode>& sequence) -> bool {
+    const auto supported_sequence = [multibyte](const auto& self,
+                                                const std::vector<PatternNode>& sequence) -> bool {
         for (const auto& node : sequence) {
+            // Keep locale-sensitive bracket expressions, non-ASCII literals,
+            // and the general extglob matcher's byte semantics on the fallback.
+            // Ordinary ASCII patterns can share endpoints in UTF-8 when
+            // wildcards advance over complete input characters.
+            if (multibyte &&
+                (node.kind == PatternNodeKind::CharacterClass ||
+                 node.kind == PatternNodeKind::ExtendedGroup ||
+                 (node.kind == PatternNodeKind::Literal &&
+                  (node.value == '\0' || static_cast<unsigned char>(node.value) >= 128)))) {
+                return false;
+            }
             if (node.kind != PatternNodeKind::ExtendedGroup) {
                 continue;
             }
@@ -519,6 +539,28 @@ std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std
     }
 
     const size_t no_match = std::string::npos;
+    std::vector<size_t> next_character;
+    if (multibyte) {
+        // fnmatch consumes NUL-terminated strings; preserve its fallback for
+        // embedded NULs and invalid/incomplete multibyte sequences.
+        if (text.find('\0') != std::string::npos) {
+            return std::nullopt;
+        }
+        if (std::any_of(text.begin(), text.end(), [](unsigned char ch) { return ch >= 128; })) {
+            next_character.assign(text.size() + 1, no_match);
+            std::mbstate_t state{};
+            for (size_t pos = 0; pos < text.size();) {
+                const size_t length = std::mbrlen(text.data() + pos, text.size() - pos, &state);
+                if (length == static_cast<size_t>(-1) || length == static_cast<size_t>(-2) ||
+                    length == 0) {
+                    return std::nullopt;
+                }
+                next_character[pos] = pos + length;
+                pos += length;
+            }
+            next_character[text.size()] = text.size();
+        }
+    }
     const auto choose = [longest](size_t left, size_t right) {
         if (left == no_match) {
             return right;
@@ -552,17 +594,33 @@ std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std
             }
             current[text.size()] =
                 node->kind == PatternNodeKind::AnyString ? next[text.size()] : no_match;
-            for (size_t pos = text.size(); pos > 0;) {
-                --pos;
+            const auto match_character = [&](size_t pos, size_t following) {
                 if (node->kind == PatternNodeKind::AnyString) {
-                    current[pos] = choose(next[pos], current[pos + 1]);
+                    current[pos] = choose(next[pos], current[following]);
                 } else {
                     const bool matches =
                         node->kind == PatternNodeKind::AnyCharacter ||
-                        (node->kind == PatternNodeKind::Literal && node->value == text[pos]) ||
+                        (node->kind == PatternNodeKind::Literal && following == pos + 1 &&
+                         node->value == text[pos]) ||
                         (node->kind == PatternNodeKind::CharacterClass &&
                          character_class_matches(text[pos], node->character_class));
-                    current[pos] = matches ? next[pos + 1] : no_match;
+                    current[pos] = matches ? next[following] : no_match;
+                }
+            };
+            if (next_character.empty()) {
+                for (size_t pos = text.size(); pos > 0;) {
+                    --pos;
+                    match_character(pos, pos + 1);
+                }
+            } else {
+                for (size_t pos = text.size(); pos > 0;) {
+                    --pos;
+                    const size_t following = next_character[pos];
+                    if (following == no_match) {
+                        current[pos] = no_match;
+                    } else {
+                        match_character(pos, following);
+                    }
                 }
             }
             next.swap(current);
@@ -576,6 +634,13 @@ std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std
         std::vector<size_t> continuation(text.size() + 1);
         for (size_t pos = 0; pos <= text.size(); ++pos) {
             continuation[pos] = pos;
+        }
+        if (!next_character.empty()) {
+            for (size_t pos = 0; pos <= text.size(); ++pos) {
+                if (next_character[pos] == no_match) {
+                    continuation[pos] = no_match;
+                }
+            }
         }
         const auto next =
             sequence_endpoints(sequence_endpoints, alternative, std::move(continuation));

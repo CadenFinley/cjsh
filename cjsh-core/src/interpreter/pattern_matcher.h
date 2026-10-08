@@ -50,6 +50,9 @@ class PatternMatcher {
     // One endpoint per starting byte, or string::npos when no substring matches.
     // Repeating/negated extended groups return nullopt for the general matcher;
     // ordinary globs and nested @() and ?() alternatives share suffix results.
+    // In UTF-8 locales, ASCII literal/*/? patterns use character boundaries;
+    // other multibyte encodings, bracket expressions, non-ASCII patterns, and
+    // extended groups fall back.
     std::optional<std::vector<size_t>> match_end_positions(const std::string& text,
                                                            const std::string& pattern,
                                                            bool longest) const;

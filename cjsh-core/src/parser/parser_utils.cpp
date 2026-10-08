@@ -1125,6 +1125,9 @@ bool has_line_continuation_suffix(const std::string& text, bool trim_newlines) {
 }
 
 std::pair<std::string, bool> strip_noenv_sentinels(const std::string& s) {
+    if (s.find('\x1E') == std::string::npos) {
+        return {s, false};
+    }
     const std::string& start = noenv_start();
     const std::string& end = noenv_end();
 
@@ -1155,6 +1158,9 @@ std::pair<std::string, bool> strip_noenv_sentinels(const std::string& s) {
 }
 
 bool strip_subst_literal_markers(std::string& value) {
+    if (value.find('\x1E') == std::string::npos) {
+        return false;
+    }
     const std::string& start = subst_literal_start();
     const std::string& end = subst_literal_end();
 

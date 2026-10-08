@@ -176,6 +176,9 @@ std::string VariableExpander::resolve_parameter_value(const std::string& var_nam
 }
 
 void VariableExpander::expand_env_vars(std::string& arg) {
+    if (arg.find('$') == std::string::npos) {
+        return;
+    }
     std::string result;
 
     result.reserve(arg.length() * 2);

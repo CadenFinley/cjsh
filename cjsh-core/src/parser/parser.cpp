@@ -1288,6 +1288,34 @@ std::string Parser::expand_aliases(const std::string& source) const {
     return expand(source);
 }
 
+std::vector<std::string> Parser::tokenize_command_cached(const std::string& cmdline) {
+    if (command_tokens_extglob != config::extglob_enabled ||
+        command_tokens_dialect != static_cast<int>(config::shell_dialect())) {
+        command_tokens.clear();
+        command_tokens_extglob = config::extglob_enabled;
+        command_tokens_dialect = static_cast<int>(config::shell_dialect());
+    }
+
+    // POSIX tilde tokenization reads HOME, IFS, and account information. Do not
+    // retain those results as lexical structure across executions.
+    const bool cacheable = cmdline.size() <= 1024 &&
+                           (!config::is_posix_mode() || cmdline.find('~') == std::string::npos);
+    if (cacheable) {
+        const auto cached = command_tokens.find(cmdline);
+        if (cached != command_tokens.end()) {
+            return cached->second;
+        }
+    }
+    auto tokens = Tokenizer::tokenize_command(cmdline);
+    if (cacheable && tokens.size() <= 64) {
+        if (command_tokens.size() >= 64) {
+            command_tokens.clear();
+        }
+        command_tokens.emplace(cmdline, tokens);
+    }
+    return tokens;
+}
+
 // produce execution words, not just lexical tokens. fast paths must preserve
 // alias, quote, IFS, tilde, and glob behavior; the general path retains provenance
 // until each expansion stage has decided whether a word may split or expand.
@@ -1306,30 +1334,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
         (void)args.emplace_back(cmdline);
     } else {
         try {
-            // cache lexical tokens only, under syntax-affecting options. expanded
-            // values depend on live variables and files and must be recomputed.
-            if (command_tokens_extglob != config::extglob_enabled ||
-                command_tokens_dialect != static_cast<int>(config::shell_dialect())) {
-                command_tokens.clear();
-                command_tokens_extglob = config::extglob_enabled;
-                command_tokens_dialect = static_cast<int>(config::shell_dialect());
-            }
-            const auto cached = command_tokens.find(cmdline);
-            // POSIX tokenization can resolve tilde against current environment
-            // state, so even this lexical cache must bypass those inputs.
-            const bool dynamic_tilde =
-                config::is_posix_mode() && cmdline.find('~') != std::string::npos;
-            if (cached != command_tokens.end() && !dynamic_tilde) {
-                args = cached->second;
-            } else {
-                args = Tokenizer::tokenize_command(cmdline);
-                if (!dynamic_tilde && cmdline.size() <= 1024 && args.size() <= 64) {
-                    if (command_tokens.size() >= 64) {
-                        command_tokens.clear();
-                    }
-                    command_tokens.emplace(cmdline, args);
-                }
-            }
+            args = tokenize_command_cached(cmdline);
         } catch (const std::exception&) {
             return args;
         }
@@ -1375,7 +1380,7 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
             alias_args.reserve(8);
 
             try {
-                alias_args = Tokenizer::tokenize_command(alias_it->second);
+                alias_args = tokenize_command_cached(alias_it->second);
 
                 if (!alias_args.empty()) {
                     std::vector<std::string> new_args;
@@ -1772,8 +1777,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
                     cmd.args.push_back(group_content);
 
                     if (!remaining.empty()) {
-                        std::vector<std::string> merged_redir =
-                            Tokenizer::tokenize_command(remaining);
+                        std::vector<std::string> merged_redir = tokenize_command_cached(remaining);
 
                         for (size_t i = 0; i < merged_redir.size(); ++i) {
                             QuoteInfo qi_redir(merged_redir[i]);
@@ -1809,7 +1813,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             }
         }
 
-        std::vector<std::string> tokens = Tokenizer::tokenize_command(cmd_part);
+        std::vector<std::string> tokens = tokenize_command_cached(cmd_part);
         std::vector<std::string> filtered_args;
 
         auto is_all_digits = [](const std::string& s) {
@@ -1974,8 +1978,7 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             if (!config::is_posix_mode() && alias_it != aliases.end() &&
                 (!shell || shell->get_shell_option(ShellOption::ExpandAliases))) {
                 try {
-                    std::vector<std::string> alias_args =
-                        Tokenizer::tokenize_command(alias_it->second);
+                    std::vector<std::string> alias_args = tokenize_command_cached(alias_it->second);
 
                     bool alias_has_pipe = false;
                     for (const auto& alias_arg : alias_args) {

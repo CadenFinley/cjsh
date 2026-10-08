@@ -26,6 +26,9 @@
   SOFTWARE.
 */
 
+#include <fnmatch.h>
+#include <algorithm>
+#include <clocale>
 #include <cstddef>
 #include <cstdio>
 #include <memory>
@@ -36,8 +39,92 @@
 #include "pattern_matcher.h"
 #include "shell.h"
 #include "shell_env.h"
+#include "string_utils.h"
 
 std::unique_ptr<Shell> g_shell;
+
+bool check_multibyte_endpoints(PatternMatcher& matcher, size_t& checks) {
+    const std::string saved_locale = std::setlocale(LC_ALL, nullptr);
+    bool have_locale = false;
+    for (const char* locale : {"C.UTF-8", "en_US.UTF-8", "UTF-8"}) {
+        if (std::setlocale(LC_ALL, locale) != nullptr) {
+            have_locale = true;
+            break;
+        }
+    }
+    if (!have_locale) {
+        (void)std::printf("SKIP: multibyte endpoint checks require a UTF-8 locale\n");
+        return true;
+    }
+
+    const std::vector<std::string> patterns = {"",      "*",    "?",    "??",  "?*",   "*?",
+                                               "a*",    "*z",   "a?b",  "*/*", "\\?",  "\\*",
+                                               "a\\*b", "*\\?", "*\\[", "[",   "\\\\", "a?*?"};
+    const std::vector<std::string> texts = {"",       "a",       u8"é",       u8"aé", u8"éa",
+                                            u8"é😀z", u8"αβ/文", u8"e\u0301", "*",    "?",
+                                            "[",      "a*b",     "a?b",       "a\\b"};
+    for (bool extglob : {false, true}) {
+        config::extglob_enabled = extglob;
+        for (const auto& pattern : patterns) {
+            // CJSH quotes an unmatched bracket as a literal before calling libc.
+            const std::string libc_pattern = pattern == "[" ? "\\[" : pattern;
+            for (const auto& text : texts) {
+                const auto offsets = string_utils::character_offsets(text);
+                for (bool longest : {false, true}) {
+                    const auto endpoints = matcher.match_end_positions(text, pattern, longest);
+                    if (!endpoints || endpoints->size() != text.size() + 1) {
+                        (void)std::fprintf(stderr, "missing multibyte endpoints: %s\n",
+                                           pattern.c_str());
+                        return false;
+                    }
+                    for (size_t begin = 0; begin <= text.size(); ++begin) {
+                        size_t expected = std::string::npos;
+                        if (std::binary_search(offsets.begin(), offsets.end(), begin)) {
+                            for (size_t end : offsets) {
+                                if (end >= begin &&
+                                    fnmatch(libc_pattern.c_str(),
+                                            text.substr(begin, end - begin).c_str(), 0) == 0) {
+                                    expected = end;
+                                    if (!longest) {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        ++checks;
+                        if ((*endpoints)[begin] != expected) {
+                            (void)std::fprintf(stderr,
+                                               "multibyte endpoint mismatch: text=%s pattern=%s "
+                                               "start=%zu longest=%d expected=%zu got=%zu\n",
+                                               text.c_str(), pattern.c_str(), begin, longest,
+                                               expected, (*endpoints)[begin]);
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (const auto& pattern : {"[[:alpha:]]", "[a-z]", u8"é*", "@(a|b)"}) {
+        ++checks;
+        if (matcher.match_end_positions(u8"éa", pattern, true)) {
+            (void)std::fprintf(stderr, "locale-sensitive pattern did not fall back: %s\n", pattern);
+            return false;
+        }
+    }
+    for (const std::string& text :
+         {std::string("\xC3"), std::string("\xFF"), std::string("a\0b", 3)}) {
+        ++checks;
+        if (matcher.match_end_positions(text, "*", true)) {
+            (void)std::fprintf(stderr, "invalid multibyte input did not fall back\n");
+            return false;
+        }
+    }
+    (void)std::setlocale(LC_ALL, saved_locale.c_str());
+    // A previously unsupported pattern must use the byte matcher again in C.
+    ++checks;
+    return matcher.match_end_positions("abc", "[a-z]*", true).has_value();
+}
 
 int main() {
     PatternMatcher matcher;
@@ -133,6 +220,9 @@ int main() {
     config::extglob_enabled = false;
     const auto literal = matcher.match_end_positions("@(a|b)", "@(a|b)", true);
     if (!literal || (*literal)[0] != 6) {
+        return 1;
+    }
+    if (!check_multibyte_endpoints(matcher, checks)) {
         return 1;
     }
     (void)std::printf("PASS: %zu endpoint comparisons and fallback/option regressions\n", checks);
