@@ -38,6 +38,7 @@
 #include <vector>
 
 #include "cjsh_filesystem.h"
+#include "cjshopt_registry.h"
 #include "completion_utils.h"
 #include "job_control.h"
 #include "signal_handler.h"
@@ -615,131 +616,20 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                  make_subcommand("action", "Execute a built-in editor action"),
                  make_subcommand("accept", "Accept and submit the current buffer")});
 
-        add_doc(
-            "cjshopt", "Configure cjsh interactive behavior",
-            {make_subcommand("style_def", "Define syntax highlight styles"),
-             make_subcommand("completion-case", "Configure completion case sensitivity"),
-             make_subcommand("history-search-case", "Configure fuzzy history case sensitivity"),
-             make_subcommand("history-directory", "Scope history to the current directory"),
-             make_subcommand("history-directory-subdirs", "Include nested directories in history"),
-             make_subcommand("history-directory-parents",
-                             "Include ancestor directories in history"),
-             make_subcommand("completion-spell", "Configure completion spell correction"),
-             make_subcommand("completion-spell-enter",
-                             "Auto-apply a single spell correction when pressing Enter"),
-             make_subcommand("completion-learning", "Toggle completion learning"),
-             make_subcommand("exit-confirmation", "Control when exit requires confirmation"),
-             make_subcommand("smart-cd", "Toggle smart cd auto-jumps"),
-             make_subcommand("dialect", "Select cjsh or posix semantics"),
-             make_subcommand("script-extension-interpreter",
-                             "Toggle extension-based script runners"),
-             make_subcommand("line-numbers", "Configure multiline line numbers"),
-             make_subcommand("scrollbars", "Toggle input and menu scrollbars"),
-             make_subcommand("line-numbers-replace-prompt",
-                             "Replace the final prompt line with line numbers"),
-             make_subcommand("line-numbers-continuation",
-                             "Control line numbers during continuation prompts"),
-
-             make_subcommand("current-line-number-highlight",
-                             "Toggle current line number highlighting"),
-             make_subcommand("multiline-start-lines", "Set default multiline prompt height"),
-             make_subcommand("multiline-max-lines", "Limit visible multiline input rows"),
-             make_subcommand("completion-menu-max-lines", "Limit completion menu content rows"),
-             make_subcommand("history-menu-max-lines", "Limit history menu content rows"),
-             make_subcommand("command-palette-max-lines", "Limit command palette content rows"),
-             make_subcommand("custom-menu-max-lines", "Limit custom menu content rows"),
-             make_subcommand("multiline-bottom-lines", "Set the input and menu scroll margin"),
-
-             make_subcommand("hint-delay", "Adjust inline hint delay"),
-             make_subcommand("idle-timeout", "Configure the idle hook timeout"),
-             make_subcommand("completion-preview", "Toggle completion preview"),
-             make_subcommand("completion-auto-menu",
-                             "Show completions while typing; Tab activates"),
-             make_subcommand("completion-click-accept",
-                             "Control whether clicks accept completion entries"),
-             make_subcommand("menu-highlighting",
-                             "Syntax-highlight completion and history menu items"),
-             make_subcommand("visible-whitespace", "Toggle visible whitespace"),
-             make_subcommand("line-wrap-marker", "Set the character at wrapped line ends"),
-             make_subcommand("hint", "Toggle inline hints"),
-             make_subcommand("multiline-indent", "Toggle multiline auto-indent"),
-             make_subcommand("multiline", "Toggle multiline input"),
-             make_subcommand("inline-help", "Toggle inline help"),
-             make_subcommand("status-hints", "Control status hint visibility"),
-             make_subcommand("status-line", "Disable the status row entirely"),
-             make_subcommand("status-reporting", "Mute cjsh status messages"),
-             make_subcommand("status-line-callback",
-                             "Run a shell function to publish status-line text"),
-             make_subcommand("mouse-clicking", "Configure prompt and menu mouse capture"),
-             make_subcommand("mouse-clicking-status-line",
-                             "Toggle the mouse-clicking status indicator line"),
-             make_subcommand("auto-tab", "Toggle automatic tab completion"),
-             make_subcommand("prompt-newline", "Toggle newline after command execution"),
-             make_subcommand("right-prompt-follow-cursor", "Move the right prompt with the cursor"),
-             make_subcommand("agent-mode", "Configure agent assistance"),
-             make_subcommand("keybind", "Inspect or modify key bindings"),
-             make_subcommand("generate-profile", "Generate ~/.cjprofile"),
-             make_subcommand("generate-env", "Generate ~/.cjshenv"),
-             make_subcommand("generate-rc", "Generate ~/.cjshrc"),
-             make_subcommand("generate-logout", "Generate ~/.cjlogout"),
-             make_subcommand("set-history-max", "Configure history persistence"),
-             make_subcommand("set-completion-max", "Limit completion suggestions")});
-
-        add_doc("cjshopt-style_def", "Define or reset syntax styles",
-                {make_subcommand("preview", "Show current syntax style preview"),
-                 make_option("--reset", "Reset all highlight styles to defaults")});
-
-        add_doc("cjshopt-completion-learning", "Toggle completion learning",
-                {make_subcommand("on", "Allow on-demand completion scraping"),
-                 make_subcommand("off", "Only use cached completions"),
-                 make_subcommand("status", "Show current setting")});
-
-        add_doc("cjshopt-exit-confirmation", "Control exit confirmation",
-                {make_subcommand("smart", "Confirm only when running or stopped jobs exist"),
-                 make_subcommand("always", "Confirm every exit request"),
-                 make_subcommand("never", "Never confirm exit requests"),
-                 make_subcommand("status", "Show current mode")});
-
-        add_doc("cjshopt-hint-delay", "Adjust inline hint delay",
-                {make_subcommand("status", "Show the current delay in milliseconds"),
-                 make_option("--status", "Show the current delay in milliseconds")});
-
-        add_doc("cjshopt-idle-timeout", "Configure terminal inactivity hooks",
-                {make_subcommand("off", "Disable idle hooks"),
-                 make_subcommand("status", "Show the current timeout"),
-                 make_option("--status", "Show the current timeout")});
-
-        add_doc("cjshopt-set-history-max", "Configure history persistence",
-                {make_subcommand("default", "Restore the default history limit"),
-                 make_option("--default", "Restore the default history limit"),
-                 make_subcommand("status", "Display the current history limit"),
-                 make_option("--status", "Display the current history limit")});
-
-        add_doc("cjshopt-set-completion-max", "Limit completion suggestions",
-                {make_subcommand("default", "Restore the default completion limit"),
-                 make_option("--default", "Restore the default completion limit"),
-                 make_subcommand("status", "Display the current completion limit"),
-                 make_option("--status", "Display the current completion limit")});
-
-        add_doc("cjshopt-keybind", "Inspect or modify key bindings",
-                {make_subcommand("list", "Show current key bindings"),
-                 make_subcommand("set", "Replace bindings for an action"),
-                 make_subcommand("add", "Add bindings for an action"),
-                 make_subcommand("clear", "Remove bindings for key sequences"),
-                 make_subcommand("clear-action", "Remove bindings for an action"),
-                 make_subcommand("reset", "Restore default key bindings"),
-                 make_subcommand("profile", "Manage key binding profiles"),
-                 make_subcommand("ext", "Manage command key bindings")});
-
-        add_doc("cjshopt-agent-mode", "Configure agent assistance",
-                {make_subcommand("set", "Add or replace an agent executor"),
-                 make_subcommand("list", "Show configured executors"),
-                 make_subcommand("status", "Show agent-mode status"),
-                 make_subcommand("on", "Enable agent assistance"),
-                 make_subcommand("off", "Disable agent assistance"),
-                 make_subcommand("key", "Configure the activation key"),
-                 make_subcommand("clear", "Remove executor configuration"),
-                 make_subcommand("reset", "Restore agent-mode defaults")});
+        std::vector<CompletionEntry> cjshopt_entries;
+        cjshopt_entries.reserve(cjshopt_subcommands().size());
+        for (const auto& command : cjshopt_subcommands()) {
+            cjshopt_entries.push_back(make_subcommand(command.name, command.summary));
+            std::vector<CompletionEntry> values;
+            values.reserve(command.values.size());
+            for (const auto& value : command.values) {
+                values.push_back(value.option ? make_option(value.text, value.description)
+                                              : make_subcommand(value.text, value.description));
+            }
+            add_doc("cjshopt-" + std::string(command.name), command.value_summary,
+                    std::move(values));
+        }
+        add_doc("cjshopt", "Configure cjsh interactive behavior", std::move(cjshopt_entries));
 
         add_doc("cjshopt-agent-mode-set", "Add or replace an agent executor",
                 {make_option("--command", "Executor command; the request is its final argument"),
@@ -765,195 +655,6 @@ const std::unordered_map<std::string, CommandDoc>& builtin_command_docs() {
                  make_subcommand("set", "Bind a key to a shell command"),
                  make_subcommand("clear", "Remove custom command key bindings"),
                  make_subcommand("reset", "Clear all custom command key bindings")});
-
-        add_doc("cjshopt-generate-profile", "Generate ~/.cjprofile",
-                {make_option("--force", "Overwrite the existing profile"),
-                 make_option("-f", "Overwrite the existing profile"),
-                 make_option("--alt", "Write to the alternate configuration path"),
-                 make_option("--help", "Show usage information"),
-                 make_option("-h", "Show usage information")});
-
-        add_doc("cjshopt-generate-env", "Generate ~/.cjshenv",
-                {make_option("--force", "Overwrite the existing env file"),
-                 make_option("-f", "Overwrite the existing env file"),
-                 make_option("--alt", "Write to the alternate configuration path"),
-                 make_option("--help", "Show usage information"),
-                 make_option("-h", "Show usage information")});
-
-        add_doc("cjshopt-generate-rc", "Generate ~/.cjshrc",
-                {make_option("--force", "Overwrite the existing rc file"),
-                 make_option("-f", "Overwrite the existing rc file"),
-                 make_option("--alt", "Write to the alternate configuration path"),
-                 make_option("--help", "Show usage information"),
-                 make_option("-h", "Show usage information")});
-
-        add_doc("cjshopt-generate-logout", "Generate ~/.cjlogout",
-                {make_option("--force", "Overwrite the existing logout file"),
-                 make_option("-f", "Overwrite the existing logout file"),
-                 make_option("--alt", "Write to the alternate configuration path"),
-                 make_option("--help", "Show usage information"),
-                 make_option("-h", "Show usage information")});
-
-        add_doc("cjshopt-completion-case", "",
-                {make_subcommand("on", "Enable case-sensitive matches"),
-                 make_subcommand("off", "Disable case sensitivity"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-history-search-case", "",
-                {make_subcommand("on", "Require exact case in fuzzy history"),
-                 make_subcommand("off", "Match history regardless of case"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-history-directory", "",
-                {make_subcommand("on", "Scope history to the current directory"),
-                 make_subcommand("off", "Recall history from all directories"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-history-directory-subdirs", "",
-                {make_subcommand("on", "Include commands from nested directories"),
-                 make_subcommand("off", "Exclude commands from nested directories"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-history-directory-parents", "",
-                {make_subcommand("on", "Include commands from all ancestor directories up to /"),
-                 make_subcommand("off", "Exclude commands from ancestor directories"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-completion-spell", "",
-                {make_subcommand("on", "Enable spell correction"),
-                 make_subcommand("off", "Disable spell correction"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-completion-spell-enter", "",
-                {make_subcommand("on", "Auto-apply a single spell correction on Enter"),
-                 make_subcommand("off", "Submit input without Enter autocorrection"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-smart-cd", "",
-                {make_subcommand("on", "Enable smart cd auto-jumps"),
-                 make_subcommand("off", "Disable smart cd auto-jumps"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-dialect", "Select the shell language dialect",
-                {make_subcommand("cjsh", "Use native cjsh semantics"),
-                 make_subcommand("posix", "Use strict POSIX semantics"),
-                 make_subcommand("status", "Print the selected dialect")});
-
-        add_doc("cjshopt-script-extension-interpreter", "",
-                {make_subcommand("on", "Enable extension-based script runners"),
-                 make_subcommand("off", "Disable extension-based script runners"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-completion-preview", "",
-                {make_subcommand("on", "Enable completion preview"),
-                 make_subcommand("off", "Disable completion preview"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-completion-auto-menu", "",
-                {make_subcommand("on", "Show passive completions while typing; Tab activates"),
-                 make_subcommand("off", "Open completions only on request (default)"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-completion-click-accept", "",
-                {make_subcommand("on", "Always accept completion entries on click"),
-                 make_subcommand("off", "Click selects entries without accepting"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-menu-highlighting", "",
-                {make_subcommand("none", "Do not syntax-highlight menu items"),
-                 make_subcommand("single", "Highlight only the selected menu item"),
-                 make_subcommand("all", "Highlight every rendered menu item"),
-                 make_subcommand("reverse",
-                                 "Highlight every rendered menu item except the selected item"),
-                 make_subcommand("status", "Show current mode")});
-        add_doc("cjshopt-visible-whitespace", "",
-                {make_subcommand("on", "Show whitespace markers"),
-                 make_subcommand("off", "Hide whitespace markers"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-line-wrap-marker", "",
-                {make_subcommand("''", "Hide the symbol at wrapped line ends"),
-                 make_subcommand("status", "Show the current marker")});
-        add_doc("cjshopt-hint", "",
-                {make_subcommand("on", "Enable inline hints"),
-                 make_subcommand("off", "Disable inline hints"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-multiline-indent", "",
-                {make_subcommand("on", "Enable multiline auto-indent"),
-                 make_subcommand("off", "Disable multiline auto-indent"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-multiline", "",
-                {make_subcommand("on", "Enable multiline input"),
-                 make_subcommand("off", "Disable multiline input"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-inline-help", "",
-                {make_subcommand("on", "Enable inline help"),
-                 make_subcommand("off", "Disable inline help"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-status-hints", "",
-                {make_subcommand("off", "Never display the hint banner"),
-                 make_subcommand("normal", "Only show when everything else is blank"),
-                 make_subcommand("transient", "Show when the status line has no content"),
-                 make_subcommand("persistent", "Always prepend hints above other lines"),
-                 make_subcommand("status", "Show current mode")});
-        add_doc("cjshopt-status-line", "",
-                {make_subcommand("on", "Show the status row"),
-                 make_subcommand("off", "Hide the status row entirely"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-status-reporting", "",
-                {make_subcommand("on", "Show cjsh validation output"),
-                 make_subcommand("off", "Hide cjsh validation output"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-status-line-callback", "",
-                {make_subcommand("off", "Disable custom status-line callback output"),
-                 make_subcommand("status", "Show current callback setting")});
-        add_doc("cjshopt-mouse-clicking", "",
-                {make_subcommand("all-off", "Never capture mouse events, including in menus"),
-                 make_subcommand("off", "Capture only in expanded/interactive menus"),
-                 make_subcommand("simple", "Enable mouse capture with manual toggles"),
-                 make_subcommand("smart", "Enable auto suspend/resume mouse handling"),
-                 make_subcommand("on", "Alias for simple mode"),
-                 make_subcommand("disabled", "Alias for all-off mode"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-mouse-clicking-status-line", "",
-                {make_subcommand("on", "Show the mouse-clicking status indicator"),
-                 make_subcommand("off", "Hide the mouse-clicking status indicator"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-auto-tab", "",
-                {make_subcommand("on", "Enable automatic tab completion"),
-                 make_subcommand("off", "Disable automatic tab completion"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-line-numbers", "",
-                {make_subcommand("on", "Enable absolute line numbers"),
-                 make_subcommand("off", "Hide line numbers"),
-                 make_subcommand("relative", "Show relative line numbers"),
-                 make_subcommand("absolute", "Show absolute line numbers"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-line-numbers-replace-prompt", "",
-                {make_subcommand("on", "Replace the final prompt line with line numbers"),
-                 make_subcommand("off", "Keep the final prompt line visible"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-line-numbers-continuation", "",
-                {make_subcommand("on", "Show line numbers with continuation prompts"),
-                 make_subcommand("off", "Hide line numbers when a continuation prompt is active"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-current-line-number-highlight", "",
-                {make_subcommand("on", "Highlight the active line number"),
-                 make_subcommand("off", "Disable line number highlighting"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-prompt-newline", "",
-                {make_subcommand("on", "Insert a newline after every command"),
-                 make_subcommand("off", "Skip the post-command newline"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-right-prompt-follow-cursor", "",
-                {make_subcommand("on", "Move the right prompt with the cursor"),
-                 make_subcommand("off", "Keep the right prompt pinned to the first row"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-multiline-start-lines", "",
-                {make_subcommand("status", "Show current multiline height")});
-        add_doc("cjshopt-multiline-max-lines", "",
-                {make_subcommand("status", "Show the multiline viewport limit")});
-        add_doc("cjshopt-scrollbars", "",
-                {make_subcommand("on", "Show input and menu scrollbars"),
-                 make_subcommand("off", "Hide input and menu scrollbars"),
-                 make_subcommand("status", "Show current setting")});
-        add_doc("cjshopt-completion-menu-max-lines", "Limit completion menu content rows",
-                {make_subcommand("status", "Show the completion menu height limit")});
-        add_doc("cjshopt-history-menu-max-lines", "Limit history menu content rows",
-                {make_subcommand("status", "Show the history menu height limit")});
-        add_doc("cjshopt-command-palette-max-lines", "Limit command palette content rows",
-                {make_subcommand("status", "Show the command palette height limit")});
-        add_doc("cjshopt-custom-menu-max-lines", "Limit custom menu content rows",
-                {make_subcommand("status", "Show the custom menu height limit")});
-        add_doc("cjshopt-multiline-bottom-lines", "",
-                {make_subcommand("status", "Show the cursor scroll margin")});
         return map;
     }();
     return docs;

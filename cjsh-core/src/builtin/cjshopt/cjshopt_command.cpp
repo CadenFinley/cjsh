@@ -27,237 +27,56 @@
 */
 
 #include "cjshopt_command.h"
+#include "cjshopt_registry.h"
 
 #include "builtin_help.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
-#include <iterator>
-#include <optional>
 #include <string>
 #include <vector>
 
-#include "agent_mode.h"
-#include "cjshopt_command.h"
 #include "error_out.h"
 #include "shell_env.h"
 
 namespace {
 
-using SubcommandHandler = int (*)(const std::vector<std::string>& args);
-
-struct CjshoptSubcommandDescriptor {
-    const char* name;
-    SubcommandHandler handler;
-};
-
-constexpr CjshoptSubcommandDescriptor kCjshoptSubcommandDescriptors[] = {
-    {"style_def", style_def_command},
-    {"completion-case", completion_case_command},
-    {"history-search-case", history_search_case_command},
-    {"history-directory", history_directory_command},
-    {"history-directory-subdirs", history_directory_subdirs_command},
-    {"history-directory-parents", history_directory_parents_command},
-    {"completion-spell", completion_spell_command},
-    {"completion-spell-enter", completion_spell_enter_command},
-    {"completion-learning", completion_learning_command},
-    {"exit-confirmation", exit_confirmation_command},
-    {"smart-cd", smart_cd_command},
-    {"dialect", dialect_command},
-    {"script-extension-interpreter", script_extension_interpreter_command},
-    {"line-numbers", line_numbers_command},
-    {"scrollbars", scrollbars_command},
-    {"line-numbers-continuation", line_numbers_continuation_command},
-    {"line-numbers-replace-prompt", line_numbers_replace_prompt_command},
-    {"current-line-number-highlight", current_line_number_highlight_command},
-    {"multiline-start-lines", multiline_start_lines_command},
-    {"multiline-max-lines", multiline_max_lines_command},
-    {"completion-menu-max-lines", completion_menu_max_lines_command},
-    {"history-menu-max-lines", history_menu_max_lines_command},
-    {"command-palette-max-lines", command_palette_max_lines_command},
-    {"custom-menu-max-lines", custom_menu_max_lines_command},
-    {"multiline-bottom-lines", multiline_bottom_lines_command},
-    {"hint-delay", hint_delay_command},
-    {"idle-timeout", idle_timeout_command},
-    {"completion-preview", completion_preview_command},
-    {"completion-auto-menu", completion_auto_menu_command},
-    {"completion-click-accept", completion_click_accept_command},
-    {"menu-highlighting", menu_highlighting_command},
-    {"visible-whitespace", visible_whitespace_command},
-    {"line-wrap-marker", line_wrap_marker_command},
-    {"hint", hint_command},
-    {"multiline-indent", multiline_indent_command},
-    {"multiline", multiline_command},
-    {"inline-help", inline_help_command},
-    {"status-hints", status_hints_command},
-    {"status-line", status_line_command},
-    {"status-reporting", status_reporting_command},
-    {"status-line-callback", status_line_callback_command},
-    {"mouse-clicking", mouse_clicking_command},
-    {"mouse-clicking-status-line", mouse_clicking_status_line_command},
-    {"auto-tab", auto_tab_command},
-    {"prompt-newline", prompt_newline_command},
-    {"right-prompt-follow-cursor", right_prompt_follow_cursor_command},
-    {"agent-mode", agent_mode::command},
-    {"keybind", keybind_command},
-    {"generate-profile", generate_profile_command},
-    {"generate-env", generate_env_command},
-    {"generate-rc", generate_rc_command},
-    {"generate-logout", generate_logout_command},
-    {"set-history-max", set_history_max_command},
-    {"set-completion-max", set_completion_max_command},
-};
-
-std::optional<CjshoptSubcommandDescriptor> parse_cjshopt_subcommand(const std::string& subcommand) {
-    for (const auto& descriptor : kCjshoptSubcommandDescriptors) {
-        if (subcommand == descriptor.name) {
-            return descriptor;
-        }
-    }
-    return std::nullopt;
-}
-
 const std::vector<std::string>& cjshopt_usage_lines() {
-    static const std::vector<std::string> kUsage = {
-        "Usage: cjshopt <subcommand> [options]",
-        "",
-        "Configure shell behavior and interactive editing.",
-        "Use 'cjshopt <subcommand> --help' for details and examples.",
-        "",
-        "Completion and hints:",
-        "  completion-auto-menu <on|off|status>",
-        "    Show completions while typing; Tab activates the menu (default: off).",
-        "  auto-tab <on|off|status>",
-        "    Automatically start tab completion (default: off).",
-        "  completion-preview <on|off|status>",
-        "    Preview the selected completion (default: on).",
-        "  completion-case <on|off|status>",
-        "    Match completions case-sensitively (default: off).",
-        "  completion-spell <on|off|status>",
-        "    Suggest spelling corrections in completions (default: on).",
-        "  completion-spell-enter <on|off|status>",
-        "    Apply a single spelling correction on Enter (default: off).",
-        "  completion-learning <on|off|status>",
-        "    Learn completions automatically from man pages (default: on).",
-        "  set-completion-max <number|default|status>",
-        "    Limit the number of completion suggestions.",
-        "  hint <on|off|status>",
-        "    Show inline completion hints (default: on).",
-        "  hint-delay <milliseconds|status>",
-        "    Set or show the delay before inline hints appear.",
-        "",
-        "History:",
-        "  history-directory <on|off|status>",
-        "    Scope interactive history to the current directory (default: off).",
-        "  history-directory-subdirs <on|off|status>",
-        "    Include nested directories when directory scope is on (default: off).",
-        "  history-directory-parents <on|off|status>",
-        "    Include all ancestor directories when scope is on (default: off).",
-        "  history-search-case <on|off|status>",
-        "    Match fuzzy history searches case-sensitively (default: on).",
-        "  set-history-max <number|default|status>",
-        "    Configure history persistence limits.",
-        "",
-        "Menus:",
-        "  completion-menu-max-lines <count|status>",
-        "    Limit completion menu content rows (default: 15).",
-        "  history-menu-max-lines <count|status>",
-        "    Limit history menu content rows (default: 15).",
-        "  command-palette-max-lines <count|status>",
-        "    Limit command palette content rows (default: 15).",
-        "  custom-menu-max-lines <count|status>",
-        "    Limit custom menu content rows (default: 15).",
-        "  menu-highlighting <none|single|all|reverse|status>",
-        "    Syntax-highlight completion and history menu items (default: none).",
-        "",
-        "Prompt and multiline input:",
-        "  multiline <on|off|status>",
-        "    Enable multiline input (default: on).",
-        "  multiline-indent <on|off|status>",
-        "    Automatically indent multiline input (default: on).",
-        "  multiline-start-lines <count|status>",
-        "    Set the initial multiline prompt height (default: 1).",
-        "  multiline-max-lines <count|status>",
-        "    Limit visible multiline input rows (default: 15).",
-        "  multiline-bottom-lines <count|status>",
-        "    Set the input and menu scroll margin (default: 3).",
-        "  prompt-newline <on|off|status>",
-        "    Add a newline after command execution (default: off).",
-        "  right-prompt-follow-cursor <on|off|status>",
-        "    Keep the inline right prompt on the cursor row (default: off).",
-        "",
-        "Appearance:",
-        "  style_def <token_type> <style>",
-        "    Define or redefine a syntax highlighting style.",
-        "  style_def preview|--reset",
-        "    Preview current styles or reset defaults.",
-        "  line-numbers <on|off|relative|absolute|status>",
-        "    Show line numbers in multiline input (default: on, absolute).",
-        "  line-numbers-continuation <on|off|status>",
-        "    Keep line numbers when a continuation prompt is active.",
-        "  line-numbers-replace-prompt <on|off|status>",
-        "    Replace the final prompt line with line numbers (default: off).",
-        "  current-line-number-highlight <on|off|status>",
-        "    Highlight the current line number (default: on).",
-        "  visible-whitespace <on|off|status>",
-        "    Show whitespace characters in the editor (default: off).",
-        "  scrollbars <on|off|status>",
-        "    Show or hide input and menu scrollbars (default: on).",
-        "  line-wrap-marker <marker|status>",
-        "    Set a single wrap character; use '' to disable it.",
-        "",
-        "Status and help:",
-        "  status-line <on|off|status>",
-        "    Show the status area below the prompt (default: on).",
-        "  status-hints <off|normal|transient|persistent|status>",
-        "    Control the default status hint banner (default: normal).",
-        "  status-reporting <on|off|status>",
-        "    Show command validation messages in the status area (default: on).",
-        "  status-line-callback <function_name|off|status>",
-        "    Run a shell function to supply custom status-line text.",
-        "  inline-help <on|off|status>",
-        "    Show inline help messages (default: on).",
-        "",
-        "Keyboard and mouse:",
-        "  keybind <subcommand> [...]",
-        "    Inspect or modify key bindings; changes apply immediately.",
-        "  mouse-clicking <all-off|off|simple|smart|status>",
-        "    Configure mouse capture for prompts and menus (default: off).",
-        "  mouse-clicking-status-line <on|off|status>",
-        "    Show the mouse-clicking status indicator (default: on).",
-        "  completion-click-accept <on|off|status>",
-        "    Accept completion entries when clicked (default: off).",
-        "",
-        "Shell behavior and agent mode:",
-        "  smart-cd <on|off|status>",
-        "    Enable smart cd auto-jumps (default: on).",
-        "  dialect <cjsh|posix|status>",
-        "    Select the language dialect for subsequent commands.",
-        "    Configure language options with shopt (for example, shopt -s extglob).",
-        "  script-extension-interpreter <on|off|status>",
-        "    Infer script runners from file extensions (default: on).",
-        "  exit-confirmation <smart|always|never|status>",
-        "    Control when exit requires confirmation (default: smart).",
-        "  idle-timeout <seconds|off|status>",
-        "    Run inactivity hooks after the specified delay (default: off).",
-        "  agent-mode <subcommand> [...]",
-        "    Configure agent assistance.",
-        "",
-        "Startup files:",
-        "  generate-env [-f|--force] [--alt]",
-        "    Generate ~/.cjshenv.",
-        "  generate-profile [-f|--force] [--alt]",
-        "    Generate ~/.cjprofile.",
-        "  generate-rc [-f|--force] [--alt]",
-        "    Generate ~/.cjshrc.",
-        "  generate-logout [-f|--force] [--alt]",
-        "    Generate ~/.cjlogout.",
-        "",
-        "Add settings to your startup files (usually ~/.cjshrc) to persist them.",
-        "Use 'cjshopt keybind ext --help' for custom command keybindings.",
-        "For startup file generators, --force overwrites and --alt uses ~/.config/cjsh.",
-    };
-    return kUsage;
+    static const std::vector<std::string> usage = [] {
+        std::vector<std::string> lines = {
+            "Usage: cjshopt <subcommand> [options]", "",
+            "Configure shell behavior and interactive editing.",
+            "Use 'cjshopt <subcommand> --help' for details and examples."};
+        std::vector<const CjshoptSubcommandDescriptor*> commands;
+        for (const auto& command : cjshopt_subcommands()) {
+            commands.push_back(&command);
+        }
+        std::sort(commands.begin(), commands.end(), [](const auto* left, const auto* right) {
+            return left->help_order < right->help_order;
+        });
+        std::string section;
+        for (const auto* command : commands) {
+            if (section != command->section) {
+                section = command->section;
+                lines.emplace_back();
+                lines.push_back(section);
+            }
+            for (const auto& form : command->usage) {
+                lines.push_back("  " + std::string(command->name) + " " + form.arguments);
+                for (const char* description : form.description) {
+                    lines.push_back("    " + std::string(description));
+                }
+            }
+        }
+        lines.insert(
+            lines.end(),
+            {"", "Add settings to your startup files (usually ~/.cjshrc) to persist them.",
+             "Use 'cjshopt keybind ext --help' for custom command keybindings.",
+             "For startup file generators, --force overwrites and --alt uses ~/.config/cjsh."});
+        return lines;
+    }();
+    return usage;
 }
 
 void print_cjshopt_usage() {
@@ -268,11 +87,11 @@ void print_cjshopt_usage() {
 
 std::string available_subcommands_message() {
     std::string message = "Available subcommands: ";
-    for (size_t i = 0; i < std::size(kCjshoptSubcommandDescriptors); ++i) {
+    for (size_t i = 0; i < cjshopt_subcommands().size(); ++i) {
         if (i != 0) {
             message += ", ";
         }
-        message += kCjshoptSubcommandDescriptors[i].name;
+        message += cjshopt_subcommands()[i].name;
     }
     return message;
 }
@@ -294,8 +113,8 @@ int cjshopt_command(const std::vector<std::string>& args) {
     }
 
     const std::string& subcommand = args[1];
-    auto descriptor = parse_cjshopt_subcommand(subcommand);
-    if (descriptor.has_value()) {
+    const auto* descriptor = find_cjshopt_subcommand(subcommand);
+    if (descriptor != nullptr) {
         return descriptor->handler(std::vector<std::string>(args.begin() + 1, args.end()));
     }
     print_error({ErrorType::INVALID_ARGUMENT,

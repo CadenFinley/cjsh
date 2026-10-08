@@ -26,6 +26,8 @@
   SOFTWARE.
 */
 
+#include "cjshopt_registry.h"
+
 #include "cjshopt_command.h"
 #include "isocline.h"
 
@@ -365,7 +367,7 @@ int handle_numeric_limit_command(const std::vector<std::string>& args,
 
 int set_history_max_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: set-history-max <number|default|status>",
+        cjshopt_subcommand_usage("set-history-max"),
         "",
         "Configure the maximum number of entries written to the history file.",
         "Use 0 to disable history persistence entirely.",
@@ -401,7 +403,7 @@ int set_history_max_command(const std::vector<std::string>& args) {
 
 int set_completion_max_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: set-completion-max <number|default|status>",
+        cjshopt_subcommand_usage("set-completion-max"),
         "",
         "Configure the maximum number of completion entries shown in menus.",
         "Use 'default' to restore the built-in limit (" +

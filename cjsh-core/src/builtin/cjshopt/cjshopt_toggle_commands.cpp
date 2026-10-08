@@ -26,6 +26,8 @@
   SOFTWARE.
 */
 
+#include "cjshopt_registry.h"
+
 #include "cjshopt_command.h"
 #include "isocline.h"
 
@@ -298,7 +300,7 @@ int handle_toggle_command(const ToggleCommandConfig& config, const std::vector<s
 
 int current_line_number_highlight_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: current-line-number-highlight <on|off|status>", "Examples:",
+        cjshopt_subcommand_usage("current-line-number-highlight"), "Examples:",
         "  current-line-number-highlight on      Enable highlighting of the current line number",
         "  current-line-number-highlight off     Disable highlighting of the current line number",
         "  current-line-number-highlight status  Show the current setting"};
@@ -319,7 +321,7 @@ int current_line_number_highlight_command(const std::vector<std::string>& args) 
 
 int completion_case_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: completion-case <on|off|status>",
+        cjshopt_subcommand_usage("completion-case"),
         "Examples:", "  completion-case on       Enable case sensitive completions",
         "  completion-case off      Use case insensitive completions",
         "  completion-case status   Show the current setting"};
@@ -340,7 +342,7 @@ int completion_case_command(const std::vector<std::string>& args) {
 
 int history_search_case_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: history-search-case <on|off|status>", "Examples:",
+        cjshopt_subcommand_usage("history-search-case"), "Examples:",
         "  history-search-case on       Require exact case matches in fuzzy history search",
         "  history-search-case off      Match history entries case insensitively",
         "  history-search-case status   Show the current setting"};
@@ -362,7 +364,7 @@ int history_search_case_command(const std::vector<std::string>& args) {
 int history_directory_command(const std::vector<std::string>& args) {
     static const ToggleCommandConfig config{
         "history-directory",
-        {"Usage: history-directory <on|off|status>",
+        {cjshopt_subcommand_usage("history-directory"),
          "Scope interactive history recall to the current directory.",
          "Default: off. Add cjshopt history-directory on to ~/.cjshrc to persist."},
         [] { return ic_history_directory_is_enabled(); },
@@ -378,7 +380,7 @@ int history_directory_command(const std::vector<std::string>& args) {
 int history_directory_subdirs_command(const std::vector<std::string>& args) {
     static const ToggleCommandConfig config{
         "history-directory-subdirs",
-        {"Usage: history-directory-subdirs <on|off|status>",
+        {cjshopt_subcommand_usage("history-directory-subdirs"),
          "Include commands from nested directories when directory-aware history is enabled.",
          "Default: off. Add cjshopt history-directory-subdirs on to ~/.cjshrc to persist."},
         [] { return ic_history_directory_subdirs_is_enabled(); },
@@ -394,7 +396,7 @@ int history_directory_subdirs_command(const std::vector<std::string>& args) {
 int history_directory_parents_command(const std::vector<std::string>& args) {
     static const ToggleCommandConfig config{
         "history-directory-parents",
-        {"Usage: history-directory-parents <on|off|status>",
+        {cjshopt_subcommand_usage("history-directory-parents"),
          "Include commands from all ancestor directories up to / when directory-aware history is "
          "enabled.",
          "Default: off. Add cjshopt history-directory-parents on to ~/.cjshrc to persist."},
@@ -410,7 +412,7 @@ int history_directory_parents_command(const std::vector<std::string>& args) {
 
 int completion_spell_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: completion-spell <on|off|status>",
+        cjshopt_subcommand_usage("completion-spell"),
         "Examples:", "  completion-spell on      Enable spell correction in completions",
         "  completion-spell off     Disable spell correction in completions",
         "  completion-spell status  Show the current setting"};
@@ -431,7 +433,7 @@ int completion_spell_command(const std::vector<std::string>& args) {
 
 int completion_spell_enter_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: completion-spell-enter <on|off|status>", "Examples:",
+        cjshopt_subcommand_usage("completion-spell-enter"), "Examples:",
         "  completion-spell-enter on      Auto-apply a single spell correction when pressing Enter",
         "  completion-spell-enter off     Submit input as typed when pressing Enter",
         "  completion-spell-enter status  Show the current setting"};
@@ -452,7 +454,7 @@ int completion_spell_enter_command(const std::vector<std::string>& args) {
 
 int completion_learning_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: completion-learning <on|off|status>", "Examples:",
+        cjshopt_subcommand_usage("completion-learning"), "Examples:",
         "  completion-learning on      Allow cjsh to learn completions as you use commands",
         "  completion-learning off     Only use cached completions (run generate-completions)",
         "  completion-learning status  Show the current setting"};
@@ -473,7 +475,7 @@ int completion_learning_command(const std::vector<std::string>& args) {
 
 int exit_confirmation_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: exit-confirmation <smart|always|never|status>",
+        cjshopt_subcommand_usage("exit-confirmation"),
         "Examples:",
         "  exit-confirmation smart   Confirm only when running or stopped jobs exist (default)",
         "  exit-confirmation always  Confirm every exit request",
@@ -574,7 +576,7 @@ int exit_confirmation_command(const std::vector<std::string>& args) {
 
 int smart_cd_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: smart-cd <on|off|status>",
+        cjshopt_subcommand_usage("smart-cd"),
         "Examples:", "  smart-cd on      Enable smart cd auto-jumps",
         "  smart-cd off     Disable smart cd auto-jumps",
         "  smart-cd status  Show the current setting"};
@@ -613,7 +615,7 @@ int dialect_command(const std::vector<std::string>& args) {
 
 int script_extension_interpreter_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: script-extension-interpreter <on|off|status>",
+        cjshopt_subcommand_usage("script-extension-interpreter"),
         "Examples:", "  script-extension-interpreter on      Enable extension-based script runners",
         "  script-extension-interpreter off     Disable extension-based script runners",
         "  script-extension-interpreter status  Show the current setting"};
@@ -634,7 +636,7 @@ int script_extension_interpreter_command(const std::vector<std::string>& args) {
 
 int line_numbers_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: line-numbers <on|off|relative|absolute|status>",
+        cjshopt_subcommand_usage("line-numbers"),
         "Examples:",
         "  line-numbers on        Enable absolute line numbers in multiline input",
         "  line-numbers relative  Enable relative line numbers in multiline input",
@@ -749,7 +751,7 @@ int line_numbers_command(const std::vector<std::string>& args) {
 
 int line_numbers_continuation_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: line-numbers-continuation <on|off|status>", "Examples:",
+        cjshopt_subcommand_usage("line-numbers-continuation"), "Examples:",
         "  line-numbers-continuation on       Keep line numbers when a continuation prompt is set",
         "  line-numbers-continuation off      Hide line numbers whenever a continuation prompt is "
         "set",
@@ -771,7 +773,7 @@ int line_numbers_continuation_command(const std::vector<std::string>& args) {
 
 int line_numbers_replace_prompt_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: line-numbers-replace-prompt <on|off|status>", "Examples:",
+        cjshopt_subcommand_usage("line-numbers-replace-prompt"), "Examples:",
         "  line-numbers-replace-prompt on      Replace the final prompt line with line numbers",
         "  line-numbers-replace-prompt off     Keep the final prompt line visible",
         "  line-numbers-replace-prompt status  Show the current setting"};
@@ -792,7 +794,7 @@ int line_numbers_replace_prompt_command(const std::vector<std::string>& args) {
 
 int hint_delay_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: hint-delay <milliseconds|status>",
+        cjshopt_subcommand_usage("hint-delay"),
         "Examples:",
         "  hint-delay 100    Set hint delay to 100 milliseconds",
         "  hint-delay 0      Show hints immediately",
@@ -854,7 +856,7 @@ int hint_delay_command(const std::vector<std::string>& args) {
 
 int idle_timeout_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: idle-timeout <seconds|off|status>",
+        cjshopt_subcommand_usage("idle-timeout"),
         "Examples:", "  idle-timeout 120     Run idle hooks after 120 seconds without input",
         "  idle-timeout off     Disable idle hooks",
         "  idle-timeout status  Show the current timeout"};
@@ -921,7 +923,7 @@ int idle_timeout_command(const std::vector<std::string>& args) {
 
 int multiline_start_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: multiline-start-lines <count|status>",
+        cjshopt_subcommand_usage("multiline-start-lines"),
         "Examples:", "  multiline-start-lines 1    Start editing on the first prompt line",
         "  multiline-start-lines 2    Start with two prompt lines (cursor on line 2)",
         "  multiline-start-lines status   Show the current setting"};
@@ -1064,7 +1066,7 @@ int max_lines_command(const std::vector<std::string>& args, const std::string& c
 
 int multiline_max_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: multiline-max-lines <count|status>",
+        cjshopt_subcommand_usage("multiline-max-lines"),
         "Examples:", "  multiline-max-lines 15       Show up to 15 multiline input rows",
         "  multiline-max-lines 5        Use a compact five-row viewport",
         "  multiline-max-lines status   Show the current setting"};
@@ -1075,7 +1077,7 @@ int multiline_max_lines_command(const std::vector<std::string>& args) {
 
 int completion_menu_max_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: completion-menu-max-lines <count|status>",
+        cjshopt_subcommand_usage("completion-menu-max-lines"),
         "Limit content rows in active and passive completion menus (default: 15).",
         "Use a positive count; values above 256 are clamped to 256.",
         "Ctrl+J temporarily toggles the open menu to full terminal height."};
@@ -1086,7 +1088,7 @@ int completion_menu_max_lines_command(const std::vector<std::string>& args) {
 
 int history_menu_max_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: history-menu-max-lines <count|status>",
+        cjshopt_subcommand_usage("history-menu-max-lines"),
         "Limit history menu content rows, including expanded previews (default: 15).",
         "Use a positive count; values above 256 are clamped to 256.",
         "Ctrl+J temporarily toggles the open menu to full terminal height."};
@@ -1097,7 +1099,7 @@ int history_menu_max_lines_command(const std::vector<std::string>& args) {
 
 int command_palette_max_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: command-palette-max-lines <count|status>",
+        cjshopt_subcommand_usage("command-palette-max-lines"),
         "Limit command palette content rows (default: 15).",
         "Use a positive count; values above 256 are clamped to 256.",
         "Ctrl+J temporarily toggles the open menu to full terminal height."};
@@ -1108,7 +1110,7 @@ int command_palette_max_lines_command(const std::vector<std::string>& args) {
 
 int custom_menu_max_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: custom-menu-max-lines <count|status>",
+        cjshopt_subcommand_usage("custom-menu-max-lines"),
         "Limit custom menu content rows, including expanded previews (default: 15).",
         "Use a positive count; values above 256 are clamped to 256.",
         "Ctrl+J temporarily toggles the open menu to full terminal height."};
@@ -1119,7 +1121,7 @@ int custom_menu_max_lines_command(const std::vector<std::string>& args) {
 
 int multiline_bottom_lines_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: multiline-bottom-lines <count|status>",
+        cjshopt_subcommand_usage("multiline-bottom-lines"),
         "Examples:", "  multiline-bottom-lines 3        Keep a three-row cursor margin",
         "  multiline-bottom-lines 0        Disable the cursor margin",
         "  multiline-bottom-lines status   Show the current setting"};
@@ -1193,7 +1195,7 @@ int multiline_bottom_lines_command(const std::vector<std::string>& args) {
 
 int completion_preview_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: completion-preview <on|off|status>",
+        cjshopt_subcommand_usage("completion-preview"),
         "Examples:", "  completion-preview on      Enable completion preview",
         "  completion-preview off     Disable completion preview",
         "  completion-preview status  Show the current setting"};
@@ -1214,7 +1216,7 @@ int completion_preview_command(const std::vector<std::string>& args) {
 
 int completion_auto_menu_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: completion-auto-menu <on|off|status>",
+        cjshopt_subcommand_usage("completion-auto-menu"),
         "Examples:", "  completion-auto-menu on      Show completions while typing; Tab activates",
         "  completion-auto-menu off     Open completions only on request (default)",
         "  completion-auto-menu status  Show the current setting"};
@@ -1235,7 +1237,7 @@ int completion_auto_menu_command(const std::vector<std::string>& args) {
 
 int completion_click_accept_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: completion-click-accept <on|off|status>",
+        cjshopt_subcommand_usage("completion-click-accept"),
         "Examples:", "  completion-click-accept on       Always accept completions when clicked",
         "  completion-click-accept off      Click selects completions without accepting",
         "  completion-click-accept status   Show the current setting"};
@@ -1256,7 +1258,7 @@ int completion_click_accept_command(const std::vector<std::string>& args) {
 
 int menu_highlighting_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: menu-highlighting <none|single|all|reverse|status>",
+        cjshopt_subcommand_usage("menu-highlighting"),
         "Examples:",
         "  menu-highlighting none    Keep completion/history menu items unhighlighted",
         "  menu-highlighting single  Highlight only the selected menu item",
@@ -1321,7 +1323,7 @@ int menu_highlighting_command(const std::vector<std::string>& args) {
 int scrollbars_command(const std::vector<std::string>& args) {
     static const ToggleCommandConfig config{
         "scrollbars",
-        {"Usage: scrollbars <on|off|status>",
+        {cjshopt_subcommand_usage("scrollbars"),
          "Examples:", "  scrollbars on      Show input and menu scrollbars",
          "  scrollbars off     Hide input and menu scrollbars",
          "  scrollbars status  Show the current setting"},
@@ -1337,7 +1339,7 @@ int scrollbars_command(const std::vector<std::string>& args) {
 
 int visible_whitespace_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: visible-whitespace <on|off|status>",
+        cjshopt_subcommand_usage("visible-whitespace"),
         "Examples:", "  visible-whitespace on      Show whitespace characters while editing",
         "  visible-whitespace off     Hide whitespace characters while editing",
         "  visible-whitespace status  Show the current setting"};
@@ -1358,7 +1360,7 @@ int visible_whitespace_command(const std::vector<std::string>& args) {
 
 int line_wrap_marker_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: line-wrap-marker <marker|status>",
+        cjshopt_subcommand_usage("line-wrap-marker"),
         "The marker must be one printable Unicode character, or '' to disable it.",
         "Examples:",
         "  line-wrap-marker '>'     Set the symbol at wrapped line ends",
@@ -1404,7 +1406,7 @@ int line_wrap_marker_command(const std::vector<std::string>& args) {
 
 int hint_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: hint <on|off|status>", "Examples:", "  hint on      Enable inline hints",
+        cjshopt_subcommand_usage("hint"), "Examples:", "  hint on      Enable inline hints",
         "  hint off     Disable inline hints", "  hint status  Show the current setting"};
 
     static const ToggleCommandConfig config{
@@ -1423,7 +1425,7 @@ int hint_command(const std::vector<std::string>& args) {
 
 int multiline_indent_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: multiline-indent <on|off|status>",
+        cjshopt_subcommand_usage("multiline-indent"),
         "Examples:", "  multiline-indent on      Enable automatic indentation in multiline",
         "  multiline-indent off     Disable automatic indentation in multiline",
         "  multiline-indent status  Show the current setting"};
@@ -1444,7 +1446,7 @@ int multiline_indent_command(const std::vector<std::string>& args) {
 
 int multiline_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: multiline <on|off|status>",
+        cjshopt_subcommand_usage("multiline"),
         "Examples:", "  multiline on      Enable multiline input",
         "  multiline off     Disable multiline input",
         "  multiline status  Show the current setting"};
@@ -1465,7 +1467,7 @@ int multiline_command(const std::vector<std::string>& args) {
 
 int inline_help_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: inline-help <on|off|status>",
+        cjshopt_subcommand_usage("inline-help"),
         "Examples:", "  inline-help on      Enable inline help messages",
         "  inline-help off     Disable inline help messages",
         "  inline-help status  Show the current setting"};
@@ -1486,7 +1488,7 @@ int inline_help_command(const std::vector<std::string>& args) {
 
 int status_hints_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: status-hints <off|normal|transient|persistent|status>",
+        cjshopt_subcommand_usage("status-hints"),
         "Examples:",
         "  status-hints off          Never display the underlined status hints",
         "  status-hints normal       Only show hints when the buffer and status are blank "
@@ -1615,7 +1617,7 @@ int status_hints_command(const std::vector<std::string>& args) {
 
 int status_line_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: status-line <on|off|status>",
+        cjshopt_subcommand_usage("status-line"),
         "Examples:", "  status-line on      Show the status area below the prompt",
         "  status-line off     Hide the status area entirely",
         "  status-line status  Show the current setting"};
@@ -1639,7 +1641,7 @@ int status_line_command(const std::vector<std::string>& args) {
 
 int status_reporting_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: status-reporting <on|off|status>",
+        cjshopt_subcommand_usage("status-reporting"),
         "Examples:", "  status-reporting on      Show cjsh validation output in the status row",
         "  status-reporting off     Hide validation and error reporting",
         "  status-reporting status  Show the current setting"};
@@ -1660,7 +1662,7 @@ int status_reporting_command(const std::vector<std::string>& args) {
 
 int status_line_callback_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: status-line-callback <function_name|off|status>", "Examples:",
+        cjshopt_subcommand_usage("status-line-callback"), "Examples:",
         "  status-line-callback my_status_banner  Run my_status_banner before drawing the status "
         "row",
         "  status-line-callback off               Disable custom status-line callback output",
@@ -1770,7 +1772,7 @@ int status_line_callback_command(const std::vector<std::string>& args) {
 
 int mouse_clicking_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: mouse-clicking <all-off|off|simple|smart|status>",
+        cjshopt_subcommand_usage("mouse-clicking"),
         "Examples:",
         "  mouse-clicking all-off   Never capture mouse events, including in menus",
         "  mouse-clicking off       Capture mouse events only in interactive menus",
@@ -1881,7 +1883,7 @@ int mouse_clicking_command(const std::vector<std::string>& args) {
 
 int mouse_clicking_status_line_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: mouse-clicking-status-line <on|off|status>", "Examples:",
+        cjshopt_subcommand_usage("mouse-clicking-status-line"), "Examples:",
         "  mouse-clicking-status-line on      Show the mouse-clicking status indicator",
         "  mouse-clicking-status-line off     Hide the mouse-clicking status indicator",
         "  mouse-clicking-status-line status  Show the current setting"};
@@ -1902,7 +1904,7 @@ int mouse_clicking_status_line_command(const std::vector<std::string>& args) {
 
 int auto_tab_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: auto-tab <on|off|status>",
+        cjshopt_subcommand_usage("auto-tab"),
         "Examples:", "  auto-tab on      Enable automatic tab completion",
         "  auto-tab off     Disable automatic tab completion",
         "  auto-tab status  Show the current setting"};
@@ -1923,7 +1925,7 @@ int auto_tab_command(const std::vector<std::string>& args) {
 
 int prompt_newline_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: prompt-newline <on|off|status>",
+        cjshopt_subcommand_usage("prompt-newline"),
         "Examples:", "  prompt-newline on      Add a newline after each command",
         "  prompt-newline off     Disable newlines after commands",
         "  prompt-newline status  Show the current setting"};
@@ -1944,7 +1946,7 @@ int prompt_newline_command(const std::vector<std::string>& args) {
 
 int right_prompt_follow_cursor_command(const std::vector<std::string>& args) {
     static const std::vector<std::string> usage_lines = {
-        "Usage: right-prompt-follow-cursor <on|off|status>", "Examples:",
+        cjshopt_subcommand_usage("right-prompt-follow-cursor"), "Examples:",
         "  right-prompt-follow-cursor on      Move the inline right prompt with the cursor",
         "  right-prompt-follow-cursor off     Pin the inline right prompt to the first row",
         "  right-prompt-follow-cursor status  Show the current setting"};

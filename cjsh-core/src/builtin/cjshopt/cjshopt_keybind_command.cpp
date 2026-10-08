@@ -26,6 +26,8 @@
   SOFTWARE.
 */
 
+#include "cjshopt_registry.h"
+
 #include "cjshopt_command.h"
 
 #include <algorithm>
@@ -92,7 +94,7 @@ const std::vector<KeyBindingDefault>& key_binding_defaults() {
 
 const std::vector<std::string>& keybind_usage_lines() {
     static const std::vector<std::string> kUsage = {
-        "Usage: keybind <subcommand> [...]",
+        cjshopt_subcommand_usage("keybind"),
         "",
         "Changes apply immediately in the current shell.",
         "Add the same command to ~/.cjshrc to persist it for future sessions.",
