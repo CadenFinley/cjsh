@@ -754,7 +754,9 @@ int printf_command(const std::vector<std::string>& args) {
         if (args_used < 0) {
             return 1;
         }
-        if (output_stopped) {
+        // Missing operands use default values but still count as format slots.
+        // Stop before advancing beyond the supplied array, including a null argv.
+        if (output_stopped || args_used >= argc) {
             break;
         }
         argc -= args_used;

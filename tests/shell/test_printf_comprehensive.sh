@@ -47,6 +47,28 @@ fail_test() {
     TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
+check_default_arguments() {
+    description=$1
+    script=$2
+    expected=$3
+    output=$("$CJSH_PATH" --secure -c "$script" 2>&1)
+    status=$?
+    if [ "$status" -eq 0 ] && [ "$output" = "$expected" ]; then
+        pass_test "$description"
+    else
+        fail_test "$description (status=$status, output='$output', expected='$expected')"
+    fi
+}
+
+# Missing values count as format slots, but must not advance past the argument array.
+check_default_arguments 'printf defaults with no operands' "printf '%s:%d'" ':0'
+check_default_arguments 'printf defaults after the last operand' \
+    "printf '%s:%d:%s' value" 'value:0:'
+check_default_arguments 'printf defaults after format reuse' \
+    "printf '%s:%s;' a b c" 'a:b;c:;'
+check_default_arguments 'printf missing width and precision operands' \
+    "printf '[%*.*s]'" '[]'
+
 OUT=$("$CJSH_PATH" -c "printf '%s\n' hello")
 if [ "$OUT" != "hello" ]; then
     fail_test "printf basic string (got '$OUT')"
