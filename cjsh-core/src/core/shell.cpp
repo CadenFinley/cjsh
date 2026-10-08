@@ -405,8 +405,8 @@ int Shell::execute_prepared_command(cjsh_env::PreparedCommand command, bool run_
         if (job_id > 0) {
             auto jobs = executor->get_jobs();
             auto it = jobs.find(job_id);
-            if (it != jobs.end() && !it->second.pids.empty()) {
-                pid_t last_pid = it->second.pids.back();
+            if (it != jobs.end() && !it->second->pids.empty()) {
+                pid_t last_pid = it->second->pids.back();
                 (void)setenv("!", std::to_string(last_pid).c_str(), 1);
 
                 JobManager::instance().set_last_background_pid(last_pid);

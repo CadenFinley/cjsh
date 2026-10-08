@@ -43,7 +43,6 @@
 #include <csignal>
 #include <cstring>
 #include <iostream>
-#include <iterator>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -59,9 +58,8 @@
 #include "signal_handler.h"
 #include "wait_status_utils.h"
 
-// manage execution-side job records, foreground waits, output relays, and child
-// cleanup. JobManager supplies jobspecs and user-facing lifecycle state; waiters
-// here publish reports there rather than treating the two tables as interchangeable.
+// Execution and job control share each job record. Their indexes have separate
+// lifetimes because private foreground jobs do not need a visible job number.
 namespace {
 
 int extract_exit_code(int status) {
@@ -85,7 +83,7 @@ Job* Exec::find_job_locked(int job_id) {
         report_missing_job(job_id);
         return nullptr;
     }
-    return &it->second;
+    return it->second.get();
 }
 
 Job* Exec::find_job_and_set_output_forwarding_locked(int job_id, bool forward) {
@@ -109,7 +107,7 @@ void Exec::report_missing_job(int job_id) {
 // resume only a requested stopped job. use one group signal where available;
 // ungrouped jobs require per-pid delivery and tolerate children that already exited.
 void Exec::resume_job(Job& job, bool cont, std::string_view context) {
-    if (!cont || !job.stopped) {
+    if (!cont || !job.stopped()) {
         return;
     }
 
@@ -118,7 +116,7 @@ void Exec::resume_job(Job& job, bool cont, std::string_view context) {
         resumed = kill(-job.pgid, SIGCONT) == 0;
     } else {
         resumed = true;
-        for (pid_t pid : job.pids) {
+        for (pid_t pid : job.remaining_pids) {
             if (pid > 0 && kill(pid, SIGCONT) < 0 && errno != ESRCH) {
                 resumed = false;
             }
@@ -130,10 +128,10 @@ void Exec::resume_job(Job& job, bool cont, std::string_view context) {
                       std::string(strerror(errno)));
     }
 
-    job.stopped = false;
+    job.mark_running();
 }
 
-int Exec::add_job(const Job& job) {
+int Exec::add_job(const std::shared_ptr<Job>& job) {
     std::lock_guard<std::mutex> lock(jobs_mutex);
 
     int job_id = next_job_id++;
@@ -173,9 +171,6 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
     struct termios shell_modes{};
     const bool shell_modes_saved =
         main_shell_controls_terminal && tcgetattr(shell_terminal, &shell_modes) == 0;
-    bool stopped_modes_saved = false;
-    pid_t stopped_job_pgid = -1;
-    struct termios stopped_job_modes{};
     if (main_shell_controls_terminal) {
         if (tcsetpgrp(shell_terminal, job->pgid) == 0) {
             terminal_control_acquired = true;
@@ -197,7 +192,7 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
     // children launched behind a barrier must not touch the tty before handoff.
     // release one byte per member, then close our writer so none wait indefinitely.
     if (job->launch_barrier_fd >= 0) {
-        const std::string ready(job->pids.size(), 'x');
+        const std::string ready(job->remaining_pids.size(), 'x');
         size_t written = 0;
         while (written < ready.size()) {
             const ssize_t count =
@@ -224,12 +219,9 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
 
     if (terminal_control_acquired && main_shell_controls_terminal) {
         auto current = jobs.find(job_id);
-        if (current != jobs.end() && current->second.stopped &&
-            tcgetattr(shell_terminal, &current->second.tmodes) == 0) {
-            current->second.tmodes_saved = true;
-            stopped_modes_saved = true;
-            stopped_job_pgid = current->second.pgid;
-            stopped_job_modes = current->second.tmodes;
+        if (current != jobs.end() && current->second->stopped() &&
+            tcgetattr(shell_terminal, &current->second->tmodes) == 0) {
+            current->second->tmodes_saved = true;
         }
         if (tcsetpgrp(shell_terminal, shell_pgid) < 0) {
             if (errno != ENOTTY && errno != EINVAL) {
@@ -241,22 +233,12 @@ void Exec::put_job_in_foreground(int job_id, bool cont) {
 
         // recover pre-command modes after a stop or signal death. a normal exit
         // may intentionally leave changed settings, as with an stty invocation.
-        const bool restore_modes = current != jobs.end() &&
-                                   (current->second.stopped || WIFSIGNALED(current->second.status));
+        const bool restore_modes = current != jobs.end() && (current->second->stopped() ||
+                                                             WIFSIGNALED(current->second->status));
         if (restore_modes && shell_modes_saved &&
             tcsetattr(shell_terminal, TCSADRAIN, &shell_modes) < 0) {
             set_error(ErrorType::RUNTIME_ERROR, "tcsetattr",
                       "failed to restore terminal attributes: " + std::string(strerror(errno)));
-        }
-    }
-
-    // make stopped terminal modes available to the user-facing fg path too.
-    // release the execution-table lock before updating the other subsystem.
-    lock.unlock();
-    if (stopped_modes_saved) {
-        if (auto managed_job = JobManager::instance().get_job_by_pid_or_pgid(stopped_job_pgid)) {
-            managed_job->tmodes = stopped_job_modes;
-            managed_job->tmodes_saved = true;
         }
     }
 }
@@ -274,263 +256,105 @@ void Exec::put_job_in_background(int job_id, bool cont) {
     resume_job(*job, cont, "background job");
 }
 
-void Exec::set_job_output_forwarding(pid_t pgid, bool forward) {
-    std::lock_guard<std::mutex> lock(jobs_mutex);
-    for (auto& pair : jobs) {
-        Job& job = pair.second;
-        if (job.pgid == pgid) {
-            if (job.output_relay) {
-                job.output_relay->forward.store(forward);
-            }
-            break;
-        }
-    }
-}
-
-// own foreground wait reports until the job completes, fully stops, or shell exit
-// interrupts the wait. preserve launch order for PIPESTATUS and the last member's
-// status separately from whichever child happens to report last.
+// Wait reports update the same record that jobs, fg, bg, and wait inspect.
 void Exec::wait_for_job(int job_id) {
-    std::unique_lock<std::mutex> lock(jobs_mutex);
-
-    auto it = jobs.find(job_id);
-    if (it == jobs.end()) {
-        return;
+    std::shared_ptr<Job> job;
+    {
+        std::lock_guard<std::mutex> lock(jobs_mutex);
+        const auto it = jobs.find(job_id);
+        if (it == jobs.end()) {
+            return;
+        }
+        job = it->second;
     }
 
-    // snapshot wait inputs before releasing the mutex. signal processing and
-    // job-management callbacks must remain able to access the execution table.
-    pid_t job_pgid = it->second.pgid;
-    bool process_group = it->second.process_group;
-    std::vector<pid_t> remaining_pids = it->second.pids;
-    pid_t last_pid = it->second.last_pid;
-    std::vector<pid_t> pid_order = it->second.pid_order;
-    std::vector<int> pipeline_statuses = it->second.pipeline_statuses;
-
-    lock.unlock();
-
-    int status = 0;
-    pid_t pid = 0;
-
-    bool job_stopped = false;
-    bool saw_last = false;
-    int last_status = 0;
-    int stop_signal = 0;
-    std::unordered_set<pid_t> stopped_pids;
-
-    const auto process_wait_signals = [&] {
-        // this waiter owns the foreground children's status reports. reaping
-        // a stop elsewhere could leave us waiting for a child that cannot run.
+    while (!job->remaining_pids.empty()) {
+        // This waiter owns these reports. Process traps without a second child reaper.
         if (shell) {
             (void)shell->process_pending_signals(false);
-        } else if (auto* signal_handler = SignalHandler::instance()) {
-            (void)signal_handler->process_pending_signals(this, false);
+        } else if (auto* handler = SignalHandler::instance()) {
+            (void)handler->process_pending_signals(this, false);
         }
-    };
-    while (!remaining_pids.empty()) {
-        // signals received during launch will not interrupt a later waitpid.
-        process_wait_signals();
         if (cjsh_env::exit_requested()) {
             last_exit_code = SignalHandler::termination_signal() != 0
                                  ? 128 + SignalHandler::termination_signal()
                                  : 0;
             return;
         }
-        const pid_t wait_target = process_group ? -job_pgid : remaining_pids.front();
-        pid = waitpid(wait_target, &status, WUNTRACED | WCONTINUED);
-
-        if (pid == -1) {
+        if (job->remaining_pids.empty()) {
+            break;
+        }
+        const auto first_live = std::find_if(job->pids.begin(), job->pids.end(), [&](pid_t pid) {
+            return job->remaining_pids.count(pid) != 0;
+        });
+        const pid_t target = job->process_group ? -job->pgid : *first_live;
+        int status = 0;
+        const pid_t pid = waitpid(target, &status, WUNTRACED | WCONTINUED);
+        if (pid < 0) {
             if (errno == EINTR) {
                 continue;
             }
             if (errno == ECHILD) {
-                remaining_pids.clear();
-                break;
+                job->remaining_pids.clear();
+                job->state.store(
+                    job->termination_signal == 0 ? JobState::DONE : JobState::TERMINATED,
+                    std::memory_order_relaxed);
+                job->status = job->last_status;
+            } else {
+                set_error(ErrorType::RUNTIME_ERROR, "waitpid",
+                          "failed to wait for child process: " + std::string(strerror(errno)));
             }
-            set_error(ErrorType::RUNTIME_ERROR, "waitpid",
-                      "failed to wait for child process: " + std::string(strerror(errno)));
             break;
         }
-
-        auto pid_it = std::find(remaining_pids.begin(), remaining_pids.end(), pid);
-        if (pid_it != remaining_pids.end() && WIFSIGNALED(status) && WTERMSIG(status) == SIGINT) {
+        if (job->remaining_pids.count(pid) != 0 && WIFSIGNALED(status) &&
+            WTERMSIG(status) == SIGINT) {
             SignalHandler::note_startup_interrupt();
         }
-        if (pid_it != remaining_pids.end() && (WIFEXITED(status) || WIFSIGNALED(status))) {
-            (void)remaining_pids.erase(pid_it);
-            stopped_pids.erase(pid);
-        }
-
-        // status arrival order is unrelated to pipeline order. only final child
-        // results populate numeric pipeline statuses, not stop/continue reports.
-        auto order_it = std::find(pid_order.begin(), pid_order.end(), pid);
-        if (order_it != pid_order.end()) {
-            size_t index = static_cast<size_t>(std::distance(pid_order.begin(), order_it));
-            if (index < pipeline_statuses.size() && (WIFEXITED(status) || WIFSIGNALED(status))) {
-                pipeline_statuses[index] = extract_exit_code(status);
-            }
-        }
-
-        if (pid == last_pid) {
-        }
-
-        if (pid == last_pid) {
-            saw_last = true;
-            last_status = status;
-        }
-
-        if (WIFEXITED(status) || WIFSIGNALED(status)) {
-            JobManager::instance().handle_child_status(pid, status);
-        }
-
-        // a pipeline is stopped only after every remaining member has stopped.
-        // finished members no longer prevent that aggregate transition.
-        if (WIFSTOPPED(status)) {
-            stopped_pids.insert(pid);
-            stop_signal = WSTOPSIG(status);
-            JobManager::instance().handle_child_status(pid, status);
-            if (!remaining_pids.empty() && stopped_pids.size() >= remaining_pids.size()) {
-                job_stopped = true;
-                break;
-            }
-        } else if (WIFCONTINUED(status)) {
-            stopped_pids.erase(pid);
-            JobManager::instance().handle_child_status(pid, status);
-        }
-
-        if (!remaining_pids.empty() && stopped_pids.size() >= remaining_pids.size()) {
-            job_stopped = true;
+        JobManager::instance().handle_child_status(pid, status, this);
+        if (job->stopped()) {
             break;
         }
     }
 
-    lock.lock();
-
-    it = jobs.find(job_id);
-    if (it != jobs.end()) {
-        Job& job = it->second;
-        if (!pipeline_statuses.empty()) {
-            job.pipeline_statuses = std::move(pipeline_statuses);
-        }
-
-        if (job_stopped) {
-            job.stopped = true;
-            job.status = status;
-
-            auto job_control = JobManager::instance().get_job_by_pid_or_pgid(job_pgid);
-
-            // native auto-background behavior applies only to terminal-stop
-            // requests, not every stop cause such as a background tty read.
-            const bool should_auto_background =
-                job.auto_background_on_stop && stop_signal == SIGTSTP && job.pgid > 0;
-
-            if (should_auto_background) {
-                if (job.auto_background_on_stop_silent && job.output_relay) {
-                    job.output_relay->forward.store(false);
-                }
-                resume_job(job, true, "background job");
-                job.background = true;
-                job.completed = false;
-                last_exit_code = 0;
-
-                if (job_control) {
-                    job_control->state.store(JobState::RUNNING, std::memory_order_relaxed);
-                    job_control->background.store(true, std::memory_order_relaxed);
-                    job_control->stop_notified.store(false, std::memory_order_relaxed);
-                    job_control->stopped_pids.clear();
-                    job_control->stop_signal = 0;
-                    job_control->defer_stop_notification = false;
-                }
-
-                JobManager::instance().set_last_background_pid(job.last_pid);
-
-                const std::string& display_command =
-                    job_control ? job_control->display_command() : job.command;
-                std::cerr << "\n[" << job_id << "]+ " << display_command << " &" << '\n';
-            } else {
-                last_exit_code = 128 + SIGTSTP;
-                if (job_control) {
-                    job_control->defer_stop_notification = false;
-                    JobManager::instance().notify_job_stopped(job_control);
-                }
+    if (job->stopped()) {
+        const bool auto_background =
+            job->auto_background_on_stop && job->stop_signal == SIGTSTP && job->pgid > 0;
+        if (auto_background) {
+            if (job->auto_background_on_stop_silent && job->output_relay) {
+                job->output_relay->forward.store(false);
             }
+            resume_job(*job, true, "background job");
+            job->background.store(true, std::memory_order_relaxed);
+            job->defer_stop_notification = false;
+            last_exit_code = 0;
+            JobManager::instance().set_last_background_pid(job->last_pid);
+            std::cerr << "\n[" << job_id << "]+ " << job->display_command() << " &" << '\n';
         } else {
-            job.completed = true;
-            job.stopped = false;
-            job.status = status;
-
-            int final_status = saw_last ? last_status : status;
-            const bool exited_or_signaled = WIFEXITED(final_status) || WIFSIGNALED(final_status);
-            if (!exited_or_signaled) {
-                final_status = (job.last_status != 0) ? job.last_status : job.status;
-            }
-            job.last_status = final_status;
-
-            if (WIFEXITED(final_status) || WIFSIGNALED(final_status)) {
-                last_exit_code = extract_exit_code(final_status);
-                job.completed = true;
-                set_error_from_wait_status(job.command, final_status);
+            last_exit_code = 128 + SIGTSTP;
+            job->defer_stop_notification = false;
+            if (job->job_id != 0) {
+                JobManager::instance().notify_job_stopped(job);
             }
         }
+    } else if (job->completed()) {
+        last_exit_code = extract_exit_code(job->last_status);
+        set_error_from_wait_status(job->command_name, job->last_status);
     }
 }
 
-// apply an already consumed wait report from a normal-context reaper. despite
-// the name, this is not an asynchronous signal callback: it takes a mutex and may
-// allocate. keep pipeline ordering even as final reports remove live pids.
-void Exec::handle_child_signal(pid_t pid, int status) {
-    static bool use_signal_masking = false;
-    static int signal_count = 0;
-
-    if (++signal_count > 10) {
-        use_signal_masking = true;
-    }
-
-    std::unique_ptr<SignalMask> mask;
-    if (use_signal_masking) {
-        mask = std::make_unique<SignalMask>(SIGCHLD);
-    }
-
+std::shared_ptr<Job> Exec::find_job_by_pid(pid_t pid) {
     std::lock_guard<std::mutex> lock(jobs_mutex);
-
-    for (auto& job_pair : jobs) {
-        Job& job = job_pair.second;
-
-        auto it = std::find(job.pids.begin(), job.pids.end(), pid);
-        if (it != job.pids.end()) {
-            auto order_it = std::find(job.pid_order.begin(), job.pid_order.end(), pid);
-            if (order_it != job.pid_order.end()) {
-                size_t index = static_cast<size_t>(std::distance(job.pid_order.begin(), order_it));
-                int recorded = -1;
-                if (WIFEXITED(status) || WIFSIGNALED(status)) {
-                    recorded = extract_exit_code(status);
-                }
-                if (recorded != -1 && index < job.pipeline_statuses.size()) {
-                    job.pipeline_statuses[index] = recorded;
-                }
-            }
-            if (pid == job.last_pid) {
-                job.last_status = status;
-            }
-            if (WIFSTOPPED(status)) {
-                job.stopped = true;
-                job.status = status;
-            } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
-                (void)job.pids.erase(it);
-
-                if (job.pids.empty()) {
-                    job.completed = true;
-                    job.stopped = false;
-                    job.status = status;
-                }
-            }
-            break;
+    for (const auto& [id, job] : jobs) {
+        (void)id;
+        if (job->remaining_pids.count(pid) != 0) {
+            return job;
         }
     }
+    return nullptr;
 }
 
-// return a snapshot so callers need not retain jobs_mutex while inspecting jobs.
-std::map<int, Job> Exec::get_jobs() {
+// Copy the index so callers can inspect shared records without the index lock.
+std::map<int, std::shared_ptr<Job>> Exec::get_jobs() {
     std::lock_guard<std::mutex> lock(jobs_mutex);
     return jobs;
 }
@@ -538,7 +362,7 @@ std::map<int, Job> Exec::get_jobs() {
 // signal a snapshot during shell teardown, then give children a bounded chance
 // to exit. disown-style hangup protection applies to SIGHUP, not all shutdown causes.
 void Exec::terminate_all_child_process(int signal) {
-    std::vector<Job> job_snapshot;
+    std::vector<std::shared_ptr<Job>> job_snapshot;
     {
         std::lock_guard<std::mutex> lock(jobs_mutex);
         job_snapshot.reserve(jobs.size());
@@ -552,7 +376,7 @@ void Exec::terminate_all_child_process(int signal) {
         if (job.process_group && job.pgid > 0 && killpg(job.pgid, signum) == 0) {
             return;
         }
-        for (pid_t pid : job.pids) {
+        for (pid_t pid : job.remaining_pids) {
             if (pid > 0) {
                 (void)kill(pid, signum);
             }
@@ -560,15 +384,17 @@ void Exec::terminate_all_child_process(int signal) {
     };
 
     std::vector<pid_t> pending_children;
-    for (const Job& job : job_snapshot) {
-        if (job.completed || (signal == SIGHUP && job.hup_protected)) {
+    for (const auto& record : job_snapshot) {
+        const Job& job = *record;
+        if (job.completed() || (signal == SIGHUP && job.hup_protected)) {
             continue;
         }
         send_signal_to_job(job, signal);
-        pending_children.insert(pending_children.end(), job.pids.begin(), job.pids.end());
+        pending_children.insert(pending_children.end(), job.remaining_pids.begin(),
+                                job.remaining_pids.end());
 #ifdef SIGCONT
         // queue the shutdown signal before resuming a stopped job.
-        if (job.stopped) {
+        if (job.stopped()) {
             send_signal_to_job(job, SIGCONT);
         }
 #endif
@@ -597,19 +423,8 @@ void Exec::terminate_all_child_process(int signal) {
 void Exec::remove_job_by_pgid(pid_t pgid) {
     std::lock_guard<std::mutex> lock(jobs_mutex);
     for (auto it = jobs.begin(); it != jobs.end(); ++it) {
-        if (it->second.pgid == pgid) {
+        if (it->second->pgid == pgid) {
             jobs.erase(it);
-            return;
-        }
-    }
-}
-
-void Exec::set_job_hup_protected(pid_t pgid, bool protected_from_hup) {
-    std::lock_guard<std::mutex> lock(jobs_mutex);
-    for (auto& [id, job] : jobs) {
-        (void)id;
-        if (job.pgid == pgid) {
-            job.hup_protected = protected_from_hup;
             return;
         }
     }

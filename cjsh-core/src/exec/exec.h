@@ -29,7 +29,6 @@
 #ifndef CJSH_CORE_SRC_EXEC_EXEC_H
 #define CJSH_CORE_SRC_EXEC_EXEC_H
 
-#include <atomic>
 #include <csignal>
 #include <functional>
 #include <map>
@@ -42,48 +41,20 @@
 #include <vector>
 
 #include <sys/types.h>
-#include <termios.h>
 
 #include "error_out.h"
+#include "job_state.h"  // IWYU pragma: export
 
 struct Command;
 namespace cjsh_env {
 struct PreparedCommand;
 }
 
-struct OutputRelayState {
-    int master_fd{-1};
-    std::atomic<bool> forward{true};
-};
-
-struct Job {
-    pid_t pgid{0};
-    std::string command;
-    bool background{false};
-    bool auto_background_on_stop{false};
-    bool auto_background_on_stop_silent{false};
-    bool suppress_notifications{false};
-    bool process_group{true};
-    bool hup_protected{false};
-    bool completed{false};
-    bool stopped{false};
-    int status{0};
-    std::vector<pid_t> pids;
-    pid_t last_pid{-1};
-    int last_status{0};
-    std::vector<pid_t> pid_order;
-    std::vector<int> pipeline_statuses;
-    std::shared_ptr<OutputRelayState> output_relay;
-    struct termios tmodes{};
-    bool tmodes_saved{false};
-    int launch_barrier_fd{-1};
-};
-
 class Exec {
    private:
     std::mutex error_mutex;
     std::mutex jobs_mutex;
-    std::map<int, Job> jobs;
+    std::map<int, std::shared_ptr<Job>> jobs;
     int next_job_id = 1;
     pid_t shell_pgid;
     int shell_terminal;
@@ -128,18 +99,16 @@ class Exec {
                                       bool* action_invoked = nullptr,
                                       bool preserve_action_fds = true);
 
-    int add_job(const Job& job);
+    int add_job(const std::shared_ptr<Job>& job);
     void remove_job(int job_id);
     void put_job_in_foreground(int job_id, bool cont);
     void put_job_in_background(int job_id, bool cont);
     void wait_for_job(int job_id);
-    void handle_child_signal(pid_t pid, int status);
-    std::map<int, Job> get_jobs();
+    std::shared_ptr<Job> find_job_by_pid(pid_t pid);
+    std::map<int, std::shared_ptr<Job>> get_jobs();
     void terminate_all_child_process(int signal = SIGTERM);
     void abandon_all_child_processes();
-    void set_job_output_forwarding(pid_t pgid, bool forward);
     void remove_job_by_pgid(pid_t pgid);
-    void set_job_hup_protected(pid_t pgid, bool protected_from_hup);
 
     void set_error(const ErrorInfo& error);
     void set_error(ErrorType type, const std::string& command = "", const std::string& message = "",

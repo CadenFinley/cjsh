@@ -890,8 +890,7 @@ void SignalHandler::reap_pending_children(Exec* executor, bool managed_jobs_only
             return;
         }
         ++count;
-        executor->handle_child_signal(pid, status);
-        JobManager::instance().handle_child_status(pid, status);
+        JobManager::instance().handle_child_status(pid, status, executor);
     }
     // leave work pending after a burst; never consume a status beyond the batch limit.
     s_sigchld_received = 1;
@@ -919,8 +918,8 @@ SignalProcessingResult SignalHandler::process_pending_signals(Exec* executor, bo
             auto jobs = executor->get_jobs();
             for (const auto& job_pair : jobs) {
                 const auto& job = job_pair.second;
-                if (!job.background && !job.completed && !job.stopped) {
-                    if (kill(-job.pgid, SIGINT) < 0) {
+                if (!job->background && !job->completed() && !job->stopped()) {
+                    if (kill(-job->pgid, SIGINT) < 0) {
                         print_error_errno({ErrorType::RUNTIME_ERROR,
                                            "signal",
                                            "kill SIGINT in process_pending_signals",

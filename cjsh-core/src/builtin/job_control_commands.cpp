@@ -188,8 +188,8 @@ int bg_command(const std::vector<std::string>& args) {
             continue;
         }
 
-        if (shell && shell->executor) {
-            shell->executor->set_job_output_forwarding(job->pgid, false);
+        if (job->output_relay) {
+            job->output_relay->forward.store(false);
         }
         if (!signal_job_processes(job, SIGCONT)) {
             print_error_errno({ErrorType::RUNTIME_ERROR, "bg", "SIGCONT", {}});
@@ -197,10 +197,7 @@ int bg_command(const std::vector<std::string>& args) {
             continue;
         }
 
-        job->state.store(JobState::RUNNING, std::memory_order_relaxed);
-        job->stopped_pids.clear();
-        job->stop_signal = 0;
-        job->stop_notified.store(false, std::memory_order_relaxed);
+        job->mark_running();
         job->background.store(true, std::memory_order_relaxed);
         job->notified = false;
         job_manager.set_current_job(job_id);
@@ -293,8 +290,8 @@ int fg_command(const std::vector<std::string>& args) {
         }
     }
 
-    if (shell && shell->executor) {
-        shell->executor->set_job_output_forwarding(job->pgid, true);
+    if (job->output_relay) {
+        job->output_relay->forward.store(true);
     }
 
     if (job->state.load(std::memory_order_relaxed) == JobState::STOPPED &&
@@ -310,8 +307,7 @@ int fg_command(const std::vector<std::string>& args) {
         return 1;
     }
 
-    job->state.store(JobState::RUNNING, std::memory_order_relaxed);
-    job->stop_notified.store(false, std::memory_order_relaxed);
+    job->mark_running();
     job->background.store(false, std::memory_order_relaxed);
     job->notified = false;
     job_manager.set_current_job(job_id);
@@ -647,9 +643,6 @@ int wait_command(const std::vector<std::string>& args) {
             }
 
             auto changed_job = job_manager.get_job_by_pid(pid);
-            if (shell && shell->executor) {
-                shell->executor->handle_child_signal(pid, status);
-            }
             job_manager.handle_child_status(pid, status);
 
             bool selected = false;
@@ -854,9 +847,6 @@ int disown_command(const std::vector<std::string>& args) {
     for (const auto& job : targets) {
         if (mark_hup_only) {
             job->hup_protected = true;
-            if (shell && shell->executor) {
-                shell->executor->set_job_hup_protected(job->pgid, true);
-            }
             continue;
         }
 
@@ -1077,10 +1067,7 @@ int kill_command(const std::vector<std::string>& args) {
                 job->state.store(JobState::STOPPED, std::memory_order_relaxed);
                 job->stop_signal = signal;
             } else if (is_continue_signal(signal)) {
-                job->state.store(JobState::RUNNING, std::memory_order_relaxed);
-                job->stop_signal = 0;
-                job->stopped_pids.clear();
-                job->stop_notified.store(false, std::memory_order_relaxed);
+                job->mark_running();
             }
         };
 

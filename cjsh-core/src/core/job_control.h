@@ -30,76 +30,18 @@
 #define CJSH_CORE_SRC_CORE_JOB_CONTROL_H
 
 #include <sys/types.h>
-#include <termios.h>
-
-#include <atomic>
-#include <chrono>
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include "error_out.h"
+#include "job_state.h"  // IWYU pragma: export
 #include "parser.h"
 
 class Shell;
-
-enum class JobState : std::uint8_t {
-    RUNNING,
-    STOPPED,
-    DONE,
-    TERMINATED
-};
-
-struct JobControlJob {
-    int job_id;
-    pid_t pgid;
-    std::vector<pid_t> pids;
-    std::unordered_set<pid_t> remaining_pids;
-    std::unordered_set<pid_t> stopped_pids;
-    pid_t last_pid{-1};
-    std::string command;
-    std::atomic<JobState> state{JobState::RUNNING};
-    int exit_status{};
-    int termination_signal{};
-    int stop_signal{};
-    bool notified{false};
-    std::atomic<bool> stop_notified{false};
-    std::atomic<bool> background{false};
-    bool suppress_notifications{false};
-    bool process_group{true};
-    bool hup_protected{false};
-    bool defer_stop_notification{false};
-    bool reads_stdin{false};
-    bool awaiting_stdin_signal{false};
-    std::uint8_t last_stdin_signal{0};
-    std::uint16_t stdin_signal_count{0};
-    std::chrono::steady_clock::time_point last_stdin_signal_time{
-        std::chrono::steady_clock::time_point::min()};
-    std::string custom_name;
-    struct termios tmodes{};
-    bool tmodes_saved{false};
-
-    JobControlJob(int id, pid_t group_id, const std::vector<pid_t>& process_ids,
-                  const std::string& cmd, bool is_background, bool consumes_stdin,
-                  bool has_process_group);
-
-    bool has_custom_name() const {
-        return !custom_name.empty();
-    }
-
-    void set_custom_name(std::string name) {
-        custom_name = std::move(name);
-    }
-
-    const std::string& display_command() const {
-        return custom_name.empty() ? command : custom_name;
-    }
-};
+class Exec;
 
 class JobManager {
    public:
@@ -107,6 +49,9 @@ class JobManager {
 
     int add_job(pid_t pgid, const std::vector<pid_t>& pids, const std::string& command,
                 bool background = false, bool reads_stdin = true, bool process_group = true);
+
+    int add_job(const std::shared_ptr<JobControlJob>& job, const std::string& command,
+                bool reads_stdin);
 
     void remove_job(int job_id);
 
@@ -136,7 +81,7 @@ class JobManager {
 
     void notify_job_stopped(const std::shared_ptr<JobControlJob>& job) const;
     void notify_job_finished(const std::shared_ptr<JobControlJob>& job) const;
-    void handle_child_status(pid_t pid, int status);
+    void handle_child_status(pid_t pid, int status, Exec* executor = nullptr);
 
     bool foreground_job_reads_stdin();
 

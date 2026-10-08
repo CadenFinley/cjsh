@@ -52,6 +52,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -62,9 +63,8 @@
 
 #include "error_out.h"
 
-// maintain the user-facing job table: jobspec resolution, aggregate child state,
-// notifications, and statuses retained for wait. Exec owns complementary launch
-// and foreground-wait state; each consumed wait report must reach both layers.
+// Manage job lookup, notifications, and statuses retained for wait.
+// Execution and job control update the same records.
 namespace {
 
 // let the editor place notifications around active input when possible. stderr
@@ -411,11 +411,7 @@ std::optional<int> wait_for_job(const std::shared_ptr<JobControlJob>& job, JobMa
             return std::nullopt;
         }
 
-        // waitpid consumes the report; publish it to both tables before deciding
-        // whether the entire job has completed or stopped.
-        if (shell && shell->executor) {
-            shell->executor->handle_child_signal(pid, status);
-        }
+        // Apply each wait report once to the shared job record.
         job_manager.handle_child_status(pid, status);
         if (status_pid != nullptr && (WIFEXITED(status) || WIFSIGNALED(status))) {
             *status_pid = pid;
@@ -492,9 +488,58 @@ JobControlJob::JobControlJob(int id, pid_t group_id, const std::vector<pid_t>& p
       remaining_pids(process_ids.begin(), process_ids.end()),
       last_pid(process_ids.empty() ? -1 : process_ids.back()),
       command(cmd),
+      command_name(cmd),
+      pipeline_statuses(process_ids.size(), -1),
       background(is_background),
       process_group(has_process_group),
       reads_stdin(consumes_stdin) {
+}
+
+void JobControlJob::mark_running() {
+    state.store(JobState::RUNNING, std::memory_order_relaxed);
+    stopped_pids.clear();
+    stop_signal = 0;
+    stop_notified.store(false, std::memory_order_relaxed);
+}
+
+void JobControlJob::record_wait_status(pid_t pid, int wait_status) {
+    const auto position = std::find(pids.begin(), pids.end(), pid);
+    if (position == pids.end()) {
+        return;
+    }
+    if (WIFSTOPPED(wait_status)) {
+        stopped_pids.insert(pid);
+        stop_signal = WSTOPSIG(wait_status);
+        status = wait_status;
+    } else if (WIFCONTINUED(wait_status)) {
+        stopped_pids.erase(pid);
+        stop_signal = 0;
+        state.store(JobState::RUNNING, std::memory_order_relaxed);
+        stop_notified.store(false, std::memory_order_relaxed);
+        return;
+    } else if (WIFEXITED(wait_status) || WIFSIGNALED(wait_status)) {
+        status = wait_status;
+        const size_t index = static_cast<size_t>(std::distance(pids.begin(), position));
+        pipeline_statuses[index] = wait_status_utils::to_exit_code(wait_status);
+        if (pid == last_pid || last_pid <= 0) {
+            last_status = wait_status;
+            termination_signal = WIFSIGNALED(wait_status) ? WTERMSIG(wait_status) : 0;
+            exit_status = wait_status_utils::to_exit_code(wait_status);
+        }
+        stopped_pids.erase(pid);
+        remaining_pids.erase(pid);
+    } else {
+        return;
+    }
+
+    if (remaining_pids.empty()) {
+        state.store(termination_signal == 0 ? JobState::DONE : JobState::TERMINATED,
+                    std::memory_order_relaxed);
+    } else if (stopped_pids.size() >= remaining_pids.size()) {
+        state.store(JobState::STOPPED, std::memory_order_relaxed);
+    } else {
+        state.store(JobState::RUNNING, std::memory_order_relaxed);
+    }
 }
 
 JobManager& JobManager::instance() {
@@ -504,14 +549,19 @@ JobManager& JobManager::instance() {
 
 int JobManager::add_job(pid_t pgid, const std::vector<pid_t>& pids, const std::string& command,
                         bool background, bool reads_stdin, bool process_group) {
-    // ids increase monotonically; selecting the new job also shifts %+ and %-.
-    int job_id = next_job_id++;
-    std::shared_ptr<JobControlJob> job = std::make_shared<JobControlJob>(
-        job_id, pgid, pids, command, background, reads_stdin, process_group);
+    return add_job(std::make_shared<JobControlJob>(0, pgid, pids, command, background, reads_stdin,
+                                                   process_group),
+                   command, reads_stdin);
+}
+
+int JobManager::add_job(const std::shared_ptr<JobControlJob>& job, const std::string& command,
+                        bool reads_stdin) {
+    const int job_id = next_job_id++;
+    job->job_id = job_id;
+    job->command = command;
+    job->reads_stdin = reads_stdin;
     jobs[job_id] = job;
-
     update_current_previous(job_id);
-
     return job_id;
 }
 
@@ -638,9 +688,6 @@ void JobManager::update_job_statuses() {
     }
 
     for (const auto& [pid, status] : status_changes) {
-        if (shell && shell->executor) {
-            shell->executor->handle_child_signal(pid, status);
-        }
         handle_child_status(pid, status);
     }
 }
@@ -766,7 +813,7 @@ void JobManager::notify_job_finished(const std::shared_ptr<JobControlJob>& job) 
 
 // apply a waitpid report, not a signal-handler callback. retain a bounded cache of
 // terminal statuses even for pids no longer visible, for later wait calls to consume.
-void JobManager::handle_child_status(pid_t pid, int status) {
+void JobManager::handle_child_status(pid_t pid, int status, Exec* executor) {
     if (WIFEXITED(status) || WIFSIGNALED(status)) {
         if (completed_pid_statuses.size() >= 256) {
             completed_pid_statuses.erase(completed_pid_statuses.begin());
@@ -775,67 +822,29 @@ void JobManager::handle_child_status(pid_t pid, int status) {
     }
 
     auto job = get_job_by_pid(pid);
+    const bool managed = job != nullptr;
+    if (!job) {
+        if (executor == nullptr && shell) {
+            executor = shell->executor.get();
+        }
+        if (executor != nullptr) {
+            job = executor->find_job_by_pid(pid);
+        }
+    }
     if (!job) {
         return;
     }
 
-    // one stopped member does not stop a pipeline as a whole. report STOPPED
-    // only when every remaining child has stopped; continuation reopens the cycle.
-    if (WIFSTOPPED(status)) {
-        job->stopped_pids.insert(pid);
-        job->stop_signal = WSTOPSIG(status);
-        if (!job->remaining_pids.empty() &&
-            job->stopped_pids.size() >= job->remaining_pids.size()) {
-            job->state.store(JobState::STOPPED, std::memory_order_relaxed);
-            if (!job->defer_stop_notification) {
-                notify_job_stopped(job);
-            }
+    job->record_wait_status(pid, status);
+    if (managed) {
+        if (WIFCONTINUED(status) || WIFEXITED(status) || WIFSIGNALED(status)) {
+            clear_stdin_signal(job->pgid);
         }
-        return;
-    }
-    if (WIFCONTINUED(status)) {
-        job->stopped_pids.erase(pid);
-        job->stop_signal = 0;
-        job->state.store(JobState::RUNNING, std::memory_order_relaxed);
-        job->stop_notified.store(false, std::memory_order_relaxed);
-        clear_stdin_signal(job->pgid);
-        return;
-    }
-    const bool process_finished = WIFEXITED(status) || WIFSIGNALED(status);
-    if (!process_finished) {
-        return;
-    }
-
-    // preserve the last pipeline member's result even if another child finishes
-    // later. aggregate completion still waits for every remaining pid to disappear.
-    if (pid == job->last_pid || job->last_pid <= 0) {
-        if (WIFSIGNALED(status)) {
-            job->termination_signal = WTERMSIG(status);
-            job->exit_status = 128 + job->termination_signal;
-        } else {
-            job->termination_signal = 0;
-            job->exit_status = WEXITSTATUS(status);
-        }
-    }
-
-    clear_stdin_signal(job->pgid);
-    job->stopped_pids.erase(pid);
-    job->remaining_pids.erase(pid);
-    if (job->remaining_pids.empty()) {
-        if (job->last_pid <= 0 || pid == job->last_pid) {
-            job->termination_signal = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
-            job->exit_status = wait_status_utils::to_exit_code(status);
-        }
-        job->state.store(job->termination_signal == 0 ? JobState::DONE : JobState::TERMINATED,
-                         std::memory_order_relaxed);
-        notify_job_finished(job);
-    } else if (job->stopped_pids.size() >= job->remaining_pids.size()) {
-        job->state.store(JobState::STOPPED, std::memory_order_relaxed);
-        if (!job->defer_stop_notification) {
+        if (job->completed()) {
+            notify_job_finished(job);
+        } else if (job->stopped() && !job->defer_stop_notification) {
             notify_job_stopped(job);
         }
-    } else {
-        job->state.store(JobState::RUNNING, std::memory_order_relaxed);
     }
 }
 
