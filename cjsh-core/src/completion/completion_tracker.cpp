@@ -32,6 +32,7 @@
 #include <cctype>
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <string>
 
 #include "isocline.h"
@@ -46,7 +47,7 @@ constexpr size_t kMinMaxCompletions = 1;
 constexpr size_t kTrackerEntryMultiplier = 2;
 
 std::atomic<size_t> g_configured_max_completions{kDefaultMaxCompletions};
-thread_local CompletionTracker* g_current_completion_tracker = nullptr;
+thread_local std::unique_ptr<CompletionTracker> g_current_completion_tracker;
 
 size_t configured_completion_limit() {
     size_t limit = g_configured_max_completions.load(std::memory_order_relaxed);
@@ -75,10 +76,6 @@ std::string canonicalize_final_result(const std::string& result) {
 CompletionTracker::CompletionTracker(ic_completion_env_t* env, const char* prefix)
     : cenv(env), original_prefix(prefix) {
     added_completions.reserve(128);
-}
-
-CompletionTracker::~CompletionTracker() {
-    added_completions.clear();
 }
 
 bool CompletionTracker::has_reached_completion_limit() const {
@@ -114,27 +111,35 @@ bool CompletionTracker::add_completion_prim_with_source_if_unique(
         return true;
     }
 
-    if (would_create_duplicate(completion_text, delete_before)) {
+    if (added_completions.size() >= tracker_entry_cap()) {
         return true;
     }
 
-    std::string final_result = calculate_final_result(completion_text, delete_before);
-    (void)added_completions.insert(canonicalize_final_result(final_result));
+    if (!added_completions
+             .insert(
+                 canonicalize_final_result(calculate_final_result(completion_text, delete_before)))
+             .second) {
+        return true;
+    }
     total_completions_added++;
     return ic_add_completion_prim_with_source(cenv, completion_text, display, help, source,
                                               delete_before, delete_after);
 }
 
 void completion_session_begin(ic_completion_env_t* cenv, const char* prefix) {
-    delete g_current_completion_tracker;
-    g_current_completion_tracker = new CompletionTracker(cenv, prefix);
+    g_current_completion_tracker = std::make_unique<CompletionTracker>(cenv, prefix);
 }
 
 void completion_session_end() {
-    if (g_current_completion_tracker != nullptr) {
-        delete g_current_completion_tracker;
-        g_current_completion_tracker = nullptr;
-    }
+    g_current_completion_tracker.reset();
+}
+
+ScopedCompletionSession::ScopedCompletionSession(ic_completion_env_t* cenv, const char* prefix) {
+    completion_session_begin(cenv, prefix);
+}
+
+ScopedCompletionSession::~ScopedCompletionSession() {
+    completion_session_end();
 }
 
 void prioritize_completion(const char* completion_text, long delete_before) {

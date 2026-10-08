@@ -45,7 +45,6 @@ struct CompletionTracker {
     size_t total_completions_added{};
 
     CompletionTracker(ic_completion_env_t* env, const char* prefix);
-    ~CompletionTracker();
 
     bool has_reached_completion_limit() const;
     std::string calculate_final_result(const char* completion_text, long delete_before = 0) const;
@@ -57,6 +56,14 @@ struct CompletionTracker {
 
 void completion_session_begin(ic_completion_env_t* cenv, const char* prefix);
 void completion_session_end();
+
+class ScopedCompletionSession {
+   public:
+    ScopedCompletionSession(ic_completion_env_t* cenv, const char* prefix);
+    ~ScopedCompletionSession();
+    ScopedCompletionSession(const ScopedCompletionSession&) = delete;
+    ScopedCompletionSession& operator=(const ScopedCompletionSession&) = delete;
+};
 
 void prioritize_completion(const char* completion_text, long delete_before);
 bool is_completion_preferred(const char* completion_text, long delete_before);

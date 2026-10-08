@@ -2000,7 +2000,7 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
         string_utils::trim_left_ascii_whitespace_copy(command_context.segment_prefix);
     const char* current_line_prefix = active_prefix.c_str();
 
-    completion_tracker::completion_session_begin(cenv, effective_prefix);
+    const completion_tracker::ScopedCompletionSession completion_session(cenv, effective_prefix);
 
     const char* full_input = raw_input != nullptr ? raw_input : effective_prefix;
     if (string_utils::trim_ascii_whitespace_copy(full_input).empty()) {
@@ -2010,7 +2010,6 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
             add_history_completion_matches(cenv, history_matches, HistoryCompletionGroup::ALL,
                                            static_cast<size_t>(get_completion_max_results()));
         }
-        completion_tracker::completion_session_end();
         return;
     }
 
@@ -2031,27 +2030,23 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
 
             (void)add_variable_completions(cenv, command_raw_prefix);
             if (ic_stop_completing(cenv)) {
-                completion_tracker::completion_session_end();
                 return;
             }
             if (has_history_matches) {
                 add_history_completion_matches(cenv, history_matches,
                                                HistoryCompletionGroup::SUCCESSFUL);
                 if (ic_stop_completing(cenv)) {
-                    completion_tracker::completion_session_end();
                     return;
                 }
             }
             add_history_file_completions(cenv, history_matches);
             cjsh_filename_completer(cenv, command_raw_prefix.c_str());
             if (ic_has_completions(cenv) && ic_stop_completing(cenv)) {
-                completion_tracker::completion_session_end();
                 return;
             }
 
             add_command_token_completions(cenv, command_prefix, command_raw_prefix.size());
             if (ic_has_completions(cenv) && ic_stop_completing(cenv)) {
-                completion_tracker::completion_session_end();
                 return;
             }
 
@@ -2060,7 +2055,6 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
                                                HistoryCompletionGroup::REMAINING);
             }
             if (ic_has_completions(cenv) && ic_stop_completing(cenv)) {
-                completion_tracker::completion_session_end();
                 return;
             }
 
@@ -2070,7 +2064,6 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
         case CONTEXT_PATH: {
             (void)add_variable_completions(cenv, command_context.current_raw_prefix);
             if (ic_stop_completing(cenv)) {
-                completion_tracker::completion_session_end();
                 return;
             }
             HistoryCompletionBatch history_matches;
@@ -2085,14 +2078,12 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
                 add_history_completion_matches(cenv, history_matches,
                                                HistoryCompletionGroup::SUCCESSFUL);
                 if (ic_stop_completing(cenv)) {
-                    completion_tracker::completion_session_end();
                     return;
                 }
             }
             add_history_file_completions(cenv, history_matches);
             cjsh_filename_completer(cenv, command_context.current_raw_prefix.c_str());
             if (ic_stop_completing(cenv)) {
-                completion_tracker::completion_session_end();
                 return;
             }
             if (has_history_matches) {
@@ -2112,7 +2103,6 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
 
             (void)add_variable_completions(cenv, prefix_str);
             if (ic_stop_completing(cenv)) {
-                completion_tracker::completion_session_end();
                 return;
             }
 
@@ -2128,7 +2118,6 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
             }
             add_history_file_completions(cenv, history_matches);
             if (ic_stop_completing(cenv) || completion_tracker::completion_limit_hit()) {
-                completion_tracker::completion_session_end();
                 return;
             }
 
@@ -2148,13 +2137,11 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
                 add_history_completion_matches(cenv, history_matches,
                                                HistoryCompletionGroup::SUCCESSFUL);
                 if (ic_stop_completing(cenv)) {
-                    completion_tracker::completion_session_end();
                     return;
                 }
             }
             cjsh_filename_completer(cenv, current_line_prefix);
             if (ic_stop_completing(cenv)) {
-                completion_tracker::completion_session_end();
                 return;
             }
             if (has_history_matches && offer_history) {
@@ -2164,8 +2151,6 @@ void cjsh_default_completer(ic_completion_env_t* cenv, const char* prefix) {
             break;
         }
     }
-
-    completion_tracker::completion_session_end();
 }
 
 void initialize_completion_system() {
