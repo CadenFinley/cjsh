@@ -547,6 +547,13 @@ std::optional<std::vector<size_t>> PatternMatcher::match_end_positions(const std
             return std::nullopt;
         }
         if (std::any_of(text.begin(), text.end(), [](unsigned char ch) { return ch >= 128; })) {
+            // Some libc versions retry a failed wide-character match byte by
+            // byte (for example, ?? also matches a single UTF-8 character).
+            // Preserve the general matcher's behavior on those implementations.
+            static const bool libc_retries_bytes = fnmatch("??", u8"\u00e9", 0) == 0;
+            if (libc_retries_bytes) {
+                return std::nullopt;
+            }
             next_character.assign(text.size() + 1, no_match);
             std::mbstate_t state{};
             for (size_t pos = 0; pos < text.size();) {

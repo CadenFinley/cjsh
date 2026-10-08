@@ -56,6 +56,7 @@ bool check_multibyte_endpoints(PatternMatcher& matcher, size_t& checks) {
         (void)std::printf("SKIP: multibyte endpoint checks require a UTF-8 locale\n");
         return true;
     }
+    const bool libc_retries_bytes = fnmatch("??", u8"\u00e9", 0) == 0;
 
     const std::vector<std::string> patterns = {"",      "*",    "?",    "??",  "?*",   "*?",
                                                "a*",    "*z",   "a?b",  "*/*", "\\?",  "\\*",
@@ -70,8 +71,23 @@ bool check_multibyte_endpoints(PatternMatcher& matcher, size_t& checks) {
             const std::string libc_pattern = pattern == "[" ? "\\[" : pattern;
             for (const auto& text : texts) {
                 const auto offsets = string_utils::character_offsets(text);
+                const bool needs_libc_fallback =
+                    libc_retries_bytes && std::any_of(text.begin(), text.end(),
+                                                      [](unsigned char ch) { return ch >= 128; });
                 for (bool longest : {false, true}) {
                     const auto endpoints = matcher.match_end_positions(text, pattern, longest);
+                    if (needs_libc_fallback) {
+                        ++checks;
+                        if (endpoints ||
+                            matcher.matches_pattern(text, pattern) !=
+                                (fnmatch(libc_pattern.c_str(), text.c_str(), 0) == 0)) {
+                            (void)std::fprintf(stderr,
+                                               "libc byte fallback mismatch: text=%s pattern=%s\n",
+                                               text.c_str(), pattern.c_str());
+                            return false;
+                        }
+                        continue;
+                    }
                     if (!endpoints || endpoints->size() != text.size() + 1) {
                         (void)std::fprintf(stderr, "missing multibyte endpoints: %s\n",
                                            pattern.c_str());

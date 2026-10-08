@@ -52,7 +52,8 @@ class PatternMatcher {
     // ordinary globs and nested @() and ?() alternatives share suffix results.
     // In UTF-8 locales, ASCII literal/*/? patterns use character boundaries;
     // other multibyte encodings, bracket expressions, non-ASCII patterns, and
-    // extended groups fall back.
+    // extended groups fall back. Non-ASCII text also falls back when libc retries
+    // failed character matches as byte matches.
     std::optional<std::vector<size_t>> match_end_positions(const std::string& text,
                                                            const std::string& pattern,
                                                            bool longest) const;
