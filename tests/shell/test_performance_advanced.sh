@@ -36,6 +36,7 @@ echo "Test: performance and resource usage..."
 
 TESTS_PASSED=0
 TESTS_FAILED=0
+TESTS_SKIPPED=0
 
 pass_test() {
     echo "PASS: $1"
@@ -45,6 +46,11 @@ pass_test() {
 fail_test() {
     echo "FAIL: $1"
     TESTS_FAILED=$((TESTS_FAILED + 1))
+}
+
+skip_test() {
+    echo "SKIP: $1"
+    TESTS_SKIPPED=$((TESTS_SKIPPED + 1))
 }
 
 command_exists() {
@@ -64,7 +70,9 @@ else
 fi
 
 echo "Testing memory usage..."
-if command_exists ps; then
+if [ "${CJSH_TEST_SANITIZERS:-0}" = 1 ]; then
+    skip_test "release memory budget does not apply to sanitizer instrumentation"
+elif command_exists ps; then
     "$CJSH_PATH" -c "sleep 1" &
     shell_pid=$!
     sleep 0.1  # Give it time to start
@@ -260,6 +268,7 @@ echo ""
 echo "Performance and Resource Usage Tests Summary:"
 echo "Passed: $TESTS_PASSED"
 echo "Failed: $TESTS_FAILED"
+echo "Skipped: $TESTS_SKIPPED"
 if [ $TESTS_FAILED -eq 0 ]; then
     echo "PASS"
     exit 0

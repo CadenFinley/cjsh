@@ -105,6 +105,12 @@ endforeach()
 # Regressions exercise loop termination as well as status propagation.
 set_tests_properties(shell.test_control_flow_status PROPERTIES TIMEOUT 120)
 
+# Sanitizer runtimes add memory overhead unrelated to the release RSS budget.
+set_property(
+    TEST shell.test_performance_advanced APPEND PROPERTY ENVIRONMENT
+    "CJSH_TEST_SANITIZERS=$<OR:$<CONFIG:Debug>,$<BOOL:${CJSH_ENABLE_UBSAN}>>"
+)
+
 # These legacy suites both write and remove /tmp/exit_code_test.out.
 set_tests_properties(
     shell.test_edge_cases shell.test_security_validation

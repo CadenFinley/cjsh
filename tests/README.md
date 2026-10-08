@@ -116,6 +116,9 @@ CI runs the full suite with the `ci-linux-clang-debug` preset, which enables
 AddressSanitizer and UndefinedBehaviorSanitizer. Reports fail the job and failure
 logs are uploaded as artifacts. The ordinary `debug` preset retains ASan; add
 `-DCJSH_ENABLE_UBSAN=ON` when configuring it to include UBSan.
+CTest marks sanitizer builds with `CJSH_TEST_SANITIZERS=1` for the resource-usage
+suite. That suite reports its release RSS budget as skipped under instrumentation;
+its other checks still run. The 50 MB limit remains enforced in release builds.
 
 The separate parser fuzzing job uses [LLVM libFuzzer](https://llvm.org/docs/LibFuzzer.html)
 with both sanitizers and a bounded 120-second run. It exercises lexical splitting,
