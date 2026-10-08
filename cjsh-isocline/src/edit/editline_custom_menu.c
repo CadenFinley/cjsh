@@ -325,22 +325,14 @@ again:;
     code_t key_no_mods = KEY_NO_MODS(c);
     if (menu_session.mouse_scroll_enabled && key_no_mods == KEY_EVENT_MOUSE_OTHER) {
         bool accept_selection = false;
-        if (custom_menu_mouse_select(env, eb, match_count, scroll_offset, last_display_count,
-                                     selected_idx, selected_preview_limit, &selected_idx,
-                                     &accept_selection)) {
-            if (accept_selection) {
-                accepted_with_mouse = true;
-                c = KEY_ENTER;
-            } else {
-                goto again;
-            }
-        } else {
-            if (edit_menu_mouse_event_is_left_click(env)) {
-                (void)edit_menu_mouse_suspend(env, eb, &menu_session.mouse_scroll_enabled,
-                                              &menu_session.mouse_suspended);
-            }
+        const bool hit = custom_menu_mouse_select(
+            env, eb, match_count, scroll_offset, last_display_count, selected_idx,
+            selected_preview_limit, &selected_idx, &accept_selection);
+        if (!edit_menu_apply_mouse_selection(env, eb, &menu_session, hit, accept_selection,
+                                             KEY_ENTER, &c)) {
             goto again;
         }
+        accepted_with_mouse = true;
     }
 
     if (c == KEY_ESC || c == KEY_BELL || c == KEY_CTRL_C) {

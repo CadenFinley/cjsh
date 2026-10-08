@@ -1473,6 +1473,20 @@ static bool edit_menu_mouse_event_is_left_click(ic_env_t* env) {
             mouse_event.action == TTY_MOUSE_ACTION_LEFT_RELEASE);
 }
 
+static bool edit_menu_apply_mouse_selection(ic_env_t* env, editor_t* eb,
+                                            edit_menu_session_t* session, bool hit,
+                                            bool accept_selection, code_t accept_key, code_t* key) {
+    if (!hit && edit_menu_mouse_event_is_left_click(env)) {
+        (void)edit_menu_mouse_suspend(env, eb, &session->mouse_scroll_enabled,
+                                      &session->mouse_suspended);
+    }
+    if (!hit || !accept_selection) {
+        return false;
+    }
+    *key = accept_key;
+    return true;
+}
+
 // Shared menu input distinguishes changes to the search from navigation/redraws.
 typedef enum edit_menu_input_e {
     EDIT_MENU_INPUT_UNHANDLED,

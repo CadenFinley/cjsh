@@ -586,18 +586,11 @@ again:;
     code_t key_no_mods = KEY_NO_MODS(c);
     if (menu_session.mouse_scroll_enabled && key_no_mods == KEY_EVENT_MOUSE_OTHER) {
         bool accept_selection = false;
-        if (edit_menu_mouse_select_vertical(env, eb, match_count, scroll_offset, last_display_count,
-                                            1, &selected_idx, &accept_selection)) {
-            if (accept_selection) {
-                c = KEY_ENTER;
-            } else {
-                goto again;
-            }
-        } else {
-            if (edit_menu_mouse_event_is_left_click(env)) {
-                (void)edit_menu_mouse_suspend(env, eb, &menu_session.mouse_scroll_enabled,
-                                              &menu_session.mouse_suspended);
-            }
+        const bool hit =
+            edit_menu_mouse_select_vertical(env, eb, match_count, scroll_offset, last_display_count,
+                                            1, &selected_idx, &accept_selection);
+        if (!edit_menu_apply_mouse_selection(env, eb, &menu_session, hit, accept_selection,
+                                             KEY_ENTER, &c)) {
             goto again;
         }
     }

@@ -4079,6 +4079,19 @@ static bool edit_should_submit_current_buffer(ic_env_t* env, editor_t* eb) {
     return callback(buffer, env->continuation_check_arg);
 }
 
+static bool edit_prepare_submission(ic_env_t* env, editor_t* eb) {
+    bool should_submit = edit_should_submit_current_buffer(env, eb);
+    if (should_submit && edit_try_spell_correct_on_enter(env, eb)) {
+        should_submit = edit_should_submit_current_buffer(env, eb);
+    }
+    if (!should_submit && !env->singleline_only) {
+        eb->request_submit = false;
+        edit_insert_auto_indented_linefeed(env, eb);
+        return false;
+    }
+    return true;
+}
+
 static void edit_release_editor(ic_env_t* env, editor_t* eb) {
     if (env == NULL || eb == NULL) {
         return;
@@ -4290,19 +4303,8 @@ edit_loop_entry:
                 if (edit_expand_abbreviation_if_needed(env, &eb, false)) {
                     edit_refresh(env, &eb);
                 }
-                bool should_submit = edit_should_submit_current_buffer(env, &eb);
-                if (!should_submit && !env->singleline_only) {
-                    eb.request_submit = false;
-                    edit_insert_auto_indented_linefeed(env, &eb);
+                if (!edit_prepare_submission(env, &eb)) {
                     continue;
-                }
-                if (should_submit && edit_try_spell_correct_on_enter(env, &eb)) {
-                    should_submit = edit_should_submit_current_buffer(env, &eb);
-                    if (!should_submit && !env->singleline_only) {
-                        eb.request_submit = false;
-                        edit_insert_auto_indented_linefeed(env, &eb);
-                        continue;
-                    }
                 }
                 c = KEY_ENTER;
                 break;
@@ -4792,19 +4794,8 @@ edit_loop_entry:
             }
 
             if (request_submit || eb.request_submit) {
-                bool should_submit = edit_should_submit_current_buffer(env, &eb);
-                if (!should_submit && !env->singleline_only) {
-                    eb.request_submit = false;
-                    edit_insert_auto_indented_linefeed(env, &eb);
+                if (!edit_prepare_submission(env, &eb)) {
                     continue;
-                }
-                if (should_submit && edit_try_spell_correct_on_enter(env, &eb)) {
-                    should_submit = edit_should_submit_current_buffer(env, &eb);
-                    if (!should_submit && !env->singleline_only) {
-                        eb.request_submit = false;
-                        edit_insert_auto_indented_linefeed(env, &eb);
-                        continue;
-                    }
                 }
                 c = KEY_ENTER;
                 break;
