@@ -110,7 +110,6 @@ static const help_line_t help_lines[] = {
     {HELP_LINE_BINDING, IC_KEY_ACTION_UNDO, NULL, "undo", NULL},
     {HELP_LINE_BINDING, IC_KEY_ACTION_REDO, NULL, "redo", NULL},
     {HELP_LINE_BINDING, IC_KEY_ACTION_COMPLETE, NULL, "try to complete the current input", NULL},
-    {HELP_LINE_BINDING, IC_KEY_ACTION_FORMAT_BUFFER, NULL, "format the input buffer", NULL},
     {HELP_LINE_BINDING, IC_KEY_ACTION_TOGGLE_MOUSE_REPORTING, NULL,
      "toggle mouse reporting for this prompt", NULL},
     {HELP_LINE_BLANK, IC_KEY_ACTION__MAX, NULL, NULL, NULL},

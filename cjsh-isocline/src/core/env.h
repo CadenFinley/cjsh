@@ -82,8 +82,6 @@ struct ic_env_s {
     char* history_search_sort_key;    // metadata key for history metadata sort modes
     ic_highlight_fun_t* highlighter;  // highlight callback
     void* highlighter_arg;            // user state for the highlighter.
-    ic_formatter_fun_t* formatter;    // buffer formatter callback
-    void* formatter_arg;              // user state for the formatter
     ic_unhandled_key_fun_t* unhandled_key_handler;  // callback for unhandled keys
     void* unhandled_key_arg;                        // user state for unhandled key handler
     ic_readline_event_fun_t* readline_event_callback;
@@ -99,7 +97,6 @@ struct ic_env_s {
         typeahead_capture_allowed_callback;  // callback that gates typeahead capture
     void* typeahead_capture_allowed_arg;     // user state for the typeahead gate callback
     ic_status_hint_mode_t status_hint_mode;  // rendering behavior for default hints
-    ic_format_mode_t format_mode;            // events that trigger buffer formatting
     ic_mouse_clicking_mode_t
         mouse_reporting_mode;  // capture strategy for mouse interaction sessions
     ic_history_search_sort_t history_search_sort;  // default fuzzy history search sort
@@ -163,7 +160,6 @@ struct ic_env_s {
     size_t command_palette_max_line_count;
     size_t custom_menu_max_line_count;
     long hint_delay;    // delay before displaying a hint in milliseconds
-    long format_delay;  // delay after the last keystroke in milliseconds
     long idle_timeout;  // inactivity timeout in milliseconds (0 disables)
 
     ic_key_binding_entry_t* key_bindings;  // dynamic array of custom key bindings

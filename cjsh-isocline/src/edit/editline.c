@@ -118,12 +118,6 @@ static void edit_scrollbar_write_cell(ic_env_t* env, const edit_scrollbar_t* bar
     bbcode_style_close(env->bbcode, NULL);
 }
 
-typedef struct format_breaks_s {
-    ssize_t spaces;
-    ssize_t newlines;
-    ssize_t wraps;
-} format_breaks_t;
-
 typedef struct editor_s {
     stringbuf_t* input;                   // current user input
     stringbuf_t* extra;                   // extra displayed info (for completion menu etc)
@@ -157,28 +151,19 @@ typedef struct editor_s {
     ssize_t completion_auto_menu_header_rows;  // passive layout used for click activation
     ssize_t completion_auto_menu_item_rows;
     ssize_t completion_auto_menu_rows;
-    bool history_prefix_active;      // whether prefix-prioritized history is active
-    bool request_submit;             // request submission of current line
-    bool force_linear_line_numbers;  // final render should drop relative numbering styling
-    bool formatting;                 // a formatter callback or its refresh is active
-    bool format_after_key;           // schedule formatting after the current key
-    bool format_pending;             // automatic formatting awaits its deadline
-    bool format_on_return;           // the current key requests immediate formatting
-    int64_t last_activity_ms;        // last non-resize input, including input handled by menus
-    int64_t format_deadline_ms;
-    int64_t idle_deadline_ms;   // shared idle deadline for the editor and nested menus
-    ssize_t history_idx;        // current index in the history
-    bool last_arg_yank_active;  // whether yank-last-arg is cycling through history
-    ic_format_mode_t format_pending_mode;
+    bool history_prefix_active;         // whether prefix-prioritized history is active
+    bool request_submit;                // request submission of current line
+    bool force_linear_line_numbers;     // final render should drop relative numbering styling
+    int64_t last_activity_ms;           // last non-resize input, including input handled by menus
+    int64_t idle_deadline_ms;           // shared idle deadline for the editor and nested menus
+    ssize_t history_idx;                // current index in the history
+    bool last_arg_yank_active;          // whether yank-last-arg is cycling through history
     ssize_t last_arg_yank_history_idx;  // history index currently used for yank-last-arg
     ssize_t last_arg_yank_start;        // insertion start for yank-last-arg replacement
     ssize_t last_arg_yank_end;          // insertion end for yank-last-arg replacement
     editstate_t* undo;                  // undo buffer
     editstate_t* redo;                  // redo buffer
-    editstate_t* format_undo_before;    // undo state before the current key
-    editstate_t* format_join_undo;      // edit that owns pending automatic formatting
-    format_breaks_t format_breaks_before;
-    const char* prompt_text;      // text of the prompt before the prompt marker
+    const char* prompt_text;            // text of the prompt before the prompt marker
     char* prompt_prefix_text;     // cached multi-line prompt prefix (everything before last line)
     ssize_t prompt_prefix_lines;  // number of prefix lines emitted for prompt
     bool prompt_begins_with_newline;       // prompt started with a leading newline
@@ -264,7 +249,6 @@ static void edit_clear_with_prompt_prefix(ic_env_t* env, editor_t* eb, ssize_t p
 static void edit_clear_screen(ic_env_t* env, editor_t* eb);
 static void edit_undo_restore(ic_env_t* env, editor_t* eb);
 static void edit_redo_restore(ic_env_t* env, editor_t* eb);
-static bool edit_format_buffer(ic_env_t* env, editor_t* eb, bool join_undo);
 static void edit_show_help(ic_env_t* env, editor_t* eb);
 static void edit_cursor_left(ic_env_t* env, editor_t* eb);
 static void edit_cursor_right(ic_env_t* env, editor_t* eb);
@@ -323,9 +307,6 @@ static bool key_action_execute(ic_env_t* env, editor_t* eb, ic_key_action_t acti
             return true;
         case IC_KEY_ACTION_COMPLETE:
             edit_generate_completions(env, eb, false);
-            return true;
-        case IC_KEY_ACTION_FORMAT_BUFFER:
-            (void)ic_format_buffer();
             return true;
         case IC_KEY_ACTION_HISTORY_SEARCH:
             edit_history_search_with_current_line(env, eb);
@@ -2479,165 +2460,7 @@ static void edit_refresh_hint(ic_env_t* env, editor_t* eb) {
 // Edit operations
 //-------------------------------------------------------------
 
-struct ic_format_env_s {
-    alloc_t* mem;
-    stringbuf_t* replacement;
-    size_t cursor_pos;
-    bool failed;
-};
-
-ic_public bool ic_set_formatted_input(ic_format_env_t* fenv, const char* text, size_t cursor_pos) {
-    if (fenv == NULL || fenv->failed) {
-        return false;
-    }
-    if (text == NULL) {
-        fenv->failed = true;
-        return false;
-    }
-    stringbuf_t* replacement = sbuf_new(fenv->mem);
-    if (replacement == NULL || sbuf_append(replacement, text) != ic_strlen(text)) {
-        sbuf_free(replacement);
-        fenv->failed = true;
-        return false;
-    }
-    sbuf_free(fenv->replacement);
-    fenv->replacement = replacement;
-    fenv->cursor_pos = cursor_pos;
-    return true;
-}
-
-static bool edit_format_buffer(ic_env_t* env, editor_t* eb, bool join_undo) {
-    if (env->formatter == NULL || env->format_mode == IC_FORMAT_MODE_OFF || eb->formatting ||
-        eb->disable_undo || eb->completion_menu_active || env->readline_terminal_suspended) {
-        return false;
-    }
-
-    ic_format_env_t fenv = {env->mem, NULL, 0, false};
-    eb->formatting = true;
-    env->formatter(&fenv, sbuf_string(eb->input), (size_t)eb->pos, env->formatter_arg);
-    bool applied = false;
-    if (!fenv.failed && fenv.replacement != NULL) {
-        const size_t len = (size_t)sbuf_len(fenv.replacement);
-        const ssize_t target = (ssize_t)(fenv.cursor_pos > len ? len : fenv.cursor_pos);
-        ssize_t pos = 0;
-        while (pos < target) {
-            const ssize_t next = sbuf_next(fenv.replacement, pos, NULL);
-            if (next <= pos || next > target) {
-                break;
-            }
-            pos = next;
-        }
-
-        if (pos == eb->pos && strcmp(sbuf_string(eb->input), sbuf_string(fenv.replacement)) == 0) {
-            applied = true;
-        } else if (join_undo || editor_capture(eb, &eb->undo)) {
-            // Allocate the result and undo state before changing the editor.
-            editstate_done(eb->mem, &eb->redo);
-            eb->modified = true;
-            edit_clear_history_preview(eb);
-            edit_reset_last_arg_state(eb);
-            stringbuf_t* previous = eb->input;
-            eb->input = fenv.replacement;
-            fenv.replacement = previous;
-            eb->pos = pos;
-            edit_refresh_hint(env, eb);
-            applied = true;
-        }
-    }
-    sbuf_free(fenv.replacement);
-    eb->formatting = false;
-    return applied;
-}
-
-ic_public bool ic_format_buffer(void) {
-    ic_env_t* env = ic_get_env();
-    if (env == NULL || env->current_editor == NULL) {
-        return false;
-    }
-    env->current_editor->format_after_key = false;
-    env->current_editor->format_pending = false;
-    return edit_format_buffer(env, env->current_editor, false);
-}
-
-static format_breaks_t edit_format_breaks(ic_env_t* env, editor_t* eb) {
-    format_breaks_t breaks = {0};
-    for (const char* p = sbuf_string(eb->input); *p != '\0'; ++p) {
-        if (*p == ' ') {
-            breaks.spaces++;
-        } else if (*p == '\n') {
-            breaks.newlines++;
-        }
-    }
-    rowcol_t rc;
-    breaks.wraps = edit_get_rowcol(env, eb, &rc) - breaks.newlines - 1;
-    return breaks;
-}
-
-static void edit_schedule_auto_format(ic_env_t* env, editor_t* eb, code_t key) {
-    if (env->formatter == NULL || env->format_mode == IC_FORMAT_MODE_OFF ||
-        eb->refresh_suppressed || key == KEY_NONE) {
-        return;
-    }
-    if (KEY_NO_MODS(key) >= IC_KEY_EVENT_BASE && key != IC_KEY_PASTE_START) {
-        return;
-    }
-    const bool on_return = (key == KEY_ENTER || key == KEY_CTRL_O);
-    if (env->format_mode == IC_FORMAT_MODE_REGULAR && !on_return) {
-        return;
-    }
-    eb->format_after_key = true;
-    eb->format_on_return = on_return;
-    eb->format_undo_before = eb->undo;
-    if (env->format_mode == IC_FORMAT_MODE_SMART) {
-        eb->format_breaks_before = edit_format_breaks(env, eb);
-    }
-}
-
-static bool edit_process_auto_format(ic_env_t* env, editor_t* eb, bool force) {
-    if (env->formatter == NULL || env->format_mode == IC_FORMAT_MODE_OFF) {
-        eb->format_after_key = false;
-        eb->format_pending = false;
-        return false;
-    }
-    if (eb->refresh_suppressed) {
-        return false;
-    }
-    if (eb->format_pending && eb->format_pending_mode != env->format_mode) {
-        eb->format_pending = false;
-    }
-    if (eb->format_after_key) {
-        bool trigger = eb->format_on_return || env->format_mode == IC_FORMAT_MODE_EVERY_KEYSTROKE;
-        if (!trigger && env->format_mode == IC_FORMAT_MODE_SMART) {
-            const format_breaks_t after = edit_format_breaks(env, eb);
-            trigger = after.spaces > eb->format_breaks_before.spaces ||
-                      after.newlines > eb->format_breaks_before.newlines ||
-                      after.wraps > eb->format_breaks_before.wraps;
-        }
-        if (trigger || eb->format_pending) {
-            if (eb->undo != eb->format_undo_before) {
-                eb->format_join_undo = eb->undo;
-            } else if (!eb->format_pending) {
-                eb->format_join_undo = NULL;
-            }
-            eb->format_deadline_ms =
-                edit_deadline_after(edit_monotonic_time_ms(), env->format_delay);
-            eb->format_pending = true;
-            eb->format_pending_mode = env->format_mode;
-        }
-        force = force || eb->format_on_return;
-        eb->format_after_key = false;
-    }
-    if (!eb->format_pending || (!force && edit_milliseconds_until(eb->format_deadline_ms) > 0)) {
-        return false;
-    }
-    const bool join_undo = (eb->format_join_undo != NULL && eb->format_join_undo == eb->undo);
-    eb->format_pending = false;
-    return edit_format_buffer(env, eb, join_undo);
-}
-
 static void edit_undo_restore(ic_env_t* env, editor_t* eb) {
-    eb->format_after_key = false;
-    eb->format_pending = false;
     editor_undo_restore(eb, true);
     if (env->completion_auto_menu) {
         edit_refresh_hint(env, eb);
@@ -2647,8 +2470,6 @@ static void edit_undo_restore(ic_env_t* env, editor_t* eb) {
 }
 
 static void edit_redo_restore(ic_env_t* env, editor_t* eb) {
-    eb->format_after_key = false;
-    eb->format_pending = false;
     editor_redo_restore(eb);
     if (env->completion_auto_menu) {
         edit_refresh_hint(env, eb);
@@ -4259,20 +4080,12 @@ static bool edit_should_submit_current_buffer(ic_env_t* env, editor_t* eb) {
 }
 
 static bool edit_prepare_submission(ic_env_t* env, editor_t* eb) {
-    if (!eb->format_after_key && !eb->format_pending) {
-        edit_schedule_auto_format(env, eb, KEY_ENTER);
-    }
-    (void)edit_process_auto_format(env, eb, true);
     bool should_submit = edit_should_submit_current_buffer(env, eb);
     if (should_submit && edit_try_spell_correct_on_enter(env, eb)) {
         should_submit = edit_should_submit_current_buffer(env, eb);
     }
     if (!should_submit && !env->singleline_only) {
         eb->request_submit = false;
-        if (env->format_mode == IC_FORMAT_MODE_SMART) {
-            // The continuation inserts a newline after the Return callback.
-            edit_schedule_auto_format(env, eb, KEY_LINEFEED);
-        }
         edit_insert_auto_indented_linefeed(env, eb);
         return false;
     }
@@ -4474,9 +4287,6 @@ static char* edit_line(ic_env_t* env, const char* prompt_text, const char* inlin
 edit_loop_entry:
     if (!initial_requests_submit) {
         while (true) {
-            if (edit_process_auto_format(env, &eb, false)) {
-                hint_delay_satisfied = false;
-            }
             edit_process_readline_event(env);
             if (edit_update_status_message(env, &eb)) {
                 if (eb.refresh_suppressed) {
@@ -4514,11 +4324,9 @@ edit_loop_entry:
                     eb.input_scrollbar_cursor_query_attempted = true;
                     (void)edit_query_screen_cursor_pos(env, &eb);
                 }
-                if (env->idle_timeout > 0 || eb.format_pending) {
+                if (env->idle_timeout > 0) {
                     while (true) {
-                        long idle_remaining =
-                            (env->idle_timeout > 0 ? edit_milliseconds_until(eb.idle_deadline_ms)
-                                                   : -1);
+                        long idle_remaining = edit_milliseconds_until(eb.idle_deadline_ms);
                         if (idle_remaining == 0) {
                             idle_timeout_received = true;
                             c = KEY_NONE;
@@ -4536,23 +4344,8 @@ edit_loop_entry:
                                 hint_delay_satisfied = true;
                                 continue;
                             }
-                            if (wait_ms < 0 || hint_remaining < wait_ms) {
+                            if (hint_remaining < wait_ms) {
                                 wait_ms = hint_remaining;
-                            }
-                        }
-
-                        if (eb.format_pending && !eb.refresh_suppressed) {
-                            const long format_remaining =
-                                edit_milliseconds_until(eb.format_deadline_ms);
-                            if (format_remaining == 0) {
-                                if (edit_process_auto_format(env, &eb, false)) {
-                                    hint_delay_satisfied = false;
-                                }
-                                term_flush(env->term);
-                                continue;
-                            }
-                            if (wait_ms < 0 || format_remaining < wait_ms) {
-                                wait_ms = format_remaining;
                             }
                         }
 
@@ -4568,8 +4361,7 @@ edit_loop_entry:
                             break;
                         }
 
-                        if (env->idle_timeout > 0 &&
-                            edit_milliseconds_until(eb.idle_deadline_ms) == 0) {
+                        if (edit_milliseconds_until(eb.idle_deadline_ms) == 0) {
                             idle_timeout_received = true;
                             c = KEY_NONE;
                             break;
@@ -4577,14 +4369,6 @@ edit_loop_entry:
                         if (waiting_for_hint && edit_milliseconds_until(hint_deadline_ms) == 0) {
                             edit_refresh(env, &eb);
                             hint_delay_satisfied = true;
-                            continue;
-                        }
-                        if (eb.format_pending && !eb.refresh_suppressed &&
-                            edit_milliseconds_until(eb.format_deadline_ms) == 0) {
-                            if (edit_process_auto_format(env, &eb, false)) {
-                                hint_delay_satisfied = false;
-                            }
-                            term_flush(env->term);
                             continue;
                         }
 
@@ -4632,8 +4416,6 @@ edit_loop_entry:
                 env->readline_event_pending = true;
                 continue;
             }
-
-            edit_schedule_auto_format(env, &eb, c);
 
             ssize_t scrollbar_row = eb.cur_row;
             if (edit_scrollbar_event(env, &eb, &eb.input_scrollbar, c,
@@ -5020,8 +4802,6 @@ edit_loop_entry:
             }
         }
     } else {
-        edit_schedule_auto_format(env, &eb, KEY_ENTER);
-        (void)edit_process_auto_format(env, &eb, true);
         if (!edit_should_submit_current_buffer(env, &eb) && !env->singleline_only) {
             initial_requests_submit = false;
             edit_insert_auto_indented_linefeed(env, &eb);
