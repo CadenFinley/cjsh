@@ -58,9 +58,6 @@ using shell_script_interpreter::detail::trim;
 namespace validation_internal = shell_validation::internal;
 
 using validation_internal::analyze_case_syntax;
-using validation_internal::analyze_for_loop_syntax;
-using validation_internal::analyze_while_until_syntax;
-using validation_internal::check_for_loop_keywords;
 using validation_internal::extract_trimmed_line;
 using validation_internal::for_each_effective_char;
 using validation_internal::IterationAction;
@@ -69,7 +66,6 @@ using validation_internal::sanitize_command_substitutions_for_validation;
 using validation_internal::sanitize_lines_for_validation;
 using validation_internal::should_process_char;
 using validation_internal::starts_with_keyword_token;
-using validation_internal::tokenize_and_get_first;
 using validation_internal::tokenize_whitespace;
 
 namespace {
@@ -303,29 +299,19 @@ bool has_incomplete_construct_errors(const std::vector<SyntaxError>& errors) {
     return std::any_of(errors.begin(), errors.end(), syntax_error_indicates_incomplete);
 }
 
-bool has_inline_terminator(const std::string& text, const std::string& terminator) {
-    return validation_internal::find_control_keyword(text, terminator) != std::string::npos;
-}
-
-std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& lines) {
-    // The structural validator below works on whole logical lines. Track conditional
-    // headers inside those lines too, so a misspelled opener is diagnosed at `then`
-    // before its later `fi` produces a misleading unmatched-closer error.
-    if (std::none_of(lines.begin(), lines.end(), [](const std::string& line) {
-            return line.find("then") != std::string::npos;
-        })) {
-        return std::nullopt;
-    }
-    std::vector<bool> awaiting_then;
+// Preserve keyword order across lines. Case patterns and expressions contain literal words.
+class ControlKeywordScanner {
     struct CaseState {
         bool pattern = true;
         int group_depth = 0;
+        bool awaiting_in = false;
     };
     std::vector<CaseState> cases;
-    for (size_t line_index = 0; line_index < lines.size(); ++line_index) {
-        const auto& line = lines[line_index];
+
+   public:
+    std::vector<std::pair<size_t, std::string>> scan(const std::string& line) {
+        std::vector<std::pair<size_t, std::string>> keywords;
         std::string source = sanitize_command_substitutions_for_validation(line);
-        const bool exact_columns = source == line;
         size_t test_start = std::string::npos;
         for_each_effective_char(
             source, false, false, [&](size_t index, char, const QuoteState& state, size_t& next) {
@@ -406,7 +392,11 @@ std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& 
         while (cursor < source.size()) {
             size_t position = std::string::npos;
             std::string keyword;
-            for (const auto* candidate : {"if", "elif", "then", "fi", "case", "esac"}) {
+            for (const auto* candidate : {"if", "elif", "then", "else", "fi", "for", "select",
+                                          "while", "until", "do", "done", "case", "in", "esac"}) {
+                if (source.find(candidate, cursor) == std::string::npos) {
+                    continue;
+                }
                 const size_t found = parser_find_keyword_token(source, candidate, cursor);
                 if (found < position) {
                     position = found;
@@ -420,7 +410,8 @@ std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& 
             cursor = position + keyword.size();
             const size_t after = source.find_first_not_of(" \t", cursor);
             // Keywords used as case patterns or brace-expansion words are literals.
-            if ((!cases.empty() && cases.back().pattern &&
+            const bool case_in = keyword == "in" && !cases.empty() && cases.back().awaiting_in;
+            if ((!cases.empty() && cases.back().pattern && !case_in &&
                  (keyword != "esac" || (after != std::string::npos &&
                                         (source[after] == ')' || source[after] == '|')))) ||
                 (position > 0 && source[position - 1] == '{' &&
@@ -428,12 +419,36 @@ std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& 
                 continue;
             }
             if (keyword == "case") {
-                cases.push_back({});
-            } else if (keyword == "esac") {
-                if (!cases.empty()) {
-                    cases.pop_back();
-                }
-            } else if (keyword == "if") {
+                const auto header =
+                    analyze_case_syntax(tokenize_whitespace(source.substr(position)));
+                cases.push_back({true, 0, header.missing_in_keyword});
+            } else if (case_in) {
+                cases.back().awaiting_in = false;
+            } else if (keyword == "esac" && !cases.empty()) {
+                cases.pop_back();
+            }
+            keywords.emplace_back(position, std::move(keyword));
+        }
+        return keywords;
+    }
+};
+
+std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& lines) {
+    // Diagnose an invalid conditional header before its closing keyword.
+    if (std::none_of(lines.begin(), lines.end(), [](const std::string& line) {
+            return line.find("then") != std::string::npos;
+        })) {
+        return std::nullopt;
+    }
+    std::vector<bool> awaiting_then;
+    ControlKeywordScanner scanner;
+    for (size_t line_index = 0; line_index < lines.size(); ++line_index) {
+        const auto& line = lines[line_index];
+        const auto source = sanitize_command_substitutions_for_validation(line);
+        const bool exact_columns = source == line;
+        for (const auto& [position, keyword] : scanner.scan(source)) {
+            const size_t cursor = position + keyword.size();
+            if (keyword == "if") {
                 awaiting_then.push_back(true);
             } else if (keyword == "elif") {
                 if (!awaiting_then.empty()) {
@@ -443,6 +458,8 @@ std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& 
                 if (!awaiting_then.empty()) {
                     awaiting_then.pop_back();
                 }
+            } else if (keyword != "then") {
+                continue;
             } else if (!awaiting_then.empty() && awaiting_then.back()) {
                 awaiting_then.back() = false;
             } else {
@@ -467,40 +484,6 @@ std::optional<SyntaxError> find_unexpected_then(const std::vector<std::string>& 
         }
     }
     return std::nullopt;
-}
-
-bool handle_inline_loop_header(
-    const std::string& line, ControlToken keyword, size_t display_line,
-    std::vector<std::tuple<ControlToken, ControlToken, size_t>>& control_stack) {
-    if (!starts_with_keyword_token(line, control_token_name(keyword))) {
-        return false;
-    }
-
-    size_t search_pos = 0;
-    while ((search_pos = line.find(';', search_pos)) != std::string::npos) {
-        size_t do_pos = search_pos + 1;
-        while (do_pos < line.size() &&
-               std::isspace(static_cast<unsigned char>(line[do_pos])) != 0) {
-            ++do_pos;
-        }
-
-        if (do_pos < line.size() && line.compare(do_pos, 2, "do") == 0) {
-            size_t after_do = do_pos + 2;
-            if (after_do == line.size() || line[after_do] == ';' || line[after_do] == '&' ||
-                line[after_do] == '|' || line[after_do] == '{' || line[after_do] == '(' ||
-                line[after_do] == '#' ||
-                std::isspace(static_cast<unsigned char>(line[after_do])) != 0) {
-                if (!has_inline_terminator(line, "done")) {
-                    control_stack.push_back({ControlToken::Do, keyword, display_line});
-                }
-                return true;
-            }
-        }
-
-        ++search_pos;
-    }
-
-    return false;
 }
 
 void push_function_context(
@@ -550,105 +533,6 @@ void push_function_context(
     control_stack.push_back({context, context, display_line});
 }
 
-bool find_embedded_loop_keyword(const std::string& line, const std::string& keyword,
-                                size_t& position_out) {
-    bool found = false;
-    for_each_effective_char(
-        line, false, false,
-        [&](size_t index, char c, QuoteState& state, size_t& next_index) -> IterationAction {
-            if (state.in_quotes || index == 0 || c != keyword[0]) {
-                return IterationAction::Continue;
-            }
-            if (index + keyword.size() > line.size()) {
-                return IterationAction::Continue;
-            }
-            if (line.compare(index, keyword.size(), keyword) != 0) {
-                return IterationAction::Continue;
-            }
-
-            char previous = line[index - 1];
-            bool prefix_ok = (std::isspace(static_cast<unsigned char>(previous)) != 0) ||
-                             previous == '|' || previous == ';' || previous == '&' ||
-                             previous == '(' || previous == '{';
-            if (!prefix_ok) {
-                return IterationAction::Continue;
-            }
-
-            size_t after = index + keyword.size();
-            if (after < line.size()) {
-                char next_char = line[after];
-                if (std::isspace(static_cast<unsigned char>(next_char)) == 0 && next_char != '(') {
-                    return IterationAction::Continue;
-                }
-            }
-
-            position_out = index;
-            next_index = index + keyword.size() - 1;
-            found = true;
-            return IterationAction::Break;
-        },
-        true);
-
-    return found;
-}
-
-bool handle_embedded_loop_header(
-    const std::string& trimmed_line, size_t display_line,
-    std::vector<std::tuple<ControlToken, ControlToken, size_t>>& control_stack) {
-    auto try_keyword = [&](ControlToken keyword) -> bool {
-        size_t position = 0;
-        const std::string keyword_text = control_token_name(keyword);
-        if (!find_embedded_loop_keyword(trimmed_line, keyword_text, position)) {
-            return false;
-        }
-
-        std::string remainder = trim(trimmed_line.substr(position));
-        auto [tokens, first_token] = tokenize_and_get_first(remainder);
-        if (first_token != keyword_text) {
-            return false;
-        }
-
-        if (has_inline_terminator(remainder, "done")) {
-            return false;
-        }
-
-        if (keyword == ControlToken::For) {
-            auto for_check = analyze_for_loop_syntax(tokens, remainder);
-            control_stack.push_back({ControlToken::For, ControlToken::For, display_line});
-            if (for_check.has_inline_do) {
-                std::get<0>(control_stack.back()) = ControlToken::Do;
-            }
-        } else if (keyword == ControlToken::Select) {
-            bool has_do = check_for_loop_keywords(tokens, remainder, false);
-            control_stack.push_back({ControlToken::Select, ControlToken::Select, display_line});
-            if (has_do) {
-                std::get<0>(control_stack.back()) = ControlToken::Do;
-            }
-        } else {
-            auto loop_check = analyze_while_until_syntax(keyword_text, remainder, tokens);
-            control_stack.push_back({keyword, keyword, display_line});
-            if (loop_check.has_inline_do) {
-                std::get<0>(control_stack.back()) = ControlToken::Do;
-            }
-        }
-        return true;
-    };
-
-    if (try_keyword(ControlToken::While)) {
-        return true;
-    }
-    if (try_keyword(ControlToken::Until)) {
-        return true;
-    }
-    if (try_keyword(ControlToken::For)) {
-        return true;
-    }
-    if (try_keyword(ControlToken::Select)) {
-        return true;
-    }
-    return false;
-}
-
 }  // namespace
 
 std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validate_script_syntax(
@@ -664,6 +548,7 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
 
     std::vector<std::tuple<ControlToken, ControlToken, size_t>> control_stack;
     bool encountered_unclosed_quote = false;
+    ControlKeywordScanner control_scanner;
 
     auto expected_close_for_entry =
         [](const std::tuple<ControlToken, ControlToken, size_t>& entry) -> ControlToken {
@@ -1037,55 +922,44 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
             }
         }
 
-        if (starts_with_token_keyword(trimmed_for_parsing, ControlToken::If) &&
-            (trimmed_for_parsing.find("; then") != std::string::npos ||
-             trimmed_for_parsing.find(";then") != std::string::npos)) {
-            if (!has_inline_terminator(trimmed_for_parsing, "fi")) {
-                control_stack.push_back({ControlToken::If, ControlToken::If, display_line});
-
-                std::get<0>(control_stack.back()) = ControlToken::Then;
+        auto keywords = control_scanner.scan(trimmed_for_parsing);
+        // Preserve each group or function body. Process keywords after its closing delimiter.
+        size_t scope_end = 0;
+        if (const auto header =
+                function_evaluator::parse_function_header(trimmed_for_parsing, true)) {
+            scope_end = function_evaluator::find_function_body_end(trimmed_for_parsing, *header);
+        } else if (!trimmed_for_parsing.empty() &&
+                   (trimmed_for_parsing.front() == '(' || trimmed_for_parsing.front() == '{')) {
+            const size_t close = trimmed_for_parsing.front() == '('
+                                     ? find_matching_paren(trimmed_for_parsing, 0)
+                                     : find_matching_brace(trimmed_for_parsing, 0);
+            scope_end = close == std::string::npos ? close : close + 1;
+        }
+        keywords.erase(std::remove_if(keywords.begin(), keywords.end(),
+                                      [&](const auto& entry) { return entry.first < scope_end; }),
+                       keywords.end());
+        if (keywords.empty()) {
+            keywords.emplace_back(0, "");
+        }
+        for (size_t keyword_index = 0; keyword_index < keywords.size(); ++keyword_index) {
+            const auto& [position, keyword] = keywords[keyword_index];
+            const size_t end = keyword_index + 1 < keywords.size()
+                                   ? keywords[keyword_index + 1].first
+                                   : trimmed_for_parsing.size();
+            std::string segment = trim(trimmed_for_parsing.substr(position, end - position));
+            if (!segment.empty() && segment.back() == ';') {
+                segment.pop_back();
             }
-
-            size_t elif_pos = 0;
-            while ((elif_pos = trimmed_for_parsing.find("; elif", elif_pos)) != std::string::npos) {
-                size_t after_elif = elif_pos + 6;
-
-                while (after_elif < trimmed_for_parsing.length() &&
-                       std::isspace(static_cast<unsigned char>(trimmed_for_parsing[after_elif]))) {
-                    after_elif++;
-                }
-
-                if (after_elif >= trimmed_for_parsing.length() ||
-                    trimmed_for_parsing[after_elif] == ';' ||
-                    (after_elif + 4 <= trimmed_for_parsing.length() &&
-                     trimmed_for_parsing.substr(after_elif, 4) == "then")) {
-                    errors.push_back({{display_line, 0, 0},
-                                      ErrorSeverity::CRITICAL,
-                                      ErrorCategory::SYNTAX,
-                                      "SYN012",
-                                      "'elif' without condition",
-                                      line,
-                                      "Add a condition after 'elif'"});
-                }
-
-                elif_pos = after_elif;
-            }
-        } else if (handle_inline_loop_header(trimmed_for_parsing, ControlToken::While, display_line,
-                                             control_stack) ||
-                   handle_inline_loop_header(trimmed_for_parsing, ControlToken::Until, display_line,
-                                             control_stack) ||
-                   handle_inline_loop_header(trimmed_for_parsing, ControlToken::For, display_line,
-                                             control_stack) ||
-                   handle_inline_loop_header(trimmed_for_parsing, ControlToken::Select,
-                                             display_line, control_stack)) {
-        } else {
-            (void)handle_embedded_loop_header(trimmed_for_parsing, display_line, control_stack);
-
-            auto tokens = tokenize_whitespace(trimmed_for_parsing);
+            auto tokens = tokenize_whitespace(segment);
 
             if (!tokens.empty()) {
                 const std::string& first_token = tokens[0];
-                auto first_control = parse_control_token(first_token);
+                auto first_control = parse_control_token(keyword.empty() ? first_token : keyword);
+                if (keyword.empty() && first_control != ControlToken::Function &&
+                    first_control != ControlToken::BraceOpen &&
+                    first_control != ControlToken::BraceClose) {
+                    first_control.reset();
+                }
 
                 auto add_unmatched_control_error = [&](const std::string& message) {
                     errors.push_back(SyntaxError({display_line, 0, 0}, ErrorSeverity::CRITICAL,
@@ -1144,13 +1018,10 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                 }
 
                 else if (first_control == ControlToken::While ||
-                         first_control == ControlToken::Until) {
-                    auto loop_check =
-                        analyze_while_until_syntax(first_token, trimmed_for_parsing, tokens);
+                         first_control == ControlToken::Until ||
+                         first_control == ControlToken::For ||
+                         first_control == ControlToken::Select) {
                     control_stack.push_back({*first_control, *first_control, display_line});
-                    if (loop_check.has_inline_do) {
-                        std::get<0>(control_stack.back()) = ControlToken::Do;
-                    }
                 } else if (first_control == ControlToken::Do) {
                     if (require_top({ControlToken::While, ControlToken::Until, ControlToken::For,
                                      ControlToken::Select},
@@ -1165,33 +1036,13 @@ std::vector<ShellScriptInterpreter::SyntaxError> ShellScriptInterpreter::validat
                     }
                 }
 
-                else if (first_control == ControlToken::For) {
-                    auto for_check = analyze_for_loop_syntax(tokens, trimmed_for_parsing);
-                    control_stack.push_back({ControlToken::For, ControlToken::For, display_line});
-                    if (for_check.has_inline_do) {
-                        std::get<0>(control_stack.back()) = ControlToken::Do;
-                    }
-                }
-
-                else if (first_control == ControlToken::Select) {
-                    bool has_do = check_for_loop_keywords(tokens, trimmed_for_parsing, false);
-                    control_stack.push_back(
-                        {ControlToken::Select, ControlToken::Select, display_line});
-                    if (has_do) {
-                        std::get<0>(control_stack.back()) = ControlToken::Do;
-                    }
-                }
-
                 else if (first_control == ControlToken::Case) {
-                    auto case_check = analyze_case_syntax(tokens);
-                    bool header_complete = !case_check.incomplete && !case_check.missing_in_keyword;
-                    if (!has_inline_terminator(trimmed_for_parsing, "esac")) {
-                        control_stack.push_back(
-                            {ControlToken::CaseHeader, ControlToken::Case, display_line});
-                        if (header_complete) {
-                            std::get<0>(control_stack.back()) = ControlToken::Case;
-                        }
-                    }
+                    const auto case_check = analyze_case_syntax(tokens);
+                    const bool header_complete =
+                        !case_check.incomplete && !case_check.missing_in_keyword;
+                    control_stack.push_back(
+                        {header_complete ? ControlToken::Case : ControlToken::CaseHeader,
+                         ControlToken::Case, display_line});
                 }
 
                 else if (first_control == ControlToken::In) {

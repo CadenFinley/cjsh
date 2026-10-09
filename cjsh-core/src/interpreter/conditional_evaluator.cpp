@@ -678,21 +678,11 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
     }
 
     // multiline path: collect then/elif/else bodies while tracking nested if depth
-    size_t k = j + 1;
+    size_t k = j;
     int depth = 1;
     bool in_else = false;
     std::vector<std::string> then_lines;
     std::vector<std::string> else_lines;
-
-    const std::string then_header = trim(strip_inline_comment(src_lines[j]));
-    const size_t then_token = parser_find_keyword_token(then_header, "then", 0);
-    if (then_token != std::string::npos) {
-        const std::string inline_body = trim(then_header.substr(then_token + 4));
-        if (!inline_body.empty()) {
-            then_lines.push_back(inline_body);
-            (void)parser_find_block_end(inline_body, {"if"}, "fi", depth);
-        }
-    }
 
     bool is_simple_single_line = false;
 
@@ -887,96 +877,88 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
     bool in_elif = false;
     bool in_elif_body = false;
     bool condition_met = (cond_rc == 0);
+    std::string trailing_commands;
 
+    auto append_body = [&](const std::string& text) {
+        const std::string body = trim(text);
+        if (body.empty() || body == ";") {
+            return;
+        }
+        if (in_elif) {
+            current_elif_cond.push_back(body);
+        } else if (in_elif_body) {
+            current_elif_body.push_back(body);
+        } else if (in_else) {
+            else_lines.push_back(body);
+        } else {
+            then_lines.push_back(body);
+        }
+    };
+
+    // Branch boundaries can follow commands on any line.
     while (k < src_lines.size() && depth > 0) {
-        const std::string& cur_raw = src_lines[k];
-        std::string cur = trim(strip_inline_comment(cur_raw));
-
-        if (depth == 1 && (cur == "elif" || cur.rfind("elif ", 0) == 0)) {
-            if (in_elif_body && !current_elif_cond.empty()) {
-                elif_branches.push_back({current_elif_cond, current_elif_body});
+        std::string cur = trim(strip_inline_comment(src_lines[k]));
+        if (k == j) {
+            const size_t then_token = parser_find_keyword_token(cur, "then", 0);
+            cur = cur.substr(then_token + 4);
+        }
+        size_t body_start = 0;
+        size_t cursor = 0;
+        while (cursor < cur.size()) {
+            size_t position = std::string::npos;
+            std::string keyword;
+            for (const auto* candidate : {"if", "fi", "elif", "else", "then"}) {
+                const size_t found = parser_find_keyword_token(cur, candidate, cursor);
+                if (found < position) {
+                    position = found;
+                    keyword = candidate;
+                }
+            }
+            if (position == std::string::npos) {
+                break;
+            }
+            cursor = position + keyword.size();
+            if (keyword == "if") {
+                ++depth;
+                continue;
+            }
+            if (keyword == "fi" && depth > 1) {
+                --depth;
+                continue;
+            }
+            if (depth != 1 || (keyword == "then" && !in_elif)) {
+                continue;
             }
 
-            in_elif = true;
-            in_elif_body = false;
-            in_else = false;
-            current_elif_cond.clear();
-            current_elif_body.clear();
-
-            std::string elif_cond;
-            if (cur.rfind("elif ", 0) == 0) {
-                elif_cond = trim(cur.substr(5));
+            append_body(cur.substr(body_start, position - body_start));
+            body_start = cursor;
+            if (keyword == "fi") {
+                depth = 0;
+                const std::string suffix = trim(cur.substr(cursor));
+                if (!suffix.empty() && suffix.front() == ';') {
+                    trailing_commands = trim(suffix.substr(1));
+                }
+                break;
             }
-
-            auto then_pos = elif_cond.find("; then");
-            if (then_pos == std::string::npos) {
-                then_pos = elif_cond.find(";then");
-            }
-
-            if (then_pos != std::string::npos) {
-                current_elif_cond.push_back(trim(elif_cond.substr(0, then_pos)));
+            if (keyword == "then") {
                 in_elif = false;
                 in_elif_body = true;
-            } else if (!elif_cond.empty()) {
-                current_elif_cond.push_back(elif_cond);
+                continue;
             }
-            k++;
-            continue;
-        }
-
-        if (depth == 1 && in_elif &&
-            parser_find_keyword_token(cur, "then", 0) != std::string::npos) {
-            in_elif = false;
-            in_elif_body = true;
-            const size_t then_pos = parser_find_keyword_token(cur, "then", 0);
-            const std::string cond_part = trim(cur.substr(0, then_pos));
-            if (!cond_part.empty()) {
-                current_elif_cond.push_back(cond_part);
-            }
-            const std::string inline_body = trim(cur.substr(then_pos + 4));
-            if (!inline_body.empty()) {
-                current_elif_body.push_back(inline_body);
-            }
-            k++;
-            continue;
-        } else if (depth == 1 && cur == "else") {
             if (in_elif_body && !current_elif_cond.empty()) {
                 elif_branches.push_back({current_elif_cond, current_elif_body});
-                current_elif_cond.clear();
-                current_elif_body.clear();
             }
-
-            in_else = true;
-            in_elif = false;
+            current_elif_cond.clear();
+            current_elif_body.clear();
+            in_elif = keyword == "elif";
             in_elif_body = false;
-            else_lines.clear();
-            k++;
-            continue;
-        } else if ((depth == 1 && cur == "then") && in_elif) {
-            in_elif = false;
-            in_elif_body = true;
-            k++;
-            continue;
+            in_else = keyword == "else";
         }
-
-        const size_t closing_fi = parser_find_block_end(cur, {"if"}, "fi", depth);
-        const std::string body_line =
-            closing_fi == std::string::npos ? cur_raw : trim(cur.substr(0, closing_fi));
-        if (!body_line.empty()) {
-            if (in_elif) {
-                current_elif_cond.push_back(body_line);
-            } else if (in_elif_body) {
-                current_elif_body.push_back(body_line);
-            } else if (!in_else) {
-                then_lines.push_back(body_line);
-            } else {
-                else_lines.push_back(body_line);
-            }
-        }
-        if (closing_fi != std::string::npos) {
+        if (depth == 0) {
             break;
         }
-        k++;
+        append_body(cur.substr(body_start));
+        ++k;
     }
 
     if (in_elif_body && !current_elif_cond.empty()) {
@@ -1002,6 +984,11 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
                 }
                 elif_cond_str += trim(strip_inline_comment(line));
             }
+            if (!elif_cond_str.empty() && elif_cond_str.back() == ';' &&
+                !is_char_escaped(elif_cond_str, elif_cond_str.size() - 1)) {
+                elif_cond_str.pop_back();
+                elif_cond_str = trim(elif_cond_str);
+            }
 
             if (elif_cond_str.empty()) {
                 idx = k;
@@ -1026,6 +1013,10 @@ int handle_if_block(const std::vector<std::string>& src_lines, size_t& idx,
 
     // move caller index to fi so execute_block continues after the full conditional block
     idx = k;
+    if (!trailing_commands.empty() && !control_flow_pending() && !cjsh_env::exit_requested() &&
+        (!should_abort_execution || !should_abort_execution())) {
+        body_rc = execute_block(parser->parse_into_lines(trailing_commands));
+    }
     return body_rc;
 }
 

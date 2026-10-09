@@ -36,7 +36,7 @@ import tempfile
 import termios
 import unittest
 
-from test_idle_hook_interactive import IdleHookSession, PROMPT_INPUT_START
+from test_idle_hook_interactive import IdleHookSession, PROMPT_INPUT_START, normalize_terminal_output
 
 
 class InteractiveTests(unittest.TestCase):
@@ -127,6 +127,29 @@ class InteractiveTests(unittest.TestCase):
             )
             self.assertEqual(result.read_text(), "complete\n")
             result.unlink()
+
+    def test_multiline_loop_closes_after_body_command(self):
+        session = self.session(terminal_size=(24, 120))
+        session.run_command(b"cjshopt status-line off")
+        start = len(session.output)
+        session.write(b"for i in {1..100}; do\r")
+        session.wait_for_normalized(b"\n    >", start)
+        self.assertNotIn(b"\x1b]133;C", session.output[start:])
+
+        start = len(session.output)
+        session.write(b"echo $i; done\r")
+        output_start = session.wait_for(b"\x1b]133;C", start)
+        session.wait_for_prompt(output_start, command_completed=True)
+        output = normalize_terminal_output(bytes(session.output[output_start:]))
+        expected = b"".join(f"{i}\n".encode() for i in range(1, 101))
+        self.assertIn(expected, output)
+        self.assertNotIn(b"[critical]", output)
+
+        start = session.run_command(b"if false; then\n echo wrong; else echo branch-ok; fi")
+        output_start = session.output.index(b"\x1b]133;C", start)
+        output = normalize_terminal_output(bytes(session.output[output_start:]))
+        self.assertIn(b"branch-ok\n", output)
+        self.assertNotIn(b"wrong\n", output)
 
     def test_palette_tracks_binding_changes_between_prompts(self):
         # Keep the custom entry below the initial viewport so the search must find it.

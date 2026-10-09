@@ -1670,74 +1670,19 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
             }
         }
 
-        // detect loop keywords on the right side of a pipeline and execute the full loop block
-        // as a single combined command so done matching stays intact
-        bool handled_pipeline_loop = false;
-        size_t pipe_search_pos = 0;
-        while (pipe_search_pos < line.size() && line.front() != '{' && line.front() != '(') {
-            size_t pipe_pos = line.find('|', pipe_search_pos);
-            if (pipe_pos == std::string::npos) {
+        // Keep an embedded compound command with its body before splitting the command list.
+        bool has_embedded_block = false;
+        for (const auto* keyword : {"if", "for", "select", "while", "until", "case"}) {
+            if (line.find(keyword) != std::string::npos &&
+                parser_find_keyword_token(line, keyword) != std::string::npos) {
+                has_embedded_block = true;
                 break;
             }
-
-            if (is_char_escaped(line, pipe_pos) || is_inside_quotes(line, pipe_pos)) {
-                pipe_search_pos = pipe_pos + 1;
-                continue;
-            }
-            std::string after_pipe = trim(line.substr(pipe_pos + 1));
-            auto loop_keyword = parse_statement_keyword_prefix(after_pipe);
-            bool is_loop_keyword_prefix =
-                loop_keyword.has_value() && is_loop_keyword(*loop_keyword);
-
-            if (!is_loop_keyword_prefix) {
-                pipe_search_pos = pipe_pos + 1;
-                continue;
-            }
-
-            size_t gather_index = line_index;
-            int nested_loop_depth = 0;
-            std::vector<std::string> block_lines;
-            block_lines.reserve(4);
-
-            while (gather_index < lines.size()) {
-                const std::string& gather_raw = lines[gather_index];
-                std::string gather_trimmed = trim(strip_inline_comment(gather_raw));
-
-                block_lines.push_back(gather_raw);
-
-                if (contains_token(gather_trimmed, "do")) {
-                    nested_loop_depth++;
-                }
-                if (contains_token(gather_trimmed, "done")) {
-                    nested_loop_depth--;
-                    if (nested_loop_depth <= 0) {
-                        break;
-                    }
-                }
-
-                gather_index++;
-            }
-
-            if (nested_loop_depth <= 0 && !block_lines.empty()) {
-                std::string combined;
-                combined.reserve(128);
-                for (size_t idx = 0; idx < block_lines.size(); ++idx) {
-                    if (idx > 0) {
-                        combined.push_back('\n');
-                    }
-                    combined += block_lines[idx];
-                }
-
-                last_code = execute_simple_or_pipeline(combined);
-                line_index = gather_index;
-                handled_pipeline_loop = true;
-            }
-
-            break;
         }
-
-        if (handled_pipeline_loop) {
-            continue;
+        while (has_embedded_block && line_index + 1 < lines.size() &&
+               needs_additional_input({line})) {
+            line += '\n';
+            line += lines[++line_index];
         }
 
         std::vector<LogicalCommand> lcmds = parser->parse_logical_commands(line);
