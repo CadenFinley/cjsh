@@ -11,7 +11,9 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
-## [1.5.11] - 2026-11-09
+## [1.5.12] - 2026-11-09
+
+The v1.5.11 release did not complete. This release includes all changes since v1.5.10.
 
 ### Added
 
@@ -43,6 +45,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Prevent `printf` from advancing beyond missing or exhausted arguments, including missing dynamic width and precision values.
 - Preserve libc behavior on platforms that retry failed multibyte glob matches byte by byte.
 - Keep multiline input rendering stable during scrollbar paging and dragging, clear stale row text, and remove the scrollbar on submission.
+- Allow more time for the wrapped-input PTY check on slower macOS runners.
 - Fix isocline's amalgamated include order so fuzzy-matching helpers are available before string-buffer code.
 - Fix documentation for invocation flags, interactive `huponexit` and status-hint defaults, the startup configuration link, and WSL compiler guidance. Remove unsupported editor benchmark claims and obsolete debug-log instructions.
 
@@ -1115,8 +1118,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Included JSON prompt themes, a shared-library plugin engine, and an optional built-in AI assistant.
 - Included CMake builds, installation helpers, and shell compatibility tests.
 
-[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.11...HEAD
-[1.5.11]: https://github.com/CadenFinley/cjsh/compare/v1.5.10...v1.5.11
+[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.12...HEAD
+[1.5.12]: https://github.com/CadenFinley/cjsh/compare/v1.5.10...v1.5.12
 [1.5.10]: https://github.com/CadenFinley/cjsh/compare/v1.5.9...v1.5.10
 [1.5.9]: https://github.com/CadenFinley/cjsh/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/CadenFinley/cjsh/compare/v1.5.7...v1.5.8

@@ -385,7 +385,7 @@ def check_scrollbars(binary: str) -> None:
     typed = b"x" * 180
     result, output = pty_tests.run_case(
         binary, "input_scrollbar_limit", typed + b"\r",
-        capture_output=True, initial_rows=rows, initial_cols=40,
+        timeout_s=15.0, capture_output=True, initial_rows=rows, initial_cols=40,
     )
     if result != BUFFER + typed.decode() or "█" not in output:
         raise AssertionError("wrapped input lost content or failed to render its scrollbar")
