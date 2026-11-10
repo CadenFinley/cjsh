@@ -11,12 +11,14 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+## [1.5.11] - 2026-11-09
+
 ### Added
 
 - Add `cjshopt scrollbars on|off|status` and corresponding isocline APIs to control input and menu scrollbars. Scrollbars remain enabled by default.
 - Add scrollbars for multiline input clipped by line limits, terminal height, or helper rows. With prompt mouse capture enabled, support track clicks and thumb dragging.
 - Add mouse-wheel navigation over scrollable multiline input in simple and smart mouse modes. Each wheel event moves the cursor one rendered row.
-- Add combined AddressSanitizer and UndefinedBehaviorSanitizer CI checks, plus a seeded parser fuzzer with bounded CI runs and saved failure artifacts. Expose the `CJSH_ENABLE_UBSAN` and `CJSH_BUILD_FUZZERS` build options.
+- Add combined AddressSanitizer and UndefinedBehaviorSanitizer CI checks. Add a seeded parser fuzzer with bounded CI runs and saved failure artifacts. Expose the `CJSH_ENABLE_UBSAN` and `CJSH_BUILD_FUZZERS` build options.
 
 ### Changed
 
@@ -37,6 +39,7 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Make noninteractive `-n` and `noexec` check syntax without expansion or execution in both dialects. Interactive shells warn and ignore the option, with normal startup-file and PATH initialization.
 - Keep exit statuses 253–255 as ordinary command results. Track `return`, `break`, and `continue` separately, and restore loop scope across nested evaluation and traps.
 - Preserve `&&` and `||` after arithmetic expansion, including nested arithmetic, subshells, and short-circuited commands.
+- Recognize loop and conditional boundaries across mixed line layouts, including nested blocks, inline branches, and commands after `fi`. Keep interactive continuation and syntax-only checks consistent with execution.
 - Prevent `printf` from advancing beyond missing or exhausted arguments, including missing dynamic width and precision values.
 - Preserve libc behavior on platforms that retry failed multibyte glob matches byte by byte.
 - Keep multiline input rendering stable during scrollbar paging and dragging, clear stale row text, and remove the scrollbar on submission.
@@ -1112,7 +1115,8 @@ date where available and the tag date otherwise, in the tag's local time zone.
 - Included JSON prompt themes, a shared-library plugin engine, and an optional built-in AI assistant.
 - Included CMake builds, installation helpers, and shell compatibility tests.
 
-[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.10...HEAD
+[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.11...HEAD
+[1.5.11]: https://github.com/CadenFinley/cjsh/compare/v1.5.10...v1.5.11
 [1.5.10]: https://github.com/CadenFinley/cjsh/compare/v1.5.9...v1.5.10
 [1.5.9]: https://github.com/CadenFinley/cjsh/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/CadenFinley/cjsh/compare/v1.5.7...v1.5.8
