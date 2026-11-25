@@ -622,17 +622,9 @@ static edit_menu_session_t edit_menu_begin(ic_env_t* env, editor_t* eb, const ch
     session.prompt_prefix_lines = eb->prompt_prefix_lines;
     session.line_number_column_width = eb->line_number_column_width;
     session.inline_right_width = eb->inline_right_width;
-    session.prompt_prefix_hidden = (eb->prompt_prefix_lines > 0);
-    if (session.prompt_prefix_hidden) {
-        edit_clear_with_prompt_prefix(env, eb, eb->prompt_prefix_lines);
+    if (eb->prompt_prefix_lines > 0) {
         eb->prompt_prefix_lines = 0;
         eb->prompt_begins_with_newline = false;
-        eb->cur_rows = 1;
-        eb->input_rows = 1;
-        eb->cur_row = 0;
-        eb->view_first_row = 0;
-        eb->view_rows = 1;
-        eb->view_input_rows = 1;
     }
     eb->force_prompt_text_visible = true;
     eb->replace_prompt_line_with_number = false;
@@ -644,6 +636,19 @@ static edit_menu_session_t edit_menu_begin(ic_env_t* env, editor_t* eb, const ch
     edit_menu_mouse_enable_focus_reporting(env, eb, session.mouse_scroll_enabled,
                                            &session.mouse_focus_reporting_added);
     return session;
+}
+
+static void edit_menu_refresh(ic_env_t* env, editor_t* eb, edit_menu_session_t* session) {
+    if (session->prompt_prefix_lines <= 0 || session->prompt_prefix_hidden) {
+        edit_refresh(env, eb);
+        return;
+    }
+
+    term_begin_update(env->term);
+    edit_clear_for_redraw(env, eb, session->prompt_prefix_lines);
+    session->prompt_prefix_hidden = true;
+    edit_refresh(env, eb);
+    term_end_update(env->term);
 }
 
 static void edit_menu_finish(ic_env_t* env, editor_t* eb, edit_menu_session_t* session,
@@ -660,13 +665,8 @@ static void edit_menu_finish(ic_env_t* env, editor_t* eb, edit_menu_session_t* s
     }
 
     if (session->prompt_prefix_hidden) {
-        edit_clear_with_prompt_prefix(env, eb, 0);
-        eb->cur_rows = 1;
-        eb->input_rows = 1;
-        eb->cur_row = 0;
-        eb->view_first_row = 0;
-        eb->view_rows = 1;
-        eb->view_input_rows = 1;
+        term_begin_update(env->term);
+        edit_clear_for_redraw(env, eb, 0);
     }
 
     eb->prompt_text = session->prompt_text;
@@ -686,6 +686,9 @@ static void edit_menu_finish(ic_env_t* env, editor_t* eb, edit_menu_session_t* s
     }
     if (refresh || session->prompt_prefix_hidden) {
         edit_refresh(env, eb);
+    }
+    if (session->prompt_prefix_hidden) {
+        term_end_update(env->term);
     }
 }
 

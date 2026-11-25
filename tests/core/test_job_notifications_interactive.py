@@ -77,13 +77,22 @@ class NotificationSession(IdleHookSession):
             raise AssertionError(f"duplicate notification: {output!r}")
         # Prefix, input and persistent status rows must be erased, and the old
         # semantic input region closed before printing asynchronous output.
-        before = output[:output.index(needle)]
+        notification_index = output.index(needle)
+        before = output[:notification_index]
         if before.count(b"\x1b[K") < 4 or b"\x1b]133;D\x1b\\" not in before:
             raise AssertionError(f"notification did not clear the editor: {output!r}")
-        restored = output[output.index(needle) + len(needle):]
+        restored = output[notification_index + len(needle):]
         for part in (b"NOTIFY-TOP", b"NOTIFY-MIDDLE", b"cjsh> ", b"NOTIFY-RIGHT"):
             if part not in restored:
                 raise AssertionError(f"missing restored {part!r}: {output!r}")
+        begin = before.rfind(b"\x1b[?2026h")
+        clear = before.find(b"\r\x1b[K", max(0, begin))
+        right_prompt = output.find(b"NOTIFY-RIGHT", notification_index)
+        end = output.find(b"\x1b[?2026l", max(0, begin))
+        if not 0 <= begin < clear < notification_index < right_prompt < end:
+            raise AssertionError(
+                f"The terminal can show a blank frame during a notification: {output!r}"
+            )
         if b"\x1b[?2004l" in output:
             raise AssertionError(f"notification disabled bracketed paste: {output!r}")
         return output

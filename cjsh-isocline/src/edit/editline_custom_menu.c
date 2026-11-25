@@ -315,7 +315,7 @@ again:;
     if (!env->no_help) {
         (void)sbuf_append(eb->extra, k_custom_menu_footer);
     }
-    edit_refresh(env, eb);
+    edit_menu_refresh(env, eb, &menu_session);
 
     accepted_with_mouse = false;
     code_t c;

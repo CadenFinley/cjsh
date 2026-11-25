@@ -694,6 +694,10 @@ std::optional<std::string> AsyncGitPromptManager::consume_ready_prompt() {
         pending_prompt_request_id_ != result_request_id_ || placeholder_offsets_.empty()) {
         return std::nullopt;
     }
+    if (pending_segment_.empty()) {
+        reset_async_state_locked();
+        return std::nullopt;
+    }
     std::string updated = pending_prompt_;
     size_t inserted = 0;
     for (size_t offset : placeholder_offsets_) {

@@ -2205,6 +2205,16 @@ static void edit_clear_with_prompt_prefix(ic_env_t* env, editor_t* eb,
     term_up(env->term, total_rows);
 }
 
+static void edit_clear_for_redraw(ic_env_t* env, editor_t* eb, ssize_t prefix_lines) {
+    edit_clear_with_prompt_prefix(env, eb, prefix_lines);
+    eb->cur_row = 0;
+    eb->cur_rows = 1;
+    eb->input_rows = 1;
+    eb->view_first_row = 0;
+    eb->view_rows = 1;
+    eb->view_input_rows = 1;
+}
+
 // Only called between editing operations, never from a completion/highlight callback.
 // Keep the editor (including undo, input, hints and cursor) alive while moving its
 // display below the notifications. Nested menus defer this until they return.
@@ -2213,22 +2223,17 @@ static void edit_flush_notifications(ic_env_t* env, editor_t* eb) {
         !env->readline_terminal_suspended) {
         stringbuf_t* messages = env->notifications;
         env->notifications = NULL;
-        edit_clear_with_prompt_prefix(env, eb, eb->prompt_prefix_lines);
+        term_begin_update(env->term);
+        edit_clear_for_redraw(env, eb, eb->prompt_prefix_lines);
         ic_term_abort_input_region(env);
         term_write(env->term, sbuf_string(messages));
         sbuf_free(messages);
 
         term_reset_line_state(env->term);
         term_start_of_line(env->term);
-        eb->cur_row = 0;
-        eb->cur_rows = 1;
-        eb->input_rows = 1;
-        eb->view_first_row = 0;
-        eb->view_rows = 1;
-        eb->view_input_rows = 1;
-        eb->last_screen_cursor_known = false;
         redraw_prompt_prefix_lines(env, eb);
         edit_refresh(env, eb);
+        term_end_update(env->term);
     }
 }
 
@@ -5203,13 +5208,8 @@ ic_public bool ic_current_loop_reset(const char* new_buffer, const char* new_pro
     // Prefix lines live outside eb->cur_rows, so clear the complete old prompt before
     // replacing any of the state used to locate it.
     const ssize_t old_prompt_prefix_lines = eb->prompt_prefix_lines;
-    edit_clear_with_prompt_prefix(env, eb, old_prompt_prefix_lines);
-    eb->cur_row = 0;
-    eb->cur_rows = 1;
-    eb->input_rows = 1;
-    eb->view_first_row = 0;
-    eb->view_rows = 1;
-    eb->view_input_rows = 1;
+    term_begin_update(env->term);
+    edit_clear_for_redraw(env, eb, old_prompt_prefix_lines);
 
     // Update buffer if provided
     if (new_buffer != NULL) {
@@ -5251,6 +5251,7 @@ ic_public bool ic_current_loop_reset(const char* new_buffer, const char* new_pro
 
     // Refresh the entire display
     edit_refresh(env, eb);
+    term_end_update(env->term);
 
     return true;
 }

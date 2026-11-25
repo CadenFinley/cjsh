@@ -75,6 +75,10 @@ ic_private bool term_enable_color(term_t* term, bool enable);
 ic_private void term_flush(term_t* term);
 ic_private buffer_mode_t term_set_buffer_mode(term_t* term, buffer_mode_t mode);
 
+// Keep the terminal update buffered until the matching end call.
+ic_private void term_begin_update(term_t* term);
+ic_private void term_end_update(term_t* term);
+
 ic_private void term_write_n(term_t* term, const char* s, ssize_t n);
 ic_private void term_write(term_t* term, const char* s);
 ic_private void term_write_untracked(term_t* term, const char* s);

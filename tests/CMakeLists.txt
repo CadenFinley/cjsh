@@ -356,6 +356,12 @@ if(Python3_Interpreter_FOUND)
                 "${CMAKE_CURRENT_SOURCE_DIR}/core/test_job_notifications_interactive.py"
                 $<TARGET_FILE:cjsh>
         )
+        cjsh_add_test(
+            NAME prompt_redraw_interactive_tests
+            COMMAND "${Python3_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/core/test_prompt_redraw_interactive.py"
+                    $<TARGET_FILE:cjsh>
+        )
     endif()
 
     if(UNIX)

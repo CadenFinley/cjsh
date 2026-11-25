@@ -85,6 +85,7 @@ struct term_s {
     palette_t palette;          // color support
     buffer_mode_t bufmode;      // buffer mode
     stringbuf_t* buf;           // buffer for buffered output
+    unsigned int update_depth;  // number of active synchronized updates
     bool track_output;          // track visible output for prompt newline detection
     bool line_state_tracked;    // have we tracked output since last reset?
     bool line_has_visible;      // visible content since last newline
@@ -449,11 +450,27 @@ ic_private void term_write_n(term_t* term, const char* s, ssize_t n) {
 //-------------------------------------------------------------
 
 ic_private void term_flush(term_t* term) {
-    if (sbuf_len(term->buf) > 0) {
+    if (term->update_depth == 0 && sbuf_len(term->buf) > 0) {
         // term_show_cursor(term,false);
         (void)term_write_direct(term, sbuf_string(term->buf), sbuf_len(term->buf));
         // term_show_cursor(term,true);
         sbuf_clear(term->buf);
+    }
+}
+
+ic_private void term_begin_update(term_t* term) {
+    if (term->update_depth++ == 0) {
+        term_write_untracked(term, IC_CSI "?2026h");
+    }
+}
+
+ic_private void term_end_update(term_t* term) {
+    assert(term->update_depth > 0);
+    if (term->update_depth == 1) {
+        term_write_untracked(term, IC_CSI "?2026l");
+    }
+    if (--term->update_depth == 0) {
+        term_flush(term);
     }
 }
 

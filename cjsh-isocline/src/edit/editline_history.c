@@ -1484,7 +1484,7 @@ again:;
         (void)sbuf_append(eb->extra, k_history_menu_footer);
     }
 
-    edit_refresh(env, eb);
+    edit_menu_refresh(env, eb, &menu_session);
 
     code_t c;
     if (!edit_menu_read_event(env, eb, &menu_session, &c, &scroll_offset, &selected_idx)) {
