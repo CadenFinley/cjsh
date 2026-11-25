@@ -109,10 +109,11 @@ class Session:
         prompt_vars: bool = False,
         no_color: bool = False,
         stdout_fd: int | None = None,
+        columns: int = 240,
     ) -> None:
         self.master_fd, slave_fd = os.openpty()
-        # Keep long macOS temporary executor paths on one row for style assertions.
-        fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 240, 0, 0))
+        # The default width keeps long executor paths on one row for style checks.
+        fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, columns, 0, 0))
         flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
         fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         env = os.environ.copy()
@@ -541,6 +542,16 @@ def main() -> int:
             session.enter_text(b":deep use the longest prefix")
             # The timer starts at zero for each request and shows the selected
             # configured command (including arguments and literal BBCode brackets).
+            session.wait_for_normalized(
+                f"Running [0s]: {executor} longest".encode(), start=longest_start
+            )
+            animation_start = len(session.output)
+            session.pump(0.3)
+            animation = bytes(session.output[animation_start:])
+            if len(re.findall(rb"Running \[\d+s\]:", normalize_terminal_output(animation))) < 2:
+                raise AssertionError("the waiting status did not animate")
+            if b"\r\x1b[K" in animation:
+                raise AssertionError("the waiting status cleared an editor row during animation")
             for seconds in range(3):
                 session.wait_for_normalized(
                     f"Running [{seconds}s]: {executor} longest".encode(),
@@ -811,6 +822,33 @@ def main() -> int:
                     raise AssertionError("agent error leaked onto stdout")
             finally:
                 output_session.close()
+
+        # Keep a multiline prompt and wrapped input in place during animation.
+        multiline_home = os.path.join(temp_dir, "multiline")
+        os.mkdir(multiline_home)
+        with open(os.path.join(configured_home, ".cjshrc"), encoding="utf-8") as source:
+            config = source.read()
+        with open(os.path.join(multiline_home, ".cjshrc"), "w", encoding="utf-8") as rc_file:
+            rc_file.write(config)
+            rc_file.write("export PS1='agent-header\nnormal> '\n")
+        multiline_session = Session(sys.argv[1], multiline_home, prompt_vars=True, columns=55)
+        try:
+            multiline_session.wait_for(b"agent-header")
+            multiline_start = len(multiline_session.output)
+            multiline_session.enter_text(b":interrupt " + b"wrapped request " * 8)
+            multiline_session.wait_for_normalized(b"Running [0s]:", start=multiline_start)
+            animation_start = len(multiline_session.output)
+            multiline_session.pump(0.3)
+            animation = bytes(multiline_session.output[animation_start:])
+            if len(re.findall(rb"Running \[\d+s\]:", normalize_terminal_output(animation))) < 2:
+                raise AssertionError("the wrapped waiting status did not animate")
+            if b"\r\x1b[K" in animation or b"agent-header" in animation:
+                raise AssertionError("the waiting status cleared the multiline prompt")
+            cancel_start = len(multiline_session.output)
+            multiline_session.write(b"\x03")
+            multiline_session.wait_for_normalized(b"normal> :interrupt", start=cancel_start)
+        finally:
+            multiline_session.close()
 
         # NO_COLOR keeps the timer readable without per-frame animation redraws.
         plain_session = Session(sys.argv[1], configured_home, no_color=True)

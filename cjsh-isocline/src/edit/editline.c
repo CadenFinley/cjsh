@@ -5176,6 +5176,21 @@ ic_public bool ic_show_menu_ex(const char* prompt_text, const ic_menu_item_t* it
                             accept);
 }
 
+ic_public bool ic_current_loop_refresh_status(void) {
+    ic_env_t* env = ic_get_env();
+    if (env == NULL || env->current_editor == NULL) {
+        return false;
+    }
+
+    editor_t* eb = env->current_editor;
+    if (eb->refresh_suppressed) {
+        eb->refresh_pending = true;
+    } else if (edit_update_status_message(env, eb)) {
+        edit_refresh(env, eb);
+    }
+    return true;
+}
+
 ic_public bool ic_current_loop_reset(const char* new_buffer, const char* new_prompt,
                                      const char* new_inline_right) {
     ic_env_t* env = ic_get_env();

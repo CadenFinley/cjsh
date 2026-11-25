@@ -432,6 +432,10 @@ bool ic_current_loop_advance(const char* new_buffer);
 bool ic_current_loop_advance_with_prompt(const char* new_buffer, const char* preserved_prompt,
                                          const char* preserved_inline_right);
 
+/// Update the status message in the active editor without clearing the prompt.
+/// @returns true if an editor is active, false otherwise.
+bool ic_current_loop_refresh_status(void);
+
 bool ic_current_loop_reset(const char* new_buffer, const char* new_prompt,
                            const char* new_inline_right);
 

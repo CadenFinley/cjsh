@@ -808,8 +808,7 @@ class ScopedWaitingStatus {
 
     ~ScopedWaitingStatus() {
         status_line::clear_transient_status_message();
-        (void)ic_current_loop_reset(nullptr, nullptr, nullptr);
-        ic_term_flush();
+        (void)ic_current_loop_refresh_status();
     }
 
     void advance() {
@@ -859,8 +858,7 @@ class ScopedWaitingStatus {
         }
         message << "[/]";
         status_line::set_transient_status_message(message.str());
-        (void)ic_current_loop_reset(nullptr, nullptr, nullptr);
-        ic_term_flush();
+        (void)ic_current_loop_refresh_status();
     }
 
     ScopedWaitingStatus(const ScopedWaitingStatus&) = delete;

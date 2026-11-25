@@ -637,6 +637,7 @@ static bool test_editline_buffer_api_without_editor(void) {
     EXPECT_FALSE(ic_request_submit(), "submit request should fail without editor");
     EXPECT_FALSE(ic_execute_key_action(IC_KEY_ACTION_CURSOR_UP),
                  "editor action should fail without editor");
+    EXPECT_FALSE(ic_current_loop_refresh_status(), "status refresh should fail without editor");
     EXPECT_FALSE(ic_current_loop_reset("buf", "prompt", "inline"),
                  "loop reset should fail without editor");
 
