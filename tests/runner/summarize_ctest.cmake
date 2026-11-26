@@ -38,8 +38,10 @@ if(current_log STREQUAL "")
     return()
 endif()
 
+# Parse the log as bytes so invalid UTF-8 in test output does not stop awk.
 execute_process(
-    COMMAND awk -f "${CMAKE_CURRENT_LIST_DIR}/summarize_ctest.awk" "${current_log}"
+    COMMAND "${CMAKE_COMMAND}" -E env LC_ALL=C
+            awk -f "${CMAKE_CURRENT_LIST_DIR}/summarize_ctest.awk" "${current_log}"
     RESULT_VARIABLE summary_result
 )
 if(NOT summary_result EQUAL 0)

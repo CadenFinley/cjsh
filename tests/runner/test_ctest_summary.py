@@ -53,7 +53,7 @@ class CTestSummaryTests(unittest.TestCase):
             "import json, sys\n"
             "from pathlib import Path\n"
             "output, status = json.loads(Path(sys.argv[1]).read_text())\n"
-            "print(output)\n"
+            "sys.stdout.buffer.write(output.encode('utf-8', 'surrogateescape') + b'\\n')\n"
             "sys.exit(status)\n"
         )
 
@@ -71,7 +71,8 @@ class CTestSummaryTests(unittest.TestCase):
             ["ctest", "--test-dir", str(self.build), *arguments],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
         self.assertEqual(result.returncode, status, result.stdout)
@@ -91,7 +92,9 @@ class CTestSummaryTests(unittest.TestCase):
             "BYPASS FAILURE PASS_suffix NOT_PASS\nPassed: 3\nFailed: 0",
         )
         self.add_suite(
-            "native", "1/1 Testing: diagnostic text\nPASS: example\nAll 7 native tests passed"
+            "native",
+            "1/1 Testing: diagnostic text\n\udcff: No such file or directory\n"
+            "PASS: example\nAll 7 native tests passed",
         )
         self.add_suite("python", "Ran 5 tests in 0.1s\n\nOK (skipped=1)")
         self.add_suite("loop", "Loop syntax: 148 checks, 0 failures")

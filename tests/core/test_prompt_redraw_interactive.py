@@ -33,14 +33,26 @@ from pathlib import Path
 
 from test_agent_mode_interactive import PROMPT_INPUT_START, Session
 
+SYNC_UPDATE_BEGIN = b"\x1b[?2026h"
+SYNC_UPDATE_END = b"\x1b[?2026l"
 
-def assert_synchronized_redraw(output: bytes, text: bytes) -> None:
-    repaint = output.find(text)
-    begin = output.rfind(b"\x1b[?2026h", 0, repaint)
+
+def assert_synchronized_redraw(session: Session, text: bytes, start: int) -> None:
+    session.wait_for(text, start=start)
+    repaint = session.output.index(text, start)
+    # The closing marker can arrive in a later PTY read.
+    session.wait_for(SYNC_UPDATE_END, start=repaint + len(text))
+
+    output = session.output
+    begin = output.rfind(SYNC_UPDATE_BEGIN, start, repaint)
     clear = output.find(b"\r\x1b[K", begin, repaint)
-    end = output.find(b"\x1b[?2026l", begin)
-    if not 0 <= begin < clear < repaint < end:
-        raise AssertionError(f"The terminal can show a blank frame before {text!r}: {output!r}")
+    end = output.find(SYNC_UPDATE_END, begin)
+    next_begin = output.find(SYNC_UPDATE_BEGIN, repaint, end)
+    if not start <= begin < clear < repaint < end or next_begin >= 0:
+        raise AssertionError(
+            f"The terminal can show a blank frame before {text!r}. "
+            f"The PTY output is {bytes(output[start:])!r}."
+        )
 
 
 def check_git_prompt(binary: str, root: Path, dirty: bool) -> None:
@@ -75,9 +87,7 @@ def check_git_prompt(binary: str, root: Path, dirty: bool) -> None:
         release.touch()
         session.wait_for_file(str(done))
         if dirty:
-            mark = "✗".encode()
-            session.wait_for(mark, start=start)
-            assert_synchronized_redraw(bytes(session.output[start:]), mark)
+            assert_synchronized_redraw(session, "✗".encode(), start)
         else:
             session.pump(0.25)
             if b"GIT-HEADER" in session.output[start:] or b"\r\x1b[K" in session.output[start:]:
@@ -113,20 +123,17 @@ def check_menu_and_final_prompts(binary: str, root: Path) -> None:
                 session.wait_for_normalized(b"ready> agent: write a command")
             start = len(session.output)
             session.write(key)
-            session.wait_for(menu, start=start)
-            assert_synchronized_redraw(bytes(session.output[start:]), menu)
+            assert_synchronized_redraw(session, menu, start)
             start = len(session.output)
             session.write(b"\x1b")
-            session.wait_for(b"PROMPT-HEADER", start=start)
-            assert_synchronized_redraw(bytes(session.output[start:]), b"PROMPT-HEADER")
+            assert_synchronized_redraw(session, b"PROMPT-HEADER", start)
         session.write(b"\x15")
         session.paste(b"echo final-check")
         session.wait_for_normalized(b"ready> echo final-check")
         start = len(session.output)
         session.write(b"\r")
         session.wait_for_normalized(b"final> echo final-check", start=start)
-        session.wait_for(b"FINAL-RIGHT", start=start)
-        assert_synchronized_redraw(bytes(session.output[start:]), b"FINAL-RIGHT")
+        assert_synchronized_redraw(session, b"FINAL-RIGHT", start)
     finally:
         session.close()
 
