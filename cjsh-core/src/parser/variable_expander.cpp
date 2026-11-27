@@ -279,8 +279,13 @@ void VariableExpander::expand_env_vars(std::string& arg) {
 }
 
 void VariableExpander::expand_word(std::string& arg, std::vector<bool>& expanded_bytes) {
-    std::string result;
     expanded_bytes.clear();
+    // An empty mask on a nonempty result marks a literal word.
+    if (arg.find_first_of("$\x1E") == std::string::npos) {
+        return;
+    }
+
+    std::string result;
     auto append = [&](const std::string& value, bool expanded) {
         result += value;
         expanded_bytes.insert(expanded_bytes.end(), value.size(), expanded);

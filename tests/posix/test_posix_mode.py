@@ -217,6 +217,8 @@ EXPANSION = [
     Case('IFS literal redirection', 'IFS=:; printf "%s\\n" a:b > output; cat output', 'a:b\n'),
     Case('IFS mixed pipeline', 'IFS=:; x=a:b; printf "<%s>\\n" p:q:$x:r | cat', '<p:q:a>\n<b:r>\n'),
     Case('IFS arithmetic field splitting', 'IFS=3; set -- a$((3))b; echo "$#:$1:$2"', '2:a:b\n'),
+    Case('IFS arithmetic with literal separators', 'IFS=3; set -- p3q$((3))z3a; printf "<%s>\\n" "$@"', '<p3q>\n<z3a>\n'),
+    Case('IFS arithmetic assignment', 'IFS=3; x=$((3)); y=$((-3)); printf "<%s>\\n" "$x" "$y"', '<3>\n<-3>\n'),
     Case('parameter substitution pattern', 'x=abc; echo "${x#$(printf a)}"', 'bc\n'),
     Case('quoted default operand', 'unset x; printf "<%s>\\n" "${x:-"a b"}" ${x:-"a b"}', '<a b>\n<a b>\n'),
 ]

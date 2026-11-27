@@ -1151,7 +1151,7 @@ int ShellScriptInterpreter::execute_block(const std::vector<std::string>& lines,
                        expand_all_substitutions(text.substr(group_end + 1),
                                                 execute_simple_or_pipeline);
             } else {
-                text = expand_all_substitutions(text, execute_simple_or_pipeline);
+                text = expand_all_substitutions(text, execute_simple_or_pipeline, true);
             }
 
             if (auto quick_result = try_execute_quick_command(text)) {
@@ -2431,7 +2431,8 @@ ShellScriptInterpreter::BlockHandlerResult ShellScriptInterpreter::try_dispatch_
 // preserving quote/protection markers needed by later parser expansion. remember
 // substitution status separately for a surrounding assignment-only command.
 std::string ShellScriptInterpreter::expand_all_substitutions(
-    const std::string& input, cjsh::FunctionRef<int(const std::string&)> executor) {
+    const std::string& input, cjsh::FunctionRef<int(const std::string&)> executor,
+    bool command_context) {
     CommandSubstitutionEvaluator cmd_subst_evaluator(
         CommandSubstitutionEvaluator::create_command_executor(executor));
 
@@ -2599,7 +2600,13 @@ std::string ShellScriptInterpreter::expand_all_substitutions(
                     try {
                         const std::string value =
                             std::to_string(evaluate_arithmetic_expression(expanded_expr));
-                        if (config::is_posix_mode()) {
+                        const bool posix = config::is_posix_mode();
+                        // A standalone scalar assignment skips field splitting.
+                        const bool scalar_assignment =
+                            posix && command_context && !in_quotes && j + 2 == result.size() &&
+                            !out.empty() && out.back() == '=' &&
+                            is_valid_identifier(out.substr(0, out.size() - 1));
+                        if (posix && !scalar_assignment) {
                             CommandSubstitutionEvaluator::append_substitution_result(
                                 value, in_quotes, out);
                         } else {

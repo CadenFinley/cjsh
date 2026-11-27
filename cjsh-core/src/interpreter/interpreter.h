@@ -222,7 +222,8 @@ class ShellScriptInterpreter {
                                             cjsh::FunctionRef<int(const std::string&)> executor);
 
     std::string expand_all_substitutions(const std::string& input,
-                                         cjsh::FunctionRef<int(const std::string&)> executor);
+                                         cjsh::FunctionRef<int(const std::string&)> executor,
+                                         bool command_context = false);
 
     struct BlockHandlerResult {
         bool handled;

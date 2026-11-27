@@ -1138,7 +1138,7 @@ std::vector<std::string> Parser::prepare_expansion_tokens(std::vector<std::strin
 // position, quoting, redirection operands, and case patterns control eligibility;
 // the active-name set prevents recursive aliases from expanding forever.
 std::string Parser::expand_aliases(const std::string& source) const {
-    if (shell && !shell->get_shell_option(ShellOption::ExpandAliases)) {
+    if (aliases.empty() || (shell && !shell->get_shell_option(ShellOption::ExpandAliases))) {
         return source;
     }
     std::unordered_set<std::string> active;
@@ -1549,6 +1549,11 @@ std::vector<std::string> Parser::parse_command(const std::string& cmdline) {
         QuoteInfo qi(raw_arg);
 
         if (qi.is_unquoted()) {
+            if (config::is_posix_mode() && (!is_assignment_builtin || index == 0) &&
+                expanded_bytes[index].empty() && !raw_arg.empty()) {
+                (void)ifs_expanded_args.emplace_back(std::move(raw_arg));
+                continue;
+            }
             const auto* bytes =
                 config::is_posix_mode() && expanded_bytes[index].size() == raw_arg.size()
                     ? &expanded_bytes[index]
@@ -2039,8 +2044,10 @@ std::vector<Command> Parser::parse_pipeline(const std::string& command) {
             }
 
             bool is_assignment = looks_like_assignment(val);
+            const bool posix_literal = config::is_posix_mode() && !skip_env_expansion &&
+                                       expanded_bytes.empty() && !val.empty();
             std::vector<std::string> fields;
-            if (qi.is_unquoted() && !is_assignment) {
+            if (qi.is_unquoted() && !is_assignment && !posix_literal) {
                 if (!tokenizer) {
                     tokenizer = std::make_unique<Tokenizer>();
                 }
