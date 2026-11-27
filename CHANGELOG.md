@@ -11,6 +11,13 @@ date where available and the tag date otherwise, in the tag's local time zone.
 
 ## [Unreleased]
 
+## [1.5.13] - 2026-11-27
+
+### Fixed
+
+- Prevent prompt flicker during agent status updates, background Git checks, job notifications, and menu transitions.
+- Preserve literal text during POSIX field splitting, including when `IFS` contains a character used in an unquoted word.
+
 ## [1.5.12] - 2026-11-09
 
 The v1.5.11 release did not complete. This release includes all changes since v1.5.10.
@@ -1118,7 +1125,8 @@ The v1.5.11 release did not complete. This release includes all changes since v1
 - Included JSON prompt themes, a shared-library plugin engine, and an optional built-in AI assistant.
 - Included CMake builds, installation helpers, and shell compatibility tests.
 
-[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.12...HEAD
+[Unreleased]: https://github.com/CadenFinley/cjsh/compare/v1.5.13...HEAD
+[1.5.13]: https://github.com/CadenFinley/cjsh/compare/v1.5.12...v1.5.13
 [1.5.12]: https://github.com/CadenFinley/cjsh/compare/v1.5.10...v1.5.12
 [1.5.10]: https://github.com/CadenFinley/cjsh/compare/v1.5.9...v1.5.10
 [1.5.9]: https://github.com/CadenFinley/cjsh/compare/v1.5.8...v1.5.9
